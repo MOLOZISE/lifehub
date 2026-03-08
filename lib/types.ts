@@ -230,8 +230,18 @@ export interface StrategyMemo {
   updatedAt: string;
 }
 
+export interface WatchlistGroup {
+  id: string;
+  name: string;
+  emoji: string;
+  description?: string;
+  color: string;  // tailwind color key e.g. "blue", "violet"
+  createdAt: string;
+}
+
 export interface WatchlistItem {
   id: string;
+  groupId?: string;   // belongs to WatchlistGroup
   ticker: string;
   name: string;
   market: "KR" | "US";
@@ -239,7 +249,6 @@ export interface WatchlistItem {
   currency: "KRW" | "USD";
   currentPrice: number;
   targetPrice?: number;
-  alertCondition?: string;
   memo?: string;
   addedAt: string;
 }

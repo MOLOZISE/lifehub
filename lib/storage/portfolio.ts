@@ -1,5 +1,5 @@
 import { getItem, setItem } from "./base";
-import type { Holding, StrategyMemo, WatchlistItem } from "../types";
+import type { Holding, StrategyMemo, WatchlistItem, WatchlistGroup } from "../types";
 
 export function getHoldings(): Holding[] {
   return getItem<Holding[]>("holdings", defaultHoldings);
@@ -10,6 +10,30 @@ export function saveHoldings(holdings: Holding[]): void {
 
 export function getWatchlist(): WatchlistItem[] { return getItem<WatchlistItem[]>("watchlist", []); }
 export function saveWatchlist(items: WatchlistItem[]): void { setItem("watchlist", items); }
+export function upsertWatchlistItem(item: WatchlistItem): void {
+  const items = getWatchlist();
+  const idx = items.findIndex(i => i.id === item.id);
+  if (idx >= 0) items[idx] = item; else items.push(item);
+  saveWatchlist(items);
+}
+export function deleteWatchlistItem(id: string): void {
+  saveWatchlist(getWatchlist().filter(i => i.id !== id));
+}
+
+export function getWatchlistGroups(): WatchlistGroup[] { return getItem<WatchlistGroup[]>("watchlist-groups", []); }
+export function saveWatchlistGroups(groups: WatchlistGroup[]): void { setItem("watchlist-groups", groups); }
+export function upsertWatchlistGroup(group: WatchlistGroup): void {
+  const groups = getWatchlistGroups();
+  const idx = groups.findIndex(g => g.id === group.id);
+  if (idx >= 0) groups[idx] = group; else groups.push(group);
+  saveWatchlistGroups(groups);
+}
+export function deleteWatchlistGroup(id: string): void {
+  // Unlink items from this group (move to ungrouped)
+  const items = getWatchlist().map(i => i.groupId === id ? { ...i, groupId: undefined } : i);
+  saveWatchlist(items);
+  saveWatchlistGroups(getWatchlistGroups().filter(g => g.id !== id));
+}
 
 export function getMemos(): StrategyMemo[] {
   return getItem<StrategyMemo[]>("strategy-memos", []);

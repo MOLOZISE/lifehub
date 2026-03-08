@@ -1,18 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, type ModelParams } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY ?? "");
 
 export async function POST(req: NextRequest) {
   try {
-    const { systemPrompt, userMessage, history } = await req.json();
+    const { systemPrompt, userMessage, history, useSearch } = await req.json();
 
-    const model = genAI.getGenerativeModel({
+    const modelConfig: ModelParams = {
       model: "gemini-2.0-flash",
       systemInstruction: systemPrompt,
-    });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ...(useSearch ? { tools: [{ googleSearch: {} }] as any } : {}),
+    };
 
-    // Convert history: [{role:"user"|"assistant", content:string}] → Gemini format
+    const model = genAI.getGenerativeModel(modelConfig);
+
     const geminiHistory = (history ?? []).map((m: { role: string; content: string }) => ({
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content }],

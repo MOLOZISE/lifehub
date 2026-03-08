@@ -33,11 +33,11 @@ const navItems = [
     icon: TrendingUp,
     children: [
       { label: "포트폴리오", href: "/portfolio" },
+      { label: "⭐ 관심 종목", href: "/portfolio/watchlist" },
       { label: "차트 분석", href: "/portfolio/chart" },
       { label: "AI 뉴스 분석", href: "/portfolio/news" },
       { label: "AI 전략 어드바이저", href: "/portfolio/strategy" },
       { label: "주식 공부방", href: "/portfolio/learn" },
-      { label: "전략 메모", href: "/portfolio/memo" },
     ],
   },
 ];
