@@ -11,14 +11,14 @@ export async function GET() {
     orderBy: { createdAt: "asc" },
     include: {
       items: {
-        orderBy: { createdAt: "asc" },
+        orderBy: { addedAt: "asc" },
       },
     },
   });
 
   const ungroupedItems = await prisma.watchlistItem.findMany({
     where: { userId: session.user.id, groupId: null },
-    orderBy: { createdAt: "desc" },
+    orderBy: { addedAt: "desc" },
   });
 
   return NextResponse.json({ groups, ungroupedItems });
