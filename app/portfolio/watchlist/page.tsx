@@ -9,12 +9,18 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  getWatchlist, upsertWatchlistItem, deleteWatchlistItem,
-  getWatchlistGroups, upsertWatchlistGroup, deleteWatchlistGroup,
-} from "@/lib/storage";
-import { generateId } from "@/lib/utils-app";
-import type { WatchlistItem, WatchlistGroup, PortfolioSector } from "@/lib/types";
+import { toast } from "sonner";
+import type { PortfolioSector } from "@/lib/types";
+
+interface WatchlistGroup {
+  id: string; name: string; emoji: string; color: string; description?: string;
+  createdAt: string; items?: WatchlistItem[];
+}
+interface WatchlistItem {
+  id: string; ticker: string; name: string; market: "KR" | "US";
+  sector?: PortfolioSector; currentPrice: number; targetPrice?: number;
+  currency: string; memo?: string; groupId?: string; addedAt: string;
+}
 import Link from "next/link";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -61,12 +67,11 @@ function GroupDialog({
   function handleSave() {
     if (!form.name.trim()) return;
     onSave({
-      id: initial?.id ?? generateId(),
+      id: initial?.id,
       name: form.name.trim(),
       emoji: form.emoji || "⭐",
       description: form.description || undefined,
       color: form.color,
-      createdAt: initial?.createdAt ?? new Date().toISOString(),
     } as WatchlistGroup);
     onClose();
   }
@@ -154,7 +159,7 @@ function TickerDialog({
   function handleSave() {
     if (!form.ticker.trim() || !form.name.trim()) return;
     onSave({
-      id: initial?.id ?? generateId(),
+      id: initial?.id,
       ticker: form.ticker.trim().toUpperCase(),
       name: form.name.trim(),
       market: form.market,
@@ -164,8 +169,7 @@ function TickerDialog({
       targetPrice: form.targetPrice ? Number(form.targetPrice) : undefined,
       memo: form.memo || undefined,
       groupId: form.groupId || undefined,
-      addedAt: initial?.addedAt ?? new Date().toISOString(),
-    });
+    } as WatchlistItem);
     onClose();
   }
 
@@ -316,29 +320,56 @@ export default function WatchlistPage() {
 
   useEffect(() => { load(); }, []);
 
-  function load() {
-    setItems(getWatchlist().sort((a, b) => b.addedAt.localeCompare(a.addedAt)));
-    setGroups(getWatchlistGroups().sort((a, b) => a.createdAt.localeCompare(b.createdAt)));
+  async function load() {
+    const res = await fetch("/api/portfolio/watchlist");
+    if (res.ok) {
+      const data = await res.json();
+      const allGroups: WatchlistGroup[] = data.groups ?? [];
+      const allItems: WatchlistItem[] = [
+        ...allGroups.flatMap((g: WatchlistGroup) => (g.items ?? []).map((i: WatchlistItem) => ({ ...i, groupId: g.id }))),
+        ...(data.ungroupedItems ?? []),
+      ];
+      setGroups(allGroups);
+      setItems(allItems);
+    }
   }
 
-  function handleSaveGroup(g: WatchlistGroup) {
-    upsertWatchlistGroup(g);
+  async function handleSaveGroup(g: WatchlistGroup) {
+    if (g.id) {
+      await fetch(`/api/portfolio/watchlist/groups/${g.id}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(g),
+      });
+    } else {
+      const res = await fetch("/api/portfolio/watchlist/groups", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(g),
+      });
+      if (!res.ok) { toast.error("그룹 저장 실패"); return; }
+    }
     load();
   }
 
-  function handleDeleteGroup(id: string) {
-    deleteWatchlistGroup(id);
+  async function handleDeleteGroup(id: string) {
+    await fetch(`/api/portfolio/watchlist/groups/${id}`, { method: "DELETE" });
     load();
   }
 
-  function handleSaveItem(item: WatchlistItem) {
-    upsertWatchlistItem(item);
+  async function handleSaveItem(item: WatchlistItem) {
+    if (item.id) {
+      await fetch(`/api/portfolio/watchlist/items/${item.id}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(item),
+      });
+    } else {
+      const res = await fetch("/api/portfolio/watchlist/items", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(item),
+      });
+      if (!res.ok) { toast.error("종목 저장 실패"); return; }
+    }
     load();
   }
 
-  function handleDeleteItem(id: string) {
-    deleteWatchlistItem(id);
-    load();
+  async function handleDeleteItem(id: string) {
+    await fetch(`/api/portfolio/watchlist/items/${id}`, { method: "DELETE" });
+    setItems(i => i.filter(x => x.id !== id));
   }
 
   function openAddTicker(groupId?: string) {

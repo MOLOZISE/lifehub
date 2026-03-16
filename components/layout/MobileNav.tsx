@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, BookOpen, TrendingUp, BarChart2 } from "lucide-react";
+import { LayoutDashboard, BookOpen, TrendingUp, MessageSquare, Utensils } from "lucide-react";
 
 const tabs = [
-  { label: "홈", href: "/", icon: LayoutDashboard },
-  { label: "분석", href: "/study/analytics", icon: BarChart2 },
-  { label: "과목", href: "/study/subjects", icon: BookOpen },
-  { label: "자산", href: "/portfolio", icon: TrendingUp },
+  { label: "홈",    href: "/",           icon: LayoutDashboard },
+  { label: "학습",  href: "/study/analytics", icon: BookOpen },
+  { label: "자산",  href: "/portfolio",  icon: TrendingUp },
+  { label: "커뮤",  href: "/community",  icon: MessageSquare },
+  { label: "맛집",  href: "/restaurant", icon: Utensils },
 ];
 
 export function MobileNav() {

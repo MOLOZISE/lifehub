@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Pencil, Trash2, TrendingUp, TrendingDown, AlertTriangle, ShieldCheck } from "lucide-react";
+import { Plus, Pencil, Trash2, TrendingUp, TrendingDown, AlertTriangle, ShieldCheck, RefreshCw } from "lucide-react";
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
@@ -11,10 +11,16 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getHoldings, saveHoldings } from "@/lib/storage";
 import { analyzePortfolioRisk } from "@/lib/recommendation";
-import { generateId, getProfitColor, formatCurrency } from "@/lib/utils-app";
-import type { Holding, PortfolioSector } from "@/lib/types";
+import { getProfitColor, formatCurrency } from "@/lib/utils-app";
+import { toast } from "sonner";
+import type { PortfolioSector } from "@/lib/types";
+
+interface Holding {
+  id: string; ticker: string; name: string; market: string;
+  sector: PortfolioSector | null; quantity: number; avgPrice: number;
+  currentPrice: number; currency: string; memo?: string;
+}
 
 const CHART_COLORS = ["#6366f1","#8b5cf6","#ec4899","#f59e0b","#10b981","#3b82f6","#ef4444","#14b8a6"];
 
@@ -55,18 +61,26 @@ function profitAmount(h: Holding): number {
   return (h.currentPrice - h.avgPrice) * h.quantity;
 }
 
-const emptyHolding: Omit<Holding, "id"> = {
-  ticker: "", name: "", market: "KR", sector: "other",
-  quantity: 0, avgPrice: 0, currentPrice: 0, currency: "KRW",
+const emptyHolding = {
+  ticker: "", name: "", market: "KR", sector: "other" as PortfolioSector,
+  quantity: 0, avgPrice: 0, currentPrice: 0, currency: "KRW", memo: "",
 };
 
 export default function PortfolioPage() {
   const [holdings, setHoldings] = useState<Holding[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Holding | null>(null);
-  const [form, setForm] = useState<Omit<Holding, "id">>(emptyHolding);
+  const [form, setForm] = useState(emptyHolding);
 
-  useEffect(() => { setHoldings(getHoldings()); }, []);
+  async function loadHoldings() {
+    const res = await fetch("/api/portfolio/holdings");
+    if (res.ok) setHoldings(await res.json());
+    setLoading(false);
+  }
+
+  useEffect(() => { loadHoldings(); }, []);
 
   const totalUSD = holdings.reduce((s, h) => s + toUSD(h), 0);
   const totalCostUSD = holdings.reduce((s, h) => {
@@ -105,26 +119,63 @@ export default function PortfolioPage() {
       sector: h.sector ?? "other",
       quantity: h.quantity, avgPrice: h.avgPrice,
       currentPrice: h.currentPrice, currency: h.currency,
-      memo: h.memo,
+      memo: h.memo ?? "",
     });
     setDialogOpen(true);
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!form.ticker || !form.name) return;
-    const updated = editing
-      ? holdings.map(h => h.id === editing.id ? { ...form, id: h.id } : h)
-      : [...holdings, { ...form, id: generateId() }];
-    setHoldings(updated);
-    saveHoldings(updated);
+    const payload = { ...form };
+    if (editing) {
+      const res = await fetch(`/api/portfolio/holdings/${editing.id}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+      });
+      if (!res.ok) { toast.error("저장 실패"); return; }
+    } else {
+      const res = await fetch("/api/portfolio/holdings", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+      });
+      if (!res.ok) { toast.error("저장 실패"); return; }
+    }
     setDialogOpen(false);
+    loadHoldings();
   }
 
-  function handleDelete(id: string) {
-    const next = holdings.filter(h => h.id !== id);
-    setHoldings(next);
-    saveHoldings(next);
+  async function handleRefreshPrices() {
+    if (holdings.length === 0) return;
+    setRefreshing(true);
+    try {
+      const tickers = holdings.map(h => h.market === "KR" ? `${h.ticker}.KS` : h.ticker);
+      const res = await fetch(`/api/stock/price?tickers=${tickers.join(",")}`);
+      if (!res.ok) { toast.error("가격 조회 실패"); return; }
+      const { prices } = await res.json() as { prices: Record<string, { price: number }> };
+
+      let updated = 0;
+      for (const h of holdings) {
+        const yahooTicker = h.market === "KR" ? `${h.ticker}.KS` : h.ticker;
+        const data = prices[yahooTicker];
+        if (!data || data.price === 0 || data.price === h.currentPrice) continue;
+        await fetch(`/api/portfolio/holdings/${h.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ currentPrice: data.price }),
+        });
+        updated++;
+      }
+      await loadHoldings();
+      toast.success(updated > 0 ? `${updated}개 종목 현재가 갱신 완료` : "변동된 가격이 없습니다");
+    } catch { toast.error("갱신 실패"); }
+    finally { setRefreshing(false); }
   }
+
+  async function handleDelete(id: string) {
+    const res = await fetch(`/api/portfolio/holdings/${id}`, { method: "DELETE" });
+    if (!res.ok) { toast.error("삭제 실패"); return; }
+    setHoldings(h => h.filter(x => x.id !== id));
+  }
+
+  if (loading) return <div className="p-8 text-center text-muted-foreground">불러오는 중...</div>;
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -235,7 +286,12 @@ export default function PortfolioPage() {
         <div className="lg:col-span-2 space-y-2">
           <div className="flex justify-between items-center">
             <h2 className="font-semibold text-sm">보유 종목</h2>
-            <Button size="sm" onClick={openAdd}><Plus className="w-3.5 h-3.5 mr-1" />종목 추가</Button>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={handleRefreshPrices} disabled={refreshing || holdings.length === 0}>
+                <RefreshCw className={`w-3.5 h-3.5 mr-1 ${refreshing ? "animate-spin" : ""}`} />현재가 갱신
+              </Button>
+              <Button size="sm" onClick={openAdd}><Plus className="w-3.5 h-3.5 mr-1" />종목 추가</Button>
+            </div>
           </div>
           <div className="overflow-x-auto rounded-lg border">
             <table className="w-full text-sm">

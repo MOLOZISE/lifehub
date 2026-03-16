@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getHoldings, getWatchlist } from "@/lib/storage";
 import type { Holding, WatchlistItem } from "@/lib/types";
 
 const KRW_TO_USD = 1350;
@@ -88,8 +87,22 @@ export default function StrategyPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    setHoldings(getHoldings());
-    setWatchlist(getWatchlist());
+    async function load() {
+      const [holdRes, watchRes] = await Promise.all([
+        fetch("/api/portfolio/holdings"),
+        fetch("/api/portfolio/watchlist"),
+      ]);
+      if (holdRes.ok) setHoldings(await holdRes.json());
+      if (watchRes.ok) {
+        const data = await watchRes.json();
+        const allItems: WatchlistItem[] = [
+          ...(data.groups ?? []).flatMap((g: { items?: WatchlistItem[] }) => g.items ?? []),
+          ...(data.ungroupedItems ?? []),
+        ];
+        setWatchlist(allItems);
+      }
+    }
+    load();
   }, []);
 
   const SYSTEM_PROMPT = `당신은 15년 경력의 주식 투자 전략가입니다. 사용자의 전체 포트폴리오 현황을 Google 검색으로 현재 시장 상황을 파악한 뒤,

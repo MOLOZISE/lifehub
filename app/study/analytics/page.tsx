@@ -2,34 +2,22 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, TrendingUp, Clock, Target, Zap, AlertTriangle } from "lucide-react";
+import { TrendingUp, Clock, Zap, AlertTriangle, Sparkles, Loader2 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar,
-  LineChart, Line,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  getSubjects, getExams, getStudySessions, getStudyLogs,
-  getWrongAnswerNotes, getSubjectStudyMinutes,
-} from "@/lib/storage";
-import { generateStudyRecommendations } from "@/lib/recommendation";
+import { StudyHeatmap } from "@/components/study/StudyHeatmap";
 import { todayString, COLOR_MAP } from "@/lib/utils-app";
-import type { Subject, StudyRecommendation } from "@/lib/types";
 
-const PRIORITY_COLORS = {
-  high: "border-red-400 bg-red-50 dark:bg-red-950/30 dark:border-red-800",
-  medium: "border-amber-400 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800",
-  low: "border-green-400 bg-green-50 dark:bg-green-950/30 dark:border-green-800",
-};
-
-const PRIORITY_BADGE: Record<string, string> = {
-  high: "bg-red-500 text-white",
-  medium: "bg-amber-500 text-white",
-  low: "bg-green-500 text-white",
-};
+interface Subject { id: string; name: string; emoji: string; color: string; }
+interface StudySession {
+  id: string; date: string; subjectId: string; durationMinutes: number;
+  focusScore: number; fatigueScore: number; satisfactionScore: number;
+}
+interface WrongAnswer { id: string; resolved: boolean; nextReviewAt: string; }
 
 function getLast7Days(): string[] {
   return Array.from({ length: 7 }, (_, i) => {
@@ -40,81 +28,129 @@ function getLast7Days(): string[] {
 }
 
 export default function AnalyticsPage() {
-  const [recommendations, setRecommendations] = useState<StudyRecommendation[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [subjectMinutes, setSubjectMinutes] = useState<Record<string, number>>({});
-  const [weeklyData, setWeeklyData] = useState<{ day: string; minutes: number }[]>([]);
-  const [sessionMetrics, setSessionMetrics] = useState({ avgFocus: 0, avgFatigue: 0, avgSatisfaction: 0 });
-  const [wrongAnswerStats, setWrongAnswerStats] = useState({ total: 0, due: 0, resolved: 0 });
+  const [sessions, setSessions] = useState<StudySession[]>([]);
+  const [wrongAnswers, setWrongAnswers] = useState<WrongAnswer[]>([]);
   const [loading, setLoading] = useState(true);
+  const [aiRecs, setAiRecs] = useState<string>("");
+  const [aiLoading, setAiLoading] = useState(false);
+
+  const today = todayString();
 
   useEffect(() => {
-    const subs = getSubjects();
-    setSubjects(subs);
-
-    // Recommendations
-    setRecommendations(generateStudyRecommendations());
-
-    // Subject minutes (last 30 days)
-    const mins = getSubjectStudyMinutes(30);
-    setSubjectMinutes(mins);
-
-    // Weekly chart
-    const last7 = getLast7Days();
-    const sessions = getStudySessions();
-    const logs = getStudyLogs();
-    const weekly = last7.map(date => {
-      const sessionMin = sessions.filter(s => s.date === date).reduce((sum, s) => sum + s.durationMinutes, 0);
-      const logMin = logs.filter(l => l.date === date && l.activityType !== "session").reduce((sum, l) => sum + l.durationMinutes, 0);
-      return {
-        day: new Date(date).toLocaleDateString("ko-KR", { month: "short", day: "numeric" }),
-        minutes: sessionMin + logMin,
-      };
-    });
-    setWeeklyData(weekly);
-
-    // Session metrics (last 14 days)
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 14);
-    const recentSessions = sessions.filter(s => s.date >= cutoff.toISOString().slice(0, 10));
-    if (recentSessions.length > 0) {
-      setSessionMetrics({
-        avgFocus: recentSessions.reduce((s, x) => s + x.focusScore, 0) / recentSessions.length,
-        avgFatigue: recentSessions.reduce((s, x) => s + x.fatigueScore, 0) / recentSessions.length,
-        avgSatisfaction: recentSessions.reduce((s, x) => s + x.satisfactionScore, 0) / recentSessions.length,
-      });
+    async function loadAll() {
+      const [subRes, sessRes, wrongRes] = await Promise.all([
+        fetch("/api/study/subjects"),
+        fetch("/api/study/sessions?limit=500"),
+        fetch("/api/study/wrong-answers"),
+      ]);
+      if (subRes.ok) setSubjects(await subRes.json());
+      if (sessRes.ok) {
+        const d = await sessRes.json();
+        setSessions(d.sessions ?? d);
+      }
+      if (wrongRes.ok) setWrongAnswers(await wrongRes.json());
+      setLoading(false);
     }
-
-    // Wrong answer stats
-    const wrongs = getWrongAnswerNotes();
-    const today = todayString();
-    setWrongAnswerStats({
-      total: wrongs.filter(w => !w.resolved).length,
-      due: wrongs.filter(w => !w.resolved && w.nextReviewAt <= today).length,
-      resolved: wrongs.filter(w => w.resolved).length,
-    });
-
-    setLoading(false);
+    loadAll();
   }, []);
 
-  // Subject bar chart data
+  // Heatmap data
+  const heatmapData = Object.entries(
+    sessions.reduce((acc, s) => {
+      acc[s.date] = (acc[s.date] ?? 0) + s.durationMinutes;
+      return acc;
+    }, {} as Record<string, number>)
+  ).map(([date, minutes]) => ({ date, minutes }));
+
+  // Weekly chart
+  const last7 = getLast7Days();
+  const weeklyData = last7.map(date => ({
+    day: new Date(date).toLocaleDateString("ko-KR", { month: "short", day: "numeric" }),
+    minutes: sessions.filter(s => s.date === date).reduce((sum, s) => sum + s.durationMinutes, 0),
+  }));
+
+  // Subject minutes (last 30 days)
+  const cutoff30 = new Date();
+  cutoff30.setDate(cutoff30.getDate() - 30);
+  const cutoff30Str = cutoff30.toISOString().slice(0, 10);
+  const subjectMinutes = sessions
+    .filter(s => s.date >= cutoff30Str)
+    .reduce((acc, s) => {
+      acc[s.subjectId] = (acc[s.subjectId] ?? 0) + s.durationMinutes;
+      return acc;
+    }, {} as Record<string, number>);
+  const totalMin30 = Object.values(subjectMinutes).reduce((a, b) => a + b, 0);
+
   const subjectChartData = subjects
-    .map(s => ({
-      name: s.name,
-      emoji: s.emoji,
-      minutes: subjectMinutes[s.id] ?? 0,
-    }))
+    .map(s => ({ name: s.name, emoji: s.emoji, color: s.color, id: s.id, minutes: subjectMinutes[s.id] ?? 0 }))
     .sort((a, b) => b.minutes - a.minutes)
     .slice(0, 8);
 
-  // Radar chart data for session metrics
+  // Session metrics (last 14 days)
+  const cutoff14 = new Date();
+  cutoff14.setDate(cutoff14.getDate() - 14);
+  const cutoff14Str = cutoff14.toISOString().slice(0, 10);
+  const recentSessions = sessions.filter(s => s.date >= cutoff14Str);
+  const avgFocus = recentSessions.length > 0
+    ? recentSessions.reduce((s, x) => s + x.focusScore, 0) / recentSessions.length : 0;
+  const avgFatigue = recentSessions.length > 0
+    ? recentSessions.reduce((s, x) => s + x.fatigueScore, 0) / recentSessions.length : 0;
+  const avgSatisfaction = recentSessions.length > 0
+    ? recentSessions.reduce((s, x) => s + x.satisfactionScore, 0) / recentSessions.length : 0;
+
   const radarData = [
-    { metric: "집중도", value: Math.round(sessionMetrics.avgFocus * 20) },
-    { metric: "만족도", value: Math.round(sessionMetrics.avgSatisfaction * 20) },
-    { metric: "활력", value: Math.round((5 - sessionMetrics.avgFatigue + 1) * 20) },
+    { metric: "집중도", value: Math.round(avgFocus * 20) },
+    { metric: "만족도", value: Math.round(avgSatisfaction * 20) },
+    { metric: "활력", value: Math.round((5 - avgFatigue + 1) * 20) },
   ];
 
-  const totalMin30 = Object.values(subjectMinutes).reduce((a, b) => a + b, 0);
+  // Wrong answer stats
+  const dueWrong = wrongAnswers.filter(w => !w.resolved && w.nextReviewAt <= today).length;
+  const totalActive = wrongAnswers.filter(w => !w.resolved).length;
+  const totalResolved = wrongAnswers.filter(w => w.resolved).length;
+
+  async function generateRecommendations() {
+    setAiLoading(true);
+    setAiRecs("");
+    try {
+      const subjectSummary = subjects.map(s => {
+        const mins = subjectMinutes[s.id] ?? 0;
+        const wrong = wrongAnswers.filter(w => !w.resolved).length;
+        return `- ${s.emoji} ${s.name}: 최근30일 ${mins}분 학습, 미해결 오답 ${wrong}개`;
+      }).join("\n");
+
+      const prompt = `학습 현황:
+총 학습 (최근 30일): ${Math.round(totalMin30 / 60)}시간 ${totalMin30 % 60}분
+평균 집중도: ${avgFocus > 0 ? avgFocus.toFixed(1) : "기록 없음"}/5
+평균 만족도: ${avgSatisfaction > 0 ? avgSatisfaction.toFixed(1) : "기록 없음"}/5
+오답 복습 대기: ${dueWrong}개 / 전체 미해결: ${totalActive}개
+
+과목별 현황:
+${subjectSummary || "과목 없음"}
+
+최근 7일 학습 패턴:
+${weeklyData.map(d => `${d.day}: ${d.minutes}분`).join(", ")}`;
+
+      const res = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemPrompt: `당신은 전문 학습 코치입니다. 학생의 학습 데이터를 분석하여 구체적이고 실용적인 개선 방안을 제시하세요.
+분석은 다음 형식으로 작성하세요:
+1. 현재 학습 패턴 분석 (2-3줄)
+2. 우선 개선 사항 3가지 (각 항목 구체적 행동 제안)
+3. 이번 주 집중 목표 1가지
+간결하고 실천 가능한 조언을 제공하세요.`,
+          userMessage: prompt,
+        }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setAiRecs(data.text);
+    } catch { setAiRecs("추천 생성에 실패했습니다. 다시 시도해주세요."); }
+    finally { setAiLoading(false); }
+  }
 
   if (loading) return <div className="p-8 text-center text-muted-foreground">분석 중...</div>;
 
@@ -122,49 +158,18 @@ export default function AnalyticsPage() {
     <div className="max-w-5xl mx-auto space-y-6">
       <div>
         <h1 className="text-xl font-bold">학습 분석</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">데이터 기반 추천 행동과 패턴 분석</p>
+        <p className="text-sm text-muted-foreground mt-0.5">데이터 기반 패턴 분석</p>
       </div>
 
-      {/* Recommendations */}
-      <div className="space-y-3">
-        <h2 className="text-sm font-semibold flex items-center gap-2">
-          <Target className="w-4 h-4 text-primary" />
-          오늘의 추천 행동
-        </h2>
-        {recommendations.length === 0 ? (
-          <Card>
-            <CardContent className="p-6 text-center">
-              <p className="text-2xl mb-2">🎉</p>
-              <p className="text-sm text-muted-foreground">모든 학습 지표가 양호합니다!</p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-2">
-            {recommendations.map(rec => (
-              <div key={rec.id} className={`border-l-4 rounded-lg p-4 ${PRIORITY_COLORS[rec.priority]}`}>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${PRIORITY_BADGE[rec.priority]}`}>
-                        {rec.priority === "high" ? "긴급" : rec.priority === "medium" ? "권장" : "참고"}
-                      </span>
-                      <span className="font-medium text-sm">{rec.title}</span>
-                    </div>
-                    <p className="text-sm text-muted-foreground">{rec.description}</p>
-                  </div>
-                  {rec.actionHref && (
-                    <Link href={rec.actionHref}>
-                      <Button variant="outline" size="sm" className="shrink-0 h-7 text-xs">
-                        {rec.actionLabel ?? "이동"} <ArrowRight className="w-3 h-3 ml-1" />
-                      </Button>
-                    </Link>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      {/* Heatmap */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">📅 학습 잔디</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <StudyHeatmap data={heatmapData} weeks={17} />
+        </CardContent>
+      </Card>
 
       {/* Key numbers */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -184,7 +189,7 @@ export default function AnalyticsPage() {
               <p className="text-xs text-muted-foreground">평균 집중도</p>
             </div>
             <p className="text-xl font-bold">
-              {sessionMetrics.avgFocus > 0 ? sessionMetrics.avgFocus.toFixed(1) : "-"}
+              {avgFocus > 0 ? avgFocus.toFixed(1) : "-"}
               <span className="text-sm font-normal ml-1">/ 5</span>
             </p>
           </CardContent>
@@ -195,7 +200,7 @@ export default function AnalyticsPage() {
               <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
               <p className="text-xs text-muted-foreground">오답 복습 예정</p>
             </div>
-            <p className={`text-xl font-bold ${wrongAnswerStats.due > 0 ? "text-red-500" : ""}`}>{wrongAnswerStats.due}</p>
+            <p className={`text-xl font-bold ${dueWrong > 0 ? "text-red-500" : ""}`}>{dueWrong}</p>
           </CardContent>
         </Card>
         <Card>
@@ -205,8 +210,8 @@ export default function AnalyticsPage() {
               <p className="text-xs text-muted-foreground">오답 해결률</p>
             </div>
             <p className="text-xl font-bold">
-              {wrongAnswerStats.total + wrongAnswerStats.resolved > 0
-                ? Math.round(wrongAnswerStats.resolved / (wrongAnswerStats.total + wrongAnswerStats.resolved) * 100)
+              {totalActive + totalResolved > 0
+                ? Math.round(totalResolved / (totalActive + totalResolved) * 100)
                 : 0}%
             </p>
           </CardContent>
@@ -238,7 +243,7 @@ export default function AnalyticsPage() {
             <CardTitle className="text-sm">최근 2주 세션 품질</CardTitle>
           </CardHeader>
           <CardContent>
-            {sessionMetrics.avgFocus === 0 ? (
+            {avgFocus === 0 ? (
               <div className="h-[180px] flex items-center justify-center text-sm text-muted-foreground">
                 세션 기록이 없습니다
               </div>
@@ -265,10 +270,9 @@ export default function AnalyticsPage() {
             <div className="space-y-2">
               {subjectChartData.map(item => {
                 const pct = totalMin30 > 0 ? (item.minutes / totalMin30) * 100 : 0;
-                const subject = subjects.find(s => s.name === item.name);
-                const colors = subject ? COLOR_MAP[subject.color] : null;
+                const colors = COLOR_MAP[item.color];
                 return (
-                  <div key={item.name} className="flex items-center gap-3">
+                  <div key={item.id} className="flex items-center gap-3">
                     <span className="text-sm w-5">{item.emoji}</span>
                     <span className="text-sm w-28 truncate">{item.name}</span>
                     <div className="flex-1 bg-muted rounded-full h-2">
@@ -290,6 +294,37 @@ export default function AnalyticsPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* AI Recommendations */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-indigo-500" />AI 학습 추천
+            </CardTitle>
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
+              onClick={generateRecommendations} disabled={aiLoading || sessions.length === 0}>
+              {aiLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+              {aiRecs ? "재분석" : "분석 생성"}
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {aiLoading ? (
+            <div className="flex items-center gap-2 py-6 justify-center text-muted-foreground text-sm">
+              <Loader2 className="w-4 h-4 animate-spin" />학습 데이터 분석 중...
+            </div>
+          ) : aiRecs ? (
+            <p className="text-sm text-muted-foreground whitespace-pre-line leading-relaxed">{aiRecs}</p>
+          ) : (
+            <p className="text-sm text-muted-foreground py-4 text-center">
+              {sessions.length === 0
+                ? "학습 세션을 기록하면 AI 추천을 받을 수 있습니다."
+                : "학습 데이터를 분석하여 맞춤 추천을 받아보세요."}
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Quick links */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

@@ -8,47 +8,66 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
-import { getSources, saveSources, getSubjectById, getQuestions, saveQuestions } from "@/lib/storage";
-import { generateId, todayString } from "@/lib/utils-app";
-import type { StudySource, QuizQuestion } from "@/lib/types";
 import { toast } from "sonner";
+
+interface StudySource {
+  id: string;
+  subjectId: string;
+  title: string;
+  content: string;
+  type: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface SubjectInfo { emoji: string; name: string; }
 
 export default function SourcesPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const subject = getSubjectById(id);
 
+  const [subject, setSubject] = useState<SubjectInfo | null>(null);
   const [sources, setSources] = useState<StudySource[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [generating, setGenerating] = useState<string | null>(null); // sourceId
+  const [generating, setGenerating] = useState<string | null>(null);
 
   useEffect(() => {
-    setSources(getSources(id));
-  }, [id]);
+    async function load() {
+      const [subRes, srcRes] = await Promise.all([
+        fetch(`/api/study/subjects/${id}`),
+        fetch(`/api/study/subjects/${id}/sources`),
+      ]);
+      if (!subRes.ok) { router.push("/study/subjects"); return; }
+      const s = await subRes.json();
+      setSubject({ emoji: s.emoji, name: s.name });
+      if (srcRes.ok) setSources(await srcRes.json());
+    }
+    load();
+  }, [id, router]);
 
   function openAdd() { setTitle(""); setContent(""); setDialogOpen(true); }
 
-  function handleSave() {
+  async function handleSave() {
     if (!title.trim() || !content.trim()) return;
-    const now = new Date().toISOString();
-    const next: StudySource[] = [...sources, {
-      id: generateId(), subjectId: id, title, content,
-      type: "text", createdAt: now, updatedAt: now,
-    }];
-    setSources(next);
-    saveSources(id, next);
+    const res = await fetch(`/api/study/subjects/${id}/sources`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, content, type: "text" }),
+    });
+    if (!res.ok) { toast.error("저장 실패"); return; }
+    const source: StudySource = await res.json();
+    setSources(prev => [source, ...prev]);
     setDialogOpen(false);
     toast.success("자료가 저장되었습니다");
   }
 
-  function handleDelete(sourceId: string) {
-    const next = sources.filter(s => s.id !== sourceId);
-    setSources(next);
-    saveSources(id, next);
+  async function handleDelete(sourceId: string) {
+    const res = await fetch(`/api/study/subjects/${id}/sources/${sourceId}`, { method: "DELETE" });
+    if (!res.ok) { toast.error("삭제 실패"); return; }
+    setSources(prev => prev.filter(s => s.id !== sourceId));
     toast.success("자료가 삭제되었습니다");
   }
 
@@ -73,7 +92,6 @@ export default function SourcesPage() {
       const data = await res.json();
       if (data.error) throw new Error(data.error);
 
-      // Parse JSON from response
       const jsonMatch = data.text.match(/\[[\s\S]*\]/);
       if (!jsonMatch) throw new Error("JSON을 파싱할 수 없습니다");
       const parsed = JSON.parse(jsonMatch[0]) as Array<{
@@ -84,22 +102,23 @@ export default function SourcesPage() {
         explanation: string;
       }>;
 
-      const now = new Date().toISOString();
-      const existing = getQuestions(id);
-      const newQuestions: QuizQuestion[] = parsed.map(q => ({
-        id: generateId(),
-        subjectId: id,
-        type: q.type,
-        question: q.question,
-        options: q.options,
-        answer: q.answer,
-        explanation: q.explanation || "",
-        tags: [source.title],
-        wrongCount: 0,
-        createdAt: now,
-      }));
-      saveQuestions(id, [...existing, ...newQuestions]);
-      toast.success(`${newQuestions.length}개 문제가 퀴즈 뱅크에 추가되었습니다!`);
+      let addedCount = 0;
+      for (const q of parsed) {
+        const qRes = await fetch(`/api/study/subjects/${id}/quiz`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: q.type,
+            question: q.question,
+            options: q.options ?? [],
+            answer: q.answer,
+            explanation: q.explanation || "",
+            tags: [source.title],
+          }),
+        });
+        if (qRes.ok) addedCount++;
+      }
+      toast.success(`${addedCount}개 문제가 퀴즈 뱅크에 추가되었습니다!`);
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "생성 실패");
     } finally {
@@ -107,7 +126,7 @@ export default function SourcesPage() {
     }
   }, [id]);
 
-  if (!subject) { router.push("/study/subjects"); return null; }
+  if (!subject) return null;
 
   return (
     <div className="max-w-4xl mx-auto space-y-4">

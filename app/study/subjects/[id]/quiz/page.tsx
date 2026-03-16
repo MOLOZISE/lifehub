@@ -2,23 +2,35 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Plus, Play, CheckCircle, XCircle, Trash2, Upload, Timer, RotateCcw, Filter } from "lucide-react";
+import { ArrowLeft, Plus, Play, XCircle, Trash2, Upload, Timer, RotateCcw, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LinkButton } from "@/components/ui/link-button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getSubjectById, getQuestions, saveQuestions, getSessions, saveSessions } from "@/lib/storage";
-import { generateId } from "@/lib/utils-app";
-import type { QuizQuestion, QuizSession, Subject, QuestionType } from "@/lib/types";
 
+type QuestionType = "multiple" | "ox" | "short";
 type Mode = "list" | "quiz" | "result" | "add";
 type FilterMode = "all" | "wrong" | "tag";
+
+interface QuizQuestion {
+  id: string;
+  subjectId: string;
+  type: QuestionType;
+  question: string;
+  options: string[];
+  answer: string;
+  explanation: string;
+  tags: string[];
+  wrongCount: number;
+  lastAnsweredAt: string | null;
+  createdAt: string;
+}
+
+interface SubjectInfo { emoji: string; name: string; }
 
 function normalizeAnswer(q: QuizQuestion, userAnswer: string): boolean {
   if (q.type === "multiple") return userAnswer === q.answer;
@@ -28,7 +40,7 @@ function normalizeAnswer(q: QuizQuestion, userAnswer: string): boolean {
 
 export default function QuizPage() {
   const { id } = useParams<{ id: string }>();
-  const [subject, setSubject] = useState<Subject | null>(null);
+  const [subject, setSubject] = useState<SubjectInfo | null>(null);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [mode, setMode] = useState<Mode>("list");
   // Filter
@@ -53,8 +65,18 @@ export default function QuizPage() {
   const [addTags, setAddTags] = useState("");
 
   useEffect(() => {
-    setSubject(getSubjectById(id) ?? null);
-    setQuestions(getQuestions(id));
+    async function load() {
+      const [subRes, qRes] = await Promise.all([
+        fetch(`/api/study/subjects/${id}`),
+        fetch(`/api/study/subjects/${id}/quiz`),
+      ]);
+      if (subRes.ok) {
+        const s = await subRes.json();
+        setSubject({ emoji: s.emoji, name: s.name });
+      }
+      if (qRes.ok) setQuestions(await qRes.json());
+    }
+    load();
   }, [id]);
 
   useEffect(() => {
@@ -92,27 +114,33 @@ export default function QuizPage() {
     setSubmitted(true);
     setAnswers(prev => [...prev, { qId: q.id, answer: userAnswer, correct }]);
     if (!correct) {
-      const updated = questions.map(qq => qq.id === q.id ? { ...qq, wrongCount: qq.wrongCount + 1, lastAnsweredAt: new Date().toISOString() } : qq);
-      setQuestions(updated);
-      saveQuestions(id, updated);
+      const newCount = q.wrongCount + 1;
+      const now = new Date().toISOString();
+      setQuestions(prev => prev.map(qq => qq.id === q.id ? { ...qq, wrongCount: newCount, lastAnsweredAt: now } : qq));
+      fetch(`/api/study/subjects/${id}/quiz/${q.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wrongCount: newCount, lastAnsweredAt: now }),
+      });
     }
   }
 
   function handleNext() {
     if (current + 1 >= queue.length) {
       if (timerRef.current) clearInterval(timerRef.current);
-      const score = answers.filter(a => a.correct).length + (answers.length < queue.length ? (normalizeAnswer(queue[current], userAnswer) ? 1 : 0) : 0);
-      const session: QuizSession = {
-        id: generateId(), subjectId: id,
-        questionIds: queue.map(q => q.id),
-        answers: answers.map(a => a.answer),
-        score: answers.filter(a => a.correct).length,
-        total: queue.length,
-        durationSeconds: elapsed,
-        completedAt: new Date().toISOString(),
-      };
-      const prev = getSessions(id);
-      saveSessions(id, [...prev, session]);
+      const finalAnswers = [...answers];
+      const score = finalAnswers.filter(a => a.correct).length;
+      fetch(`/api/study/subjects/${id}/sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          questionIds: queue.map(q => q.id),
+          answers: finalAnswers.map(a => a.answer),
+          score,
+          total: queue.length,
+          durationSeconds: elapsed,
+        }),
+      });
       setMode("result");
     } else {
       setCurrent(c => c + 1);
@@ -121,57 +149,63 @@ export default function QuizPage() {
     }
   }
 
-  function handleAddQuestion() {
+  async function handleAddQuestion() {
     if (!addQ.trim() || !addAnswer.trim()) return;
-    const q: QuizQuestion = {
-      id: generateId(), subjectId: id,
-      type: addType, question: addQ,
-      options: addType === "multiple" ? addOpts.filter(Boolean) : undefined,
-      answer: addAnswer, explanation: addExpl,
-      tags: addTags.split(",").map(t => t.trim()).filter(Boolean),
-      wrongCount: 0, createdAt: new Date().toISOString(),
-    };
-    const next = [...questions, q];
-    setQuestions(next);
-    saveQuestions(id, next);
+    const res = await fetch(`/api/study/subjects/${id}/quiz`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: addType,
+        question: addQ,
+        options: addType === "multiple" ? addOpts.filter(Boolean) : [],
+        answer: addAnswer,
+        explanation: addExpl,
+        tags: addTags.split(",").map(t => t.trim()).filter(Boolean),
+      }),
+    });
+    if (!res.ok) return;
+    const q: QuizQuestion = await res.json();
+    setQuestions(prev => [...prev, q]);
     setAddQ(""); setAddOpts(["","","",""]); setAddAnswer(""); setAddExpl(""); setAddTags(""); setMode("list");
   }
 
-  function handleCSVImport(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleCSVImport(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       const text = ev.target?.result as string;
-      const lines = text.trim().split("\n").slice(1); // skip header
-      const imported: QuizQuestion[] = [];
-      lines.forEach(line => {
+      const lines = text.trim().split("\n").slice(1);
+      for (const line of lines) {
         const cols = line.split(",");
-        if (cols.length < 7) return;
+        if (cols.length < 7) continue;
         const [type, question, o1, o2, o3, o4, answer, explanation, ...tagParts] = cols;
-        imported.push({
-          id: generateId(), subjectId: id,
-          type: (type?.trim() || "multiple") as QuestionType,
-          question: question?.trim() || "",
-          options: type?.trim() === "multiple" ? [o1,o2,o3,o4].map(o => o?.trim()).filter(Boolean) : undefined,
-          answer: answer?.trim() || "",
-          explanation: explanation?.trim() || "",
-          tags: tagParts.join(",").split(",").map(t => t.trim()).filter(Boolean),
-          wrongCount: 0, createdAt: new Date().toISOString(),
+        const qType = (type?.trim() || "multiple") as QuestionType;
+        const res = await fetch(`/api/study/subjects/${id}/quiz`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: qType,
+            question: question?.trim() || "",
+            options: qType === "multiple" ? [o1,o2,o3,o4].map(o => o?.trim()).filter(Boolean) : [],
+            answer: answer?.trim() || "",
+            explanation: explanation?.trim() || "",
+            tags: tagParts.join(",").split(",").map(t => t.trim()).filter(Boolean),
+          }),
         });
-      });
-      const next = [...questions, ...imported];
-      setQuestions(next);
-      saveQuestions(id, next);
+        if (res.ok) {
+          const q: QuizQuestion = await res.json();
+          setQuestions(prev => [...prev, q]);
+        }
+      }
     };
     reader.readAsText(file, "utf-8");
     e.target.value = "";
   }
 
-  function handleDelete(qId: string) {
-    const next = questions.filter(q => q.id !== qId);
-    setQuestions(next);
-    saveQuestions(id, next);
+  async function handleDelete(qId: string) {
+    await fetch(`/api/study/subjects/${id}/quiz/${qId}`, { method: "DELETE" });
+    setQuestions(prev => prev.filter(q => q.id !== qId));
   }
 
   const pad = (n: number) => String(n).padStart(2, "0");

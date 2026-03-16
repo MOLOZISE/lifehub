@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Plus, List, Play, RotateCcw, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, Play, RotateCcw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LinkButton } from "@/components/ui/link-button";
 import { Input } from "@/components/ui/input";
@@ -10,15 +10,26 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { getSubjectById, getFlashcards, saveFlashcards } from "@/lib/storage";
-import { generateId } from "@/lib/utils-app";
-import type { Flashcard, Subject } from "@/lib/types";
 
 type Mode = "list" | "study" | "add" | "result";
 
+interface Flashcard {
+  id: string;
+  subjectId: string;
+  front: string;
+  back: string;
+  tags: string[];
+  interval: number;
+  easeFactor: number;
+  nextReviewAt: string;
+  reviewCount: number;
+  known: boolean;
+  createdAt: string;
+}
+
+interface SubjectInfo { emoji: string; name: string; }
+
 function sm2Update(card: Flashcard, quality: number): Flashcard {
-  // quality: 5=easy, 3=hard, 1=fail
   let { interval, easeFactor } = card;
   if (quality >= 3) {
     interval = card.reviewCount === 0 ? 1 : card.reviewCount === 1 ? 6 : Math.round(interval * easeFactor);
@@ -34,7 +45,7 @@ function sm2Update(card: Flashcard, quality: number): Flashcard {
 
 export default function FlashcardPage() {
   const { id } = useParams<{ id: string }>();
-  const [subject, setSubject] = useState<Subject | null>(null);
+  const [subject, setSubject] = useState<SubjectInfo | null>(null);
   const [cards, setCards] = useState<Flashcard[]>([]);
   const [mode, setMode] = useState<Mode>("list");
   const [showBack, setShowBack] = useState(false);
@@ -49,8 +60,18 @@ export default function FlashcardPage() {
   const [tags, setTags] = useState("");
 
   useEffect(() => {
-    setSubject(getSubjectById(id) ?? null);
-    setCards(getFlashcards(id));
+    async function load() {
+      const [subRes, cardsRes] = await Promise.all([
+        fetch(`/api/study/subjects/${id}`),
+        fetch(`/api/study/subjects/${id}/flashcards`),
+      ]);
+      if (subRes.ok) {
+        const s = await subRes.json();
+        setSubject({ emoji: s.emoji, name: s.name });
+      }
+      if (cardsRes.ok) setCards(await cardsRes.json());
+    }
+    load();
   }, [id]);
 
   // Keyboard shortcuts
@@ -64,11 +85,11 @@ export default function FlashcardPage() {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, showBack, queue, current]);
 
   function startStudy() {
     const today = new Date().toISOString().slice(0, 10);
-    // Prioritize due cards, then new cards
     const due = cards.filter(c => c.nextReviewAt.slice(0, 10) <= today);
     const fresh = cards.filter(c => c.nextReviewAt.slice(0, 10) > today);
     const q = [...due.sort(() => Math.random() - 0.5), ...fresh.sort(() => Math.random() - 0.5)];
@@ -85,7 +106,18 @@ export default function FlashcardPage() {
     const updated = sm2Update(card, quality);
     const newCards = cards.map(c => c.id === card.id ? updated : c);
     setCards(newCards);
-    saveFlashcards(id, newCards);
+    // Persist SM-2 update
+    fetch(`/api/study/subjects/${id}/flashcards/${card.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        interval: updated.interval,
+        easeFactor: updated.easeFactor,
+        nextReviewAt: updated.nextReviewAt,
+        reviewCount: updated.reviewCount,
+        known: updated.known,
+      }),
+    });
     setResults(prev => [...prev, { card, known: quality >= 3 }]);
     if (quality < 3) setRetryQueue(prev => [...prev, updated]);
 
@@ -94,7 +126,6 @@ export default function FlashcardPage() {
       setCurrent(nextIdx);
       setShowBack(false);
     } else if (retryQueue.length > 0) {
-      // Retry unknown cards
       setQueue([...retryQueue]);
       setRetryQueue([]);
       setCurrent(0);
@@ -104,26 +135,26 @@ export default function FlashcardPage() {
     }
   }
 
-  function handleAdd() {
+  async function handleAdd() {
     if (!front.trim() || !back.trim()) return;
-    const now = new Date().toISOString();
-    const card: Flashcard = {
-      id: generateId(), subjectId: id,
-      front: front.trim(), back: back.trim(),
-      tags: tags.split(",").map(t => t.trim()).filter(Boolean),
-      interval: 0, easeFactor: 2.5,
-      nextReviewAt: now, reviewCount: 0, known: false, createdAt: now,
-    };
-    const next = [...cards, card];
-    setCards(next);
-    saveFlashcards(id, next);
+    const res = await fetch(`/api/study/subjects/${id}/flashcards`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        front: front.trim(),
+        back: back.trim(),
+        tags: tags.split(",").map(t => t.trim()).filter(Boolean),
+      }),
+    });
+    if (!res.ok) return;
+    const card: Flashcard = await res.json();
+    setCards(prev => [...prev, card]);
     setFront(""); setBack(""); setTags("");
   }
 
-  function handleDelete(cardId: string) {
-    const next = cards.filter(c => c.id !== cardId);
-    setCards(next);
-    saveFlashcards(id, next);
+  async function handleDelete(cardId: string) {
+    await fetch(`/api/study/subjects/${id}/flashcards/${cardId}`, { method: "DELETE" });
+    setCards(prev => prev.filter(c => c.id !== cardId));
   }
 
   const today = new Date().toISOString().slice(0, 10);
@@ -139,7 +170,6 @@ export default function FlashcardPage() {
         </div>
         <Progress value={((current + 1) / queue.length) * 100} />
 
-        {/* Flip card */}
         <div
           className="relative cursor-pointer"
           style={{ perspective: 1000 }}
@@ -149,7 +179,6 @@ export default function FlashcardPage() {
             className="relative w-full transition-all duration-500"
             style={{ transformStyle: "preserve-3d", transform: showBack ? "rotateY(180deg)" : "rotateY(0deg)", minHeight: 240 }}
           >
-            {/* Front */}
             <div
               className="absolute inset-0 flex items-center justify-center p-8 rounded-2xl border-2 bg-card text-center"
               style={{ backfaceVisibility: "hidden" }}
@@ -160,7 +189,6 @@ export default function FlashcardPage() {
                 <p className="text-xs text-muted-foreground mt-4">클릭하거나 Space를 눌러 뒤집기</p>
               </div>
             </div>
-            {/* Back */}
             <div
               className="absolute inset-0 flex items-center justify-center p-8 rounded-2xl border-2 border-primary bg-primary/5 text-center"
               style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
@@ -270,7 +298,7 @@ export default function FlashcardPage() {
                     <div className="flex gap-1 flex-wrap">{card.tags.map(t => <Badge key={t} variant="outline" className="text-xs">{t}</Badge>)}</div>
                   )}
                   <p className="text-xs text-muted-foreground mt-2">
-                    복습 {card.reviewCount}회 | 다음: {card.nextReviewAt.slice(0, 10)}
+                    복습 {card.reviewCount}회 | 다음: {new Date(card.nextReviewAt).toISOString().slice(0, 10)}
                   </p>
                 </CardContent>
               </Card>

@@ -10,7 +10,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { getHoldings, getWatchlist } from "@/lib/storage";
 import type { OHLCVBar } from "@/lib/types";
 
 function toYahooTicker(ticker: string, market?: "KR" | "US"): string {
@@ -99,8 +98,25 @@ export default function ChartPage() {
   const [watchlist, setWatchlist] = useState<{ id: string; name: string; ticker: string; market: "KR" | "US"; currency: string }[]>([]);
 
   useEffect(() => {
-    setHoldings(getHoldings().map(h => ({ id: h.id, name: h.name, ticker: h.ticker, market: h.market, currency: h.currency })));
-    setWatchlist(getWatchlist().map(w => ({ id: w.id, name: w.name, ticker: w.ticker, market: w.market, currency: w.currency })));
+    async function load() {
+      const [holdRes, watchRes] = await Promise.all([
+        fetch("/api/portfolio/holdings"),
+        fetch("/api/portfolio/watchlist"),
+      ]);
+      if (holdRes.ok) {
+        const data = await holdRes.json();
+        setHoldings(data.map((h: { id: string; name: string; ticker: string; market: "KR"|"US"; currency: string }) => ({ id: h.id, name: h.name, ticker: h.ticker, market: h.market, currency: h.currency })));
+      }
+      if (watchRes.ok) {
+        const data = await watchRes.json();
+        const allItems: { id: string; name: string; ticker: string; market: "KR"|"US"; currency: string }[] = [
+          ...(data.groups ?? []).flatMap((g: { items?: { id: string; name: string; ticker: string; market: "KR"|"US"; currency: string }[] }) => g.items ?? []),
+          ...(data.ungroupedItems ?? []),
+        ];
+        setWatchlist(allItems.map(w => ({ id: w.id, name: w.name, ticker: w.ticker, market: w.market, currency: w.currency })));
+      }
+    }
+    load();
   }, []);
 
   async function fetchChart(yahooTicker: string, label: string, currency: string, p?: Period) {

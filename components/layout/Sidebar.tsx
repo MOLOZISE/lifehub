@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useSession, signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import {
-  LayoutDashboard, BookOpen, TrendingUp,
-  Moon, Sun, ChevronRight,
+  LayoutDashboard, BookOpen, TrendingUp, MessageSquare, Utensils,
+  Moon, Sun, ChevronRight, LogOut, User, LogIn,
 } from "lucide-react";
 import { useTheme } from "@/components/providers/ThemeProvider";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,7 @@ const navItems = [
     icon: TrendingUp,
     children: [
       { label: "포트폴리오", href: "/portfolio" },
+      { label: "📋 거래 이력", href: "/portfolio/trades" },
       { label: "⭐ 관심 종목", href: "/portfolio/watchlist" },
       { label: "차트 분석", href: "/portfolio/chart" },
       { label: "AI 뉴스 분석", href: "/portfolio/news" },
@@ -40,11 +42,31 @@ const navItems = [
       { label: "주식 공부방", href: "/portfolio/learn" },
     ],
   },
+  {
+    label: "커뮤니티",
+    icon: MessageSquare,
+    children: [
+      { label: "🗣️ 자유게시판", href: "/community?category=free" },
+      { label: "📈 주식 토론방", href: "/community?category=stock" },
+      { label: "📖 스터디 인증", href: "/community?category=study" },
+      { label: "🍜 맛집 추천", href: "/community?category=restaurant" },
+    ],
+  },
+  {
+    label: "맛집",
+    icon: Utensils,
+    children: [
+      { label: "🗺️ 맛집 지도", href: "/restaurant" },
+      { label: "⭐ 내 리스트", href: "/restaurant/mylist" },
+    ],
+  },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
+  const { data: session } = useSession();
+  const router = useRouter();
 
   return (
     <aside className="hidden md:flex flex-col w-60 min-h-screen bg-background border-r">
@@ -78,7 +100,9 @@ export function Sidebar() {
             );
           }
 
-          const groupActive = item.children.some((c) => pathname === c.href || pathname.startsWith(c.href + "/"));
+          const groupActive = item.children.some(
+            (c) => pathname === c.href || pathname.startsWith(c.href.split("?")[0] + "/")
+          );
 
           return (
             <div key={item.label} className="space-y-1">
@@ -93,7 +117,8 @@ export function Sidebar() {
               </div>
               <div className="ml-4 space-y-0.5 border-l pl-3">
                 {item.children.map((child) => {
-                  const active = pathname === child.href || pathname.startsWith(child.href + "/");
+                  const basePath = child.href.split("?")[0];
+                  const active = pathname === basePath || pathname.startsWith(basePath + "/");
                   return (
                     <Link
                       key={child.href}
@@ -116,8 +141,49 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Theme toggle */}
-      <div className="px-3 py-4 border-t">
+      {/* Bottom area */}
+      <div className="px-3 py-4 border-t space-y-1">
+        {/* User info / login */}
+        {session?.user ? (
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-accent/50">
+              <div className="w-6 h-6 rounded-full bg-indigo-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                {session.user.name?.[0]?.toUpperCase() ?? "U"}
+              </div>
+              <span className="text-sm font-medium truncate">{session.user.name}</span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start gap-2 text-muted-foreground"
+              onClick={() => router.push("/profile")}
+            >
+              <User className="w-4 h-4" />
+              프로필
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start gap-2 text-muted-foreground"
+              onClick={() => signOut({ callbackUrl: "/auth/signin" })}
+            >
+              <LogOut className="w-4 h-4" />
+              로그아웃
+            </Button>
+          </div>
+        ) : (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start gap-2 text-muted-foreground"
+            onClick={() => router.push("/auth/signin")}
+          >
+            <LogIn className="w-4 h-4" />
+            로그인
+          </Button>
+        )}
+
+        {/* Theme toggle */}
         <Button
           variant="ghost"
           size="sm"

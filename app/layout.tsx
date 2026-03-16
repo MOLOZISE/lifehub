@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
+import { AuthProvider } from "@/components/providers/AuthProvider";
+import { MigrationProvider } from "@/components/providers/MigrationProvider";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { MobileNav } from "@/components/layout/MobileNav";
 import { Header } from "@/components/layout/Header";
@@ -19,6 +21,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ko" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <AuthProvider>
+        <MigrationProvider>
         <ThemeProvider>
           <div className="flex min-h-screen bg-background text-foreground">
             <Sidebar />
@@ -32,6 +36,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <MobileNav />
           <Toaster richColors position="top-right" />
         </ThemeProvider>
+        </MigrationProvider>
+        </AuthProvider>
       </body>
     </html>
   );

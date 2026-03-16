@@ -1,17 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Trash2, Save, Pencil } from "lucide-react";
+import { Plus, Trash2, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { getMemos, saveMemos } from "@/lib/storage";
-import { generateId } from "@/lib/utils-app";
-import type { StrategyMemo } from "@/lib/types";
 import { toast } from "sonner";
+
+interface StrategyMemo { id: string; ticker: string; title: string; content: string; updatedAt: string; }
 
 export default function MemoPage() {
   const [memos, setMemos] = useState<StrategyMemo[]>([]);
@@ -21,7 +20,12 @@ export default function MemoPage() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
 
-  useEffect(() => { setMemos(getMemos()); }, []);
+  async function loadMemos() {
+    const res = await fetch("/api/portfolio/strategy");
+    if (res.ok) setMemos(await res.json());
+  }
+
+  useEffect(() => { loadMemos(); }, []);
 
   function openAdd() {
     setEditing(null); setTicker(""); setTitle(""); setContent(""); setDialogOpen(true);
@@ -29,21 +33,32 @@ export default function MemoPage() {
   function openEdit(m: StrategyMemo) {
     setEditing(m); setTicker(m.ticker); setTitle(m.title); setContent(m.content); setDialogOpen(true);
   }
-  function handleSave() {
+
+  async function handleSave() {
     if (!title.trim()) return;
-    const now = new Date().toISOString();
-    const next = editing
-      ? memos.map(m => m.id === editing.id ? { ...m, ticker, title, content, updatedAt: now } : m)
-      : [...memos, { id: generateId(), ticker, title, content, createdAt: now, updatedAt: now }];
-    setMemos(next);
-    saveMemos(next);
+    if (editing) {
+      const res = await fetch(`/api/portfolio/strategy/${editing.id}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ticker, title, content }),
+      });
+      if (!res.ok) { toast.error("저장 실패"); return; }
+      toast.success("메모가 수정되었습니다");
+    } else {
+      const res = await fetch("/api/portfolio/strategy", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ticker: ticker || "MEMO", title, content }),
+      });
+      if (!res.ok) { toast.error("저장 실패"); return; }
+      toast.success("메모가 저장되었습니다");
+    }
     setDialogOpen(false);
-    toast.success(editing ? "메모가 수정되었습니다" : "메모가 저장되었습니다");
+    loadMemos();
   }
-  function handleDelete(id: string) {
-    const next = memos.filter(m => m.id !== id);
-    setMemos(next);
-    saveMemos(next);
+
+  async function handleDelete(id: string) {
+    const res = await fetch(`/api/portfolio/strategy/${id}`, { method: "DELETE" });
+    if (!res.ok) { toast.error("삭제 실패"); return; }
+    setMemos(m => m.filter(x => x.id !== id));
     toast.success("메모가 삭제되었습니다");
   }
 
@@ -68,7 +83,7 @@ export default function MemoPage() {
             <Card key={m.id} className="relative">
               <CardHeader className="pb-2 pt-4 px-4 flex-row items-start justify-between gap-2">
                 <div className="min-w-0">
-                  {m.ticker && <Badge variant="outline" className="text-xs mb-1">{m.ticker}</Badge>}
+                  {m.ticker && m.ticker !== "MEMO" && <Badge variant="outline" className="text-xs mb-1">{m.ticker}</Badge>}
                   <h3 className="font-semibold text-sm truncate">{m.title}</h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {new Date(m.updatedAt).toLocaleDateString("ko-KR")}

@@ -1,0 +1,593 @@
+// LifeHub - Prisma Schema
+// Covers: Auth, Study, Portfolio, Community, Restaurant
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Auth (NextAuth.js v5) ────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  username      String?   @unique  // 커뮤니티 닉네임
+  bio           String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts       Account[]
+  sessions       Session[]
+
+  // Study
+  subjects       Subject[]
+  studySessions  StudySession[]
+  flashcards     Flashcard[]
+  notes          Note[]
+  quizQuestions  QuizQuestion[]
+  quizSessions   QuizSession[]
+  wrongAnswers   WrongAnswerNote[]
+  exams          Exam[]
+  studySources   StudySource[]
+  studyLogs      StudyLog[]
+  dailyGoals     DailyGoal[]
+
+  // Portfolio
+  holdings       Holding[]
+  watchlistGroups WatchlistGroup[]
+  watchlistItems  WatchlistItem[]
+  strategyMemos  StrategyMemo[]
+
+  // Community
+  posts          Post[]
+  comments       Comment[]
+  likes          Like[]
+  bookmarks      Bookmark[]
+  reports        Report[]
+
+  // Restaurant
+  restaurants    Restaurant[]
+  restaurantReviews RestaurantReview[]
+  restaurantBookmarks RestaurantBookmark[]
+
+  // Portfolio
+  stockTrades        StockTrade[]
+  portfolioSnapshots PortfolioSnapshot[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ─── Study App ────────────────────────────────────────────────────────────────
+
+model Subject {
+  id            String    @id @default(cuid())
+  userId        String
+  name          String
+  description   String    @default("")
+  color         String    @default("blue")   // SubjectColor
+  emoji         String    @default("📚")
+  examDate      String?
+  lastStudiedAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notes         Note[]
+  quizQuestions QuizQuestion[]
+  quizSessions  QuizSession[]
+  flashcards    Flashcard[]
+  studySessions StudySession[]
+  studySources  StudySource[]
+  studyLogs     StudyLog[]
+  wrongAnswers  WrongAnswerNote[]
+  examSubjects  ExamSubject[]
+
+  @@map("subjects")
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  userId    String
+  subjectId String
+  title     String
+  content   String   @db.Text
+  tags      String[] @default([])
+  isPinned  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@map("notes")
+}
+
+model QuizQuestion {
+  id              String    @id @default(cuid())
+  userId          String
+  subjectId       String
+  type            String    // "multiple" | "ox" | "short"
+  question        String    @db.Text
+  options         String[]  @default([])
+  answer          String
+  explanation     String    @default("")
+  tags            String[]  @default([])
+  wrongCount      Int       @default(0)
+  lastAnsweredAt  DateTime?
+  createdAt       DateTime  @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@map("quiz_questions")
+}
+
+model QuizSession {
+  id              String   @id @default(cuid())
+  userId          String
+  subjectId       String
+  questionIds     String[]
+  answers         String[]
+  score           Int
+  total           Int
+  durationSeconds Int
+  completedAt     DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@map("quiz_sessions")
+}
+
+model Flashcard {
+  id           String   @id @default(cuid())
+  userId       String
+  subjectId    String
+  front        String   @db.Text
+  back         String   @db.Text
+  tags         String[] @default([])
+  interval     Int      @default(1)     // SM-2 days
+  easeFactor   Float    @default(2.5)   // SM-2 ease factor
+  nextReviewAt DateTime @default(now())
+  reviewCount  Int      @default(0)
+  known        Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@map("flashcards")
+}
+
+model StudyLog {
+  id              String   @id @default(cuid())
+  userId          String
+  subjectId       String
+  date            String   // YYYY-MM-DD
+  activityType    String   // "note" | "quiz" | "flashcard" | "pomodoro" | "session"
+  durationMinutes Int
+  count           Int?
+  createdAt       DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@map("study_logs")
+}
+
+model DailyGoal {
+  id     String @id @default(cuid())
+  userId String
+  date   String // YYYY-MM-DD
+
+  goals DailyGoalItem[]
+  note  String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@map("daily_goals")
+}
+
+model DailyGoalItem {
+  id            String @id @default(cuid())
+  dailyGoalId   String
+  subjectId     String
+  targetMinutes Int
+  done          Boolean @default(false)
+
+  dailyGoal DailyGoal @relation(fields: [dailyGoalId], references: [id], onDelete: Cascade)
+
+  @@map("daily_goal_items")
+}
+
+model Exam {
+  id          String    @id @default(cuid())
+  userId      String
+  name        String
+  category    String
+  examDate    String    // YYYY-MM-DD
+  targetScore Float?
+  passScore   Float?
+  memo        String?
+  status      String    @default("preparing") // ExamStatus
+  actualScore Float?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  examSubjects ExamSubject[]
+  studySessions StudySession[]
+  wrongAnswers  WrongAnswerNote[]
+
+  @@map("exams")
+}
+
+model ExamSubject {
+  examId    String
+  subjectId String
+
+  exam    Exam    @relation(fields: [examId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@id([examId, subjectId])
+  @@map("exam_subjects")
+}
+
+model StudySession {
+  id                String   @id @default(cuid())
+  userId            String
+  subjectId         String
+  examId            String?
+  date              String   // YYYY-MM-DD
+  materialName      String?
+  activityType      String   // SessionActivityType
+  durationMinutes   Int
+  pagesOrQuestions  Int?
+  correctRate       Float?
+  focusScore        Int
+  fatigueScore      Int
+  satisfactionScore Int
+  memo              String?  @db.Text
+  createdAt         DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  exam    Exam?   @relation(fields: [examId], references: [id], onDelete: SetNull)
+
+  @@map("study_sessions")
+}
+
+model WrongAnswerNote {
+  id             String    @id @default(cuid())
+  userId         String
+  subjectId      String
+  examId         String?
+  questionText   String    @db.Text
+  myAnswer       String?
+  correctAnswer  String
+  explanation    String?   @db.Text
+  reason         String    // WrongReason
+  tags           String[]  @default([])
+  reviewCount    Int       @default(0)
+  lastReviewedAt DateTime?
+  nextReviewAt   DateTime
+  resolved       Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  exam    Exam?   @relation(fields: [examId], references: [id], onDelete: SetNull)
+
+  @@map("wrong_answer_notes")
+}
+
+model StudySource {
+  id        String   @id @default(cuid())
+  userId    String
+  subjectId String
+  title     String
+  content   String   @db.Text
+  type      String   // "text" | "note"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@map("study_sources")
+}
+
+// ─── Portfolio App ────────────────────────────────────────────────────────────
+
+model Holding {
+  id           String  @id @default(cuid())
+  userId       String
+  ticker       String
+  name         String
+  market       String  // "KR" | "US"
+  sector       String?
+  quantity     Float
+  avgPrice     Float
+  currentPrice Float
+  currency     String  // "KRW" | "USD"
+  memo         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("holdings")
+}
+
+model WatchlistGroup {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  emoji       String
+  description String?
+  color       String
+  createdAt   DateTime @default(now())
+
+  user  User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items WatchlistItem[]
+
+  @@map("watchlist_groups")
+}
+
+model WatchlistItem {
+  id           String   @id @default(cuid())
+  userId       String
+  groupId      String?
+  ticker       String
+  name         String
+  market       String
+  sector       String?
+  currency     String
+  currentPrice Float
+  targetPrice  Float?
+  memo         String?
+  addedAt      DateTime @default(now())
+
+  user  User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group WatchlistGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+
+  @@map("watchlist_items")
+}
+
+model StrategyMemo {
+  id        String   @id @default(cuid())
+  userId    String
+  ticker    String
+  title     String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("strategy_memos")
+}
+
+// ─── Community App ────────────────────────────────────────────────────────────
+
+model Post {
+  id          String   @id @default(cuid())
+  userId      String
+  category    String   // "free" | "stock" | "study" | "restaurant"
+  title       String
+  content     String   @db.Text
+  isAnonymous Boolean  @default(false)
+  tags        String[] @default([])
+  viewCount   Int      @default(0)
+  images      String[] @default([])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comments  Comment[]
+  likes     Like[]
+  bookmarks Bookmark[]
+  reports   Report[]
+
+  @@map("posts")
+}
+
+model Comment {
+  id          String   @id @default(cuid())
+  userId      String
+  postId      String
+  parentId    String?  // 대댓글
+  content     String   @db.Text
+  isAnonymous Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post     Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  parent   Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies  Comment[] @relation("CommentReplies")
+
+  @@map("comments")
+}
+
+model Like {
+  id     String @id @default(cuid())
+  userId String
+  postId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@map("likes")
+}
+
+model Bookmark {
+  id     String @id @default(cuid())
+  userId String
+  postId String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@map("bookmarks")
+}
+
+model Report {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String
+  reason    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@map("reports")
+}
+
+// ─── Restaurant App ──────────────────────────────────────────────────────────
+
+model Restaurant {
+  id           String   @id @default(cuid())
+  userId       String   // 등록한 유저
+  name         String
+  category     String   // "한식" | "중식" | "일식" | "양식" | "카페" | "기타"
+  address      String
+  roadAddress  String?
+  latitude     Float?
+  longitude    Float?
+  phone        String?
+  url          String?  // 카카오맵 or 네이버 지도 URL
+  description  String?  @db.Text
+  images       String[] @default([])
+  avgRating    Float    @default(0)
+  reviewCount  Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reviews   RestaurantReview[]
+  bookmarks RestaurantBookmark[]
+
+  @@map("restaurants")
+}
+
+model RestaurantReview {
+  id           String   @id @default(cuid())
+  userId       String
+  restaurantId String
+  rating       Int      // 1-5
+  content      String   @db.Text
+  images       String[] @default([])
+  visitedAt    String?  // YYYY-MM-DD
+  isAnonymous  Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@map("restaurant_reviews")
+}
+
+model RestaurantBookmark {
+  id           String   @id @default(cuid())
+  userId       String
+  restaurantId String
+  listName     String   @default("가고 싶은 곳") // "가고 싶은 곳" | "다녀온 곳"
+  createdAt    DateTime @default(now())
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, restaurantId])
+  @@map("restaurant_bookmarks")
+}
+
+// ─── Stock Trades ─────────────────────────────────────────────────────────────
+
+model StockTrade {
+  id        String   @id @default(cuid())
+  userId    String
+  ticker    String
+  name      String
+  market    String   // "KR" | "US"
+  type      String   // "buy" | "sell"
+  quantity  Float
+  price     Float    // 체결 단가
+  fee       Float    @default(0)   // 거래 수수료
+  currency  String   // "KRW" | "USD"
+  memo      String?
+  tradedAt  DateTime // 거래 일시
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("stock_trades")
+}
+
+model PortfolioSnapshot {
+  id         String   @id @default(cuid())
+  userId     String
+  date       String   // YYYY-MM-DD
+  totalValue Float    // 총 평가금액 (USD 환산)
+  totalCost  Float    // 총 매입금액 (USD 환산)
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@map("portfolio_snapshots")
+}

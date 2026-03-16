@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Plus, Trash2, Save, Star, Search, Eye, Edit3, Pin } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Search, Eye, Edit3, Pin } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
@@ -12,13 +12,23 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { getSubjectById, getNotes, saveNotes } from "@/lib/storage";
-import { generateId } from "@/lib/utils-app";
-import type { Note, Subject } from "@/lib/types";
+
+interface Note {
+  id: string;
+  subjectId: string;
+  title: string;
+  content: string;
+  tags: string[];
+  isPinned: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface SubjectInfo { emoji: string; name: string; }
 
 export default function NotesPage() {
   const { id } = useParams<{ id: string }>();
-  const [subject, setSubject] = useState<Subject | null>(null);
+  const [subject, setSubject] = useState<SubjectInfo | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
@@ -31,10 +41,23 @@ export default function NotesPage() {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    setSubject(getSubjectById(id) ?? null);
-    const loaded = getNotes(id);
-    setNotes(loaded);
-    if (loaded.length > 0) selectNote(loaded[0]);
+    async function load() {
+      const [subRes, notesRes] = await Promise.all([
+        fetch(`/api/study/subjects/${id}`),
+        fetch(`/api/study/subjects/${id}/notes`),
+      ]);
+      if (subRes.ok) {
+        const s = await subRes.json();
+        setSubject({ emoji: s.emoji, name: s.name });
+      }
+      if (notesRes.ok) {
+        const loaded: Note[] = await notesRes.json();
+        setNotes(loaded);
+        if (loaded.length > 0) selectNote(loaded[0]);
+      }
+    }
+    load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   function selectNote(note: Note) {
@@ -45,15 +68,18 @@ export default function NotesPage() {
     setPreview(false);
   }
 
-  const doSave = useCallback((title: string, content: string, tags: string, notesArr: Note[], noteId: string) => {
-    const now = new Date().toISOString();
-    const next = notesArr.map(n =>
+  const doSave = useCallback(async (title: string, content: string, tagsStr: string, noteId: string) => {
+    const tagsArr = tagsStr.split(",").map(t => t.trim()).filter(Boolean);
+    await fetch(`/api/study/subjects/${id}/notes/${noteId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, content, tags: tagsArr }),
+    });
+    setNotes(prev => prev.map(n =>
       n.id === noteId
-        ? { ...n, title, content, tags: tags.split(",").map(t => t.trim()).filter(Boolean), updatedAt: now }
+        ? { ...n, title, content, tags: tagsArr, updatedAt: new Date().toISOString() }
         : n
-    );
-    saveNotes(id, next);
-    setNotes(next);
+    ));
     setAutoSaveLabel("저장됨 ✓");
     setTimeout(() => setAutoSaveLabel(""), 2000);
   }, [id]);
@@ -62,37 +88,42 @@ export default function NotesPage() {
     setEditContent(v);
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
-      if (selectedId) doSave(editTitle, v, editTags, notes, selectedId);
+      if (selectedId) doSave(editTitle, v, editTags, selectedId);
     }, 2000);
   }
 
-  function handleNew() {
-    const now = new Date().toISOString();
-    const note: Note = {
-      id: generateId(), subjectId: id,
-      title: "새 노트", content: "", tags: [], isPinned: false,
-      createdAt: now, updatedAt: now,
-    };
-    const next = [note, ...notes];
-    setNotes(next);
-    saveNotes(id, next);
+  async function handleNew() {
+    const res = await fetch(`/api/study/subjects/${id}/notes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "새 노트", content: "", tags: [], isPinned: false }),
+    });
+    if (!res.ok) return;
+    const note: Note = await res.json();
+    setNotes(prev => [note, ...prev]);
     selectNote(note);
   }
 
-  function handleDelete(noteId: string) {
+  async function handleDelete(noteId: string) {
+    await fetch(`/api/study/subjects/${id}/notes/${noteId}`, { method: "DELETE" });
     const next = notes.filter(n => n.id !== noteId);
     setNotes(next);
-    saveNotes(id, next);
     if (selectedId === noteId) {
       if (next.length > 0) selectNote(next[0]);
       else { setSelectedId(null); setEditTitle(""); setEditContent(""); setEditTags(""); }
     }
   }
 
-  function handlePin(noteId: string) {
-    const next = notes.map(n => n.id === noteId ? { ...n, isPinned: !n.isPinned } : n);
-    setNotes(next);
-    saveNotes(id, next);
+  async function handlePin(noteId: string) {
+    const note = notes.find(n => n.id === noteId);
+    if (!note) return;
+    const newPinned = !note.isPinned;
+    await fetch(`/api/study/subjects/${id}/notes/${noteId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isPinned: newPinned }),
+    });
+    setNotes(prev => prev.map(n => n.id === noteId ? { ...n, isPinned: newPinned } : n));
   }
 
   const allTags = Array.from(new Set(notes.flatMap(n => n.tags)));
@@ -172,7 +203,7 @@ export default function NotesPage() {
                 placeholder="태그 (쉼표 구분, Enter로 저장)"
                 value={editTags}
                 onChange={e => setEditTags(e.target.value)}
-                onBlur={() => { if (selectedId) doSave(editTitle, editContent, editTags, notes, selectedId); }}
+                onBlur={() => { if (selectedId) doSave(editTitle, editContent, editTags, selectedId); }}
               />
             </div>
             <div className="flex-1 overflow-auto">

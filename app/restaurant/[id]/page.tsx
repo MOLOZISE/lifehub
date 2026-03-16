@@ -1,0 +1,339 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { Star, MapPin, Phone, ExternalLink, Trash2, ArrowLeft, Bookmark, BookmarkCheck } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { useSession } from "next-auth/react";
+import { toast } from "sonner";
+
+interface Review {
+  id: string;
+  userId: string;
+  rating: number;
+  content: string;
+  visitedAt: string | null;
+  isAnonymous: boolean;
+  createdAt: string;
+  user: { id: string; name: string | null; image: string | null };
+}
+
+interface RestaurantDetail {
+  id: string;
+  userId: string;
+  name: string;
+  category: string;
+  address: string;
+  roadAddress: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  phone: string | null;
+  url: string | null;
+  description: string | null;
+  avgRating: number;
+  reviewCount: number;
+  user: { id: string; name: string | null };
+  reviews: Review[];
+  bookmarks: { id: string; listName: string }[];
+}
+
+function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  return (
+    <div className="flex gap-1">
+      {[1, 2, 3, 4, 5].map(i => (
+        <button key={i} type="button" onClick={() => onChange(i)}>
+          <Star className={`w-6 h-6 transition-colors ${i <= value ? "fill-amber-400 text-amber-400" : "text-muted-foreground hover:text-amber-300"}`} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function StarDisplay({ value }: { value: number }) {
+  return (
+    <span className="flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map(i => (
+        <Star key={i} className={`w-3.5 h-3.5 ${i <= value ? "fill-amber-400 text-amber-400" : "text-muted-foreground"}`} />
+      ))}
+    </span>
+  );
+}
+
+export default function RestaurantDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+  const { data: session } = useSession();
+  const [restaurant, setRestaurant] = useState<RestaurantDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [reviewDialog, setReviewDialog] = useState(false);
+  const [reviewForm, setReviewForm] = useState({ rating: 5, content: "", visitedAt: "", isAnonymous: false });
+  const [submitting, setSubmitting] = useState(false);
+
+  async function loadDetail() {
+    const res = await fetch(`/api/restaurant/${id}`);
+    if (res.ok) setRestaurant(await res.json());
+    else router.push("/restaurant");
+    setLoading(false);
+  }
+
+  useEffect(() => { loadDetail(); }, [id]);
+
+  async function handleBookmark() {
+    if (!restaurant) return;
+    const isBookmarked = restaurant.bookmarks.length > 0;
+    const res = await fetch(`/api/restaurant/${id}/bookmark`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ listName: isBookmarked ? restaurant.bookmarks[0].listName : "가고 싶은 곳" }),
+    });
+    if (!res.ok) { toast.error("실패했습니다."); return; }
+    const data = await res.json();
+    toast.success(data.bookmarked ? "북마크에 추가했습니다." : "북마크를 해제했습니다.");
+    loadDetail();
+  }
+
+  async function handleDelete() {
+    if (!confirm("이 맛집을 삭제하시겠습니까?")) return;
+    const res = await fetch(`/api/restaurant/${id}`, { method: "DELETE" });
+    if (!res.ok) { toast.error("삭제 실패"); return; }
+    toast.success("삭제되었습니다.");
+    router.push("/restaurant");
+  }
+
+  async function handleReviewSubmit() {
+    if (!reviewForm.content) { toast.error("리뷰 내용을 입력하세요."); return; }
+    setSubmitting(true);
+    const res = await fetch(`/api/restaurant/${id}/reviews`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(reviewForm),
+    });
+    setSubmitting(false);
+    if (!res.ok) { toast.error("리뷰 등록 실패"); return; }
+    toast.success("리뷰가 등록되었습니다!");
+    setReviewDialog(false);
+    setReviewForm({ rating: 5, content: "", visitedAt: "", isAnonymous: false });
+    loadDetail();
+  }
+
+  async function handleDeleteReview(reviewId: string) {
+    if (!confirm("리뷰를 삭제하시겠습니까?")) return;
+    const res = await fetch(`/api/restaurant/${id}/reviews`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reviewId }),
+    });
+    if (!res.ok) { toast.error("삭제 실패"); return; }
+    toast.success("삭제되었습니다.");
+    loadDetail();
+  }
+
+  if (loading) return <div className="text-center py-16 text-muted-foreground">불러오는 중...</div>;
+  if (!restaurant) return null;
+
+  const isOwner = session?.user?.id === restaurant.userId;
+  const isBookmarked = restaurant.bookmarks.length > 0;
+
+  return (
+    <div className="max-w-2xl mx-auto space-y-5">
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="sm" onClick={() => router.back()}>
+          <ArrowLeft className="w-4 h-4 mr-1" />뒤로
+        </Button>
+      </div>
+
+      {/* Main info */}
+      <Card>
+        <CardContent className="p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-2">
+                <Badge variant="secondary">{restaurant.category}</Badge>
+                <h1 className="text-xl font-bold">{restaurant.name}</h1>
+              </div>
+              <div className="space-y-1 text-sm text-muted-foreground">
+                <div className="flex items-center gap-1.5">
+                  <MapPin className="w-4 h-4 shrink-0" />
+                  <span>{restaurant.address}</span>
+                </div>
+                {restaurant.phone && (
+                  <div className="flex items-center gap-1.5">
+                    <Phone className="w-4 h-4 shrink-0" />
+                    <span>{restaurant.phone}</span>
+                  </div>
+                )}
+              </div>
+              {restaurant.description && (
+                <p className="mt-3 text-sm">{restaurant.description}</p>
+              )}
+              <div className="mt-3 flex items-center gap-3">
+                <div className="flex items-center gap-1.5">
+                  {[1,2,3,4,5].map(i => (
+                    <Star key={i} className={`w-4 h-4 ${i <= Math.round(restaurant.avgRating) ? "fill-amber-400 text-amber-400" : "text-muted-foreground"}`} />
+                  ))}
+                  <span className="font-semibold">{restaurant.avgRating > 0 ? restaurant.avgRating.toFixed(1) : "-"}</span>
+                  <span className="text-muted-foreground text-xs">({restaurant.reviewCount}개)</span>
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <button onClick={handleBookmark} className="p-2 rounded-md hover:bg-accent transition-colors">
+                {isBookmarked
+                  ? <BookmarkCheck className="w-5 h-5 text-primary" />
+                  : <Bookmark className="w-5 h-5 text-muted-foreground" />
+                }
+              </button>
+              {restaurant.url && (
+                <a href={restaurant.url} target="_blank" rel="noopener noreferrer"
+                  className="p-2 rounded-md hover:bg-accent transition-colors">
+                  <ExternalLink className="w-5 h-5 text-muted-foreground" />
+                </a>
+              )}
+              {isOwner && (
+                <button onClick={handleDelete} className="p-2 rounded-md hover:bg-accent transition-colors text-destructive">
+                  <Trash2 className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Map */}
+      {(restaurant.latitude && restaurant.longitude) || restaurant.address ? (
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium mb-0.5">위치</p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {restaurant.roadAddress || restaurant.address}
+                </p>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <a
+                  href={
+                    restaurant.latitude && restaurant.longitude
+                      ? `https://map.kakao.com/link/map/${encodeURIComponent(restaurant.name)},${restaurant.latitude},${restaurant.longitude}`
+                      : `https://map.kakao.com/link/search/${encodeURIComponent(restaurant.roadAddress || restaurant.address)}`
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border hover:bg-accent transition-colors"
+                >
+                  <MapPin className="w-3.5 h-3.5" />카카오맵
+                </a>
+                <a
+                  href={`https://map.naver.com/v5/search/${encodeURIComponent(restaurant.roadAddress || restaurant.address)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border hover:bg-accent transition-colors"
+                >
+                  <MapPin className="w-3.5 h-3.5" />네이버맵
+                </a>
+              </div>
+            </div>
+            {restaurant.latitude && restaurant.longitude && (
+              <iframe
+                className="w-full mt-3 rounded-lg border"
+                height={220}
+                style={{ border: 0 }}
+                loading="lazy"
+                src={`https://maps.google.com/maps?q=${restaurant.latitude},${restaurant.longitude}&z=15&output=embed`}
+              />
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {/* Reviews */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">리뷰 ({restaurant.reviewCount})</CardTitle>
+            <Button size="sm" onClick={() => setReviewDialog(true)}>리뷰 작성</Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {restaurant.reviews.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-6">아직 리뷰가 없습니다. 첫 리뷰를 남겨보세요!</p>
+          ) : (
+            <div className="space-y-4">
+              {restaurant.reviews.map(review => (
+                <div key={review.id} className="border-b last:border-0 pb-4 last:pb-0">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2">
+                      <StarDisplay value={review.rating} />
+                      <span className="text-sm font-medium">
+                        {review.isAnonymous ? "익명" : (review.user.name ?? "알 수 없음")}
+                      </span>
+                      {review.visitedAt && (
+                        <span className="text-xs text-muted-foreground">방문: {review.visitedAt}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(review.createdAt).toLocaleDateString("ko-KR")}
+                      </span>
+                      {session?.user?.id === review.userId && (
+                        <button onClick={() => handleDeleteReview(review.id)} className="p-1 text-destructive hover:bg-accent rounded">
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-sm">{review.content}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Review dialog */}
+      <Dialog open={reviewDialog} onOpenChange={setReviewDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>리뷰 작성 — {restaurant.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <p className="text-xs mb-2">별점</p>
+              <StarPicker value={reviewForm.rating} onChange={v => setReviewForm(f => ({ ...f, rating: v }))} />
+            </div>
+            <div>
+              <p className="text-xs mb-1">방문일 (선택)</p>
+              <Input type="date" value={reviewForm.visitedAt} onChange={e => setReviewForm(f => ({ ...f, visitedAt: e.target.value }))} />
+            </div>
+            <div>
+              <p className="text-xs mb-1">리뷰 내용</p>
+              <textarea
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm resize-none h-28 focus:outline-none focus:ring-2 focus:ring-ring"
+                value={reviewForm.content}
+                onChange={e => setReviewForm(f => ({ ...f, content: e.target.value }))}
+                placeholder="맛, 분위기, 서비스 등을 자유롭게 남겨주세요."
+              />
+            </div>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={reviewForm.isAnonymous}
+                onChange={e => setReviewForm(f => ({ ...f, isAnonymous: e.target.checked }))}
+                className="rounded"
+              />
+              익명으로 작성
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReviewDialog(false)}>취소</Button>
+            <Button onClick={handleReviewSubmit} disabled={submitting}>등록</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
