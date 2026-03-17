@@ -29,6 +29,8 @@ interface Props {
   onSelectRestaurant: (id: string) => void;
   onSelectKakaoPlace?: (place: MapKakaoPlace) => void;
   centerLatLng?: [number, number] | null;
+  userLocation?: [number, number] | null;
+  onMapIdle?: (lat: number, lng: number) => void;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -100,11 +102,14 @@ export default function RestaurantMap({
   onSelectRestaurant,
   onSelectKakaoPlace,
   centerLatLng,
+  userLocation,
+  onMapIdle,
 }: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<AnyKakao>(null);
   const markersRef = useRef<{ overlay: AnyKakao; id: string }[]>([]);
   const kakaoMarkersRef = useRef<{ overlay: AnyKakao; id: string }[]>([]);
+  const userMarkerRef = useRef<AnyKakao>(null);
   const popupRef = useRef<AnyKakao>(null);
   const [mapReady, setMapReady] = useState(false);
   const [sdkStatus, setSdkStatus] = useState<"loading" | "loaded" | "error">("loading");
@@ -313,6 +318,41 @@ export default function RestaurantMap({
     try { map.setBounds(bounds, 80, 80, 80, 80); } catch { /* ignore */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapReady, kakaoPlaces]);
+
+  // ── 5a. User location marker ────────────────────────────────────────────
+  useEffect(() => {
+    if (!mapReady || !userLocation) return;
+    const kakao = window.kakao;
+    if (userMarkerRef.current) userMarkerRef.current.setMap(null);
+
+    const el = document.createElement("div");
+    el.style.cssText = "position:relative;width:16px;height:16px";
+    el.innerHTML = `
+      <div style="width:16px;height:16px;background:#2563eb;border-radius:50%;border:3px solid white;box-shadow:0 0 0 3px rgba(37,99,235,0.3);"></div>
+    `;
+    userMarkerRef.current = new kakao.maps.CustomOverlay({
+      position: new kakao.maps.LatLng(userLocation[0], userLocation[1]),
+      content: el,
+      map: mapInstanceRef.current,
+      zIndex: 10,
+      yAnchor: 0.5,
+      xAnchor: 0.5,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapReady, userLocation]);
+
+  // ── 5b. Map idle → notify parent ────────────────────────────────────────
+  useEffect(() => {
+    if (!mapReady || !onMapIdle) return;
+    const kakao = window.kakao;
+    const map = mapInstanceRef.current;
+    const listener = kakao.maps.event.addListener(map, "idle", () => {
+      const center = map.getCenter();
+      onMapIdle(center.getLat(), center.getLng());
+    });
+    return () => kakao.maps.event.removeListener(map, "idle", listener);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapReady, onMapIdle]);
 
   // ── 5. Pan to custom center ─────────────────────────────────────────────
   useEffect(() => {

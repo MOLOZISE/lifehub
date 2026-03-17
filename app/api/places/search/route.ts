@@ -12,15 +12,28 @@ export async function GET(req: NextRequest) {
   const query = searchParams.get("query");
   if (!query) return NextResponse.json({ error: "query required" }, { status: 400 });
 
+  const x = searchParams.get("x");       // longitude
+  const y = searchParams.get("y");       // latitude
+  const radius = searchParams.get("radius") ?? "5000"; // meters, default 5km
+
   const key = process.env.KAKAO_REST_API_KEY;
   if (!key) {
-    // No key configured - return empty results
     return NextResponse.json({ places: [], message: "KAKAO_REST_API_KEY not configured" });
   }
 
   try {
-    // FD6 = 음식점 카테고리
-    const url = `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}&category_group_code=FD6&size=10`;
+    const params = new URLSearchParams({
+      query,
+      category_group_code: "FD6",
+      size: "15",
+      sort: x && y ? "distance" : "accuracy",
+    });
+    if (x && y) {
+      params.set("x", x);
+      params.set("y", y);
+      params.set("radius", radius);
+    }
+    const url = `https://dapi.kakao.com/v2/local/search/keyword.json?${params}`;
     const res = await fetch(url, {
       headers: { Authorization: `KakaoAK ${key}` },
       next: { revalidate: 300 },
@@ -41,6 +54,7 @@ export async function GET(req: NextRequest) {
       place_url: string;
       x: string;
       y: string;
+      distance?: string;
     }) => ({
       id: d.id,
       name: d.place_name,
@@ -51,6 +65,7 @@ export async function GET(req: NextRequest) {
       url: d.place_url,
       longitude: parseFloat(d.x),
       latitude: parseFloat(d.y),
+      distance: d.distance ? parseInt(d.distance) : null,
     }));
 
     return NextResponse.json({ places });

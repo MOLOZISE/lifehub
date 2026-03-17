@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { Plus, Search, Star, MapPin, Phone, Bookmark, BookmarkCheck, Loader2, Map, List } from "lucide-react";
+import { Plus, Search, Star, MapPin, Phone, Bookmark, BookmarkCheck, Loader2, Map, List, Navigation, RotateCcw, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +43,7 @@ interface KakaoPlace {
   url: string;
   longitude: number;
   latitude: number;
+  distance?: number | null;
 }
 
 const emptyForm = {
@@ -89,6 +90,15 @@ export default function RestaurantPage() {
   const [kakaoQuery, setKakaoQuery] = useState("");
   const [kakaoResults, setKakaoResults] = useState<KakaoPlace[]>([]);
   const [kakaoLoading, setKakaoLoading] = useState(false);
+  const [selectedKakaoId, setSelectedKakaoId] = useState<string | null>(null);
+
+  // Geolocation
+  const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+  const [locating, setLocating] = useState(false);
+
+  // Map center (for "이 지역 재검색")
+  const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
+  const [showReSearch, setShowReSearch] = useState(false);
 
   async function load(p = 1) {
     setLoading(true);
@@ -126,11 +136,20 @@ export default function RestaurantPage() {
     setSearch(searchInput);
   }
 
-  async function searchKakao() {
-    if (!kakaoQuery.trim()) return;
+  async function searchKakao(opts?: { x?: number; y?: number; radius?: number; query?: string }) {
+    const q = opts?.query ?? kakaoQuery;
+    if (!q.trim()) return;
     setKakaoLoading(true);
     setKakaoResults([]);
-    const res = await fetch(`/api/places/search?query=${encodeURIComponent(kakaoQuery)}`);
+    setSelectedKakaoId(null);
+    setShowReSearch(false);
+    const params = new URLSearchParams({ query: q });
+    if (opts?.x != null && opts?.y != null) {
+      params.set("x", String(opts.x));
+      params.set("y", String(opts.y));
+      if (opts.radius) params.set("radius", String(opts.radius));
+    }
+    const res = await fetch(`/api/places/search?${params}`);
     if (res.ok) {
       const data = await res.json();
       setKakaoResults(data.places ?? []);
@@ -139,15 +158,50 @@ export default function RestaurantPage() {
     setKakaoLoading(false);
   }
 
-  function selectKakaoPlace(place: KakaoPlace) {
+  async function handleMyLocation() {
+    if (!navigator.geolocation) { toast.error("위치 서비스가 지원되지 않습니다."); return; }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setUserLocation([lat, lng]);
+        setMapCenter([lat, lng]);
+        // 내 위치 근처 맛집 자동 검색
+        if (kakaoQuery.trim()) {
+          await searchKakao({ x: lng, y: lat, radius: 5000 });
+        } else {
+          await searchKakao({ query: "맛집", x: lng, y: lat, radius: 5000 });
+        }
+        setLocating(false);
+        toast.success("현재 위치로 이동했습니다.");
+      },
+      () => { toast.error("위치를 가져올 수 없습니다."); setLocating(false); },
+      { timeout: 8000 }
+    );
+  }
+
+  async function handleReSearch() {
+    if (!mapCenter) return;
+    const q = kakaoQuery.trim() || "맛집";
+    await searchKakao({ query: q, x: mapCenter[1], y: mapCenter[0], radius: 5000 });
+  }
+
+  // 카카오 검색 결과 → 지도 이동 (등록 다이얼로그 없이)
+  function focusKakaoPlace(place: KakaoPlace) {
+    setSelectedKakaoId(place.id);
+    setSelectedId(null);
+  }
+
+  // 카카오 장소를 등록 폼에 채워서 다이얼로그 열기
+  function registerKakaoPlace(place: KakaoPlace) {
     const catMap: Record<string, string> = {
       "한식": "한식", "중식": "중식", "일식": "일식", "양식": "양식",
       "카페": "카페", "제과,베이커리": "카페", "술집": "기타",
     };
-    const mappedCat = catMap[place.category] ?? "기타";
     setForm({
       name: place.name,
-      category: mappedCat,
+      category: catMap[place.category] ?? "기타",
       address: place.address,
       roadAddress: place.roadAddress,
       phone: place.phone,
@@ -156,8 +210,6 @@ export default function RestaurantPage() {
       latitude: String(place.latitude || ""),
       longitude: String(place.longitude || ""),
     });
-    setKakaoResults([]);
-    setKakaoQuery("");
     setDialogOpen(true);
   }
 
@@ -228,12 +280,15 @@ export default function RestaurantPage() {
     longitude: p.longitude,
   }));
 
-  // Center map on selected restaurant
+  // Center map on selected restaurant or selected kakao place
   const selectedRestaurant = selectedId ? allRestaurants.find(r => r.id === selectedId) : null;
+  const selectedKakaoPlace = selectedKakaoId ? kakaoResults.find(p => p.id === selectedKakaoId) : null;
   const centerLatLng: [number, number] | null =
-    selectedRestaurant?.latitude && selectedRestaurant?.longitude
-      ? [selectedRestaurant.latitude, selectedRestaurant.longitude]
-      : null;
+    selectedKakaoPlace
+      ? [selectedKakaoPlace.latitude, selectedKakaoPlace.longitude]
+      : selectedRestaurant?.latitude && selectedRestaurant?.longitude
+        ? [selectedRestaurant.latitude, selectedRestaurant.longitude]
+        : userLocation ?? null;
 
   return (
     <div className="flex flex-col -mx-4 md:-mx-6 -mt-4 md:-mt-6 -mb-20 md:-mb-6" style={{ height: "calc(100vh - 3.5rem)" }}>
@@ -241,6 +296,17 @@ export default function RestaurantPage() {
       <div className="flex items-center justify-between px-4 py-2 border-b shrink-0 bg-background">
         <h1 className="text-base font-bold">맛집 지도</h1>
         <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs gap-1"
+            onClick={handleMyLocation}
+            disabled={locating}
+            title="현재 위치 근처 검색"
+          >
+            {locating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Navigation className="w-3.5 h-3.5" />}
+            <span className="hidden sm:inline">내 위치</span>
+          </Button>
           <Button
             size="sm"
             variant="outline"
@@ -282,7 +348,7 @@ export default function RestaurantPage() {
                 onKeyDown={e => e.key === "Enter" && searchKakao()}
                 className="h-7 text-xs"
               />
-              <Button size="sm" variant="outline" onClick={searchKakao} disabled={kakaoLoading} className="h-7 px-2 shrink-0">
+              <Button size="sm" variant="outline" onClick={() => searchKakao()} disabled={kakaoLoading} className="h-7 px-2 shrink-0">
                 {kakaoLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <MapPin className="w-3 h-3" />}
               </Button>
             </div>
@@ -298,19 +364,43 @@ export default function RestaurantPage() {
           {kakaoResults.length > 0 && (
             <div className="border-b shrink-0">
               <div className="px-3 py-1.5 flex items-center justify-between">
-                <p className="text-[10px] font-medium text-blue-600">카카오 검색 결과 {kakaoResults.length}건 (지도에 표시됨)</p>
-                <button onClick={() => setKakaoResults([])} className="text-[10px] text-muted-foreground hover:text-foreground">닫기</button>
+                <p className="text-[10px] font-medium text-blue-600">카카오 검색 {kakaoResults.length}건</p>
+                <button onClick={() => { setKakaoResults([]); setSelectedKakaoId(null); }} className="text-[10px] text-muted-foreground hover:text-foreground">닫기</button>
               </div>
-              <div className="max-h-40 overflow-y-auto px-3 pb-2 space-y-1">
+              <div className="max-h-56 overflow-y-auto px-2 pb-2 space-y-1">
                 {kakaoResults.map(place => (
-                  <button
+                  <div
                     key={place.id}
-                    onClick={() => selectKakaoPlace(place)}
-                    className="w-full text-left px-2 py-1.5 rounded-md hover:bg-accent text-xs border"
+                    className={`rounded-md border text-xs transition-all ${selectedKakaoId === place.id ? "border-blue-400 bg-blue-50 dark:bg-blue-950/30" : "hover:bg-accent"}`}
                   >
-                    <div className="font-medium truncate">{place.name}</div>
-                    <div className="text-muted-foreground truncate text-[10px]">{place.roadAddress || place.address}</div>
-                  </button>
+                    <button
+                      onClick={() => focusKakaoPlace(place)}
+                      className="w-full text-left px-2 py-1.5"
+                    >
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="font-medium truncate">{place.name}</span>
+                        {place.distance != null && (
+                          <span className="text-[10px] text-blue-500 shrink-0">
+                            {place.distance >= 1000 ? `${(place.distance / 1000).toFixed(1)}km` : `${place.distance}m`}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-muted-foreground truncate text-[10px]">{place.category} · {place.roadAddress || place.address}</div>
+                    </button>
+                    <div className="flex gap-1 px-2 pb-1.5">
+                      <button
+                        onClick={() => registerKakaoPlace(place)}
+                        className="text-[10px] text-primary hover:underline"
+                      >
+                        + 내 맛집 등록
+                      </button>
+                      {place.url && (
+                        <a href={place.url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
+                          <ExternalLink className="w-2.5 h-2.5" /> 카카오맵
+                        </a>
+                      )}
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
@@ -393,21 +483,25 @@ export default function RestaurantPage() {
               kakaoPlaces={mapKakaoPlaces}
               selectedId={selectedId}
               onSelectRestaurant={handleSelectOnMap}
-              onSelectKakaoPlace={place => {
-                selectKakaoPlace({
-                  id: place.id,
-                  name: place.name,
-                  category: place.category,
-                  address: place.address,
-                  roadAddress: place.roadAddress,
-                  phone: "",
-                  url: "",
-                  latitude: place.latitude,
-                  longitude: place.longitude,
-                });
-              }}
+              onSelectKakaoPlace={place => focusKakaoPlace({ ...place, phone: "", url: "" })}
               centerLatLng={centerLatLng}
+              userLocation={userLocation}
+              onMapIdle={(lat, lng) => {
+                setMapCenter([lat, lng]);
+                setShowReSearch(true);
+              }}
             />
+            {/* 이 지역 재검색 버튼 */}
+            {showReSearch && (
+              <div className="absolute top-3 left-1/2 -translate-x-1/2 z-50">
+                <button
+                  onClick={handleReSearch}
+                  className="flex items-center gap-1.5 bg-white dark:bg-zinc-800 shadow-md rounded-full px-3 py-1.5 text-xs font-medium border hover:bg-accent transition-colors"
+                >
+                  <RotateCcw className="w-3 h-3" /> 이 지역 재검색
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -430,7 +524,7 @@ export default function RestaurantPage() {
                   onKeyDown={e => e.key === "Enter" && searchKakao()}
                   className="h-8 text-xs"
                 />
-                <Button size="sm" variant="outline" onClick={searchKakao} disabled={kakaoLoading} className="h-8 shrink-0">
+                <Button size="sm" variant="outline" onClick={() => searchKakao()} disabled={kakaoLoading} className="h-8 shrink-0">
                   {kakaoLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
                 </Button>
               </div>
@@ -439,7 +533,7 @@ export default function RestaurantPage() {
                   {kakaoResults.map(place => (
                     <button
                       key={place.id}
-                      onClick={() => selectKakaoPlace(place)}
+                      onClick={() => registerKakaoPlace(place)}
                       className="w-full text-left px-2 py-1.5 rounded-md hover:bg-accent text-xs border"
                     >
                       <div className="font-medium">{place.name}</div>
