@@ -18,15 +18,12 @@ const navItems = [
     icon: LayoutDashboard,
   },
   {
-    label: "학습 앱",
+    label: "학습",
     icon: BookOpen,
     children: [
-      { label: "📊 학습 분석", href: "/study/analytics" },
-      { label: "🎯 시험 관리", href: "/study/exams" },
-      { label: "📝 세션 기록", href: "/study/sessions" },
-      { label: "❌ 오답 노트", href: "/study/wrong-answers" },
-      { label: "📚 과목 관리", href: "/study/subjects" },
+      { label: "📚 과목 · 학습", href: "/study/subjects" },
       { label: "🍅 오늘의 플래너", href: "/study/daily" },
+      { label: "📊 학습 분석", href: "/study/analytics" },
     ],
   },
   {

@@ -174,11 +174,9 @@ export default function RestaurantPage() {
         setMapCenter([lat, lng]);
         setFlyToOnce([lat, lng]); // 딱 한 번만 이동
         // 내 위치 근처 맛집 자동 검색
-        if (kakaoQuery.trim()) {
-          await searchKakao({ x: lng, y: lat, radius: 5000 });
-        } else {
-          await searchKakao({ query: "맛집", x: lng, y: lat, radius: 5000 });
-        }
+        // GPS 검색: 반경 3km 이내, 쿼리 없으면 "맛집" 기본
+        const gpsQuery = kakaoQuery.trim() || "맛집";
+        await searchKakao({ query: gpsQuery, x: lng, y: lat, radius: 3000 });
         setLocating(false);
         toast.success("현재 위치로 이동했습니다.");
       },
@@ -190,7 +188,8 @@ export default function RestaurantPage() {
   async function handleReSearch() {
     if (!mapCenter) return;
     const q = kakaoQuery.trim() || "맛집";
-    await searchKakao({ query: q, x: mapCenter[1], y: mapCenter[0], radius: 5000 });
+    // 현재 지도 중심 기준 재검색: 지도 zoom에 따라 자동 범위
+    await searchKakao({ query: q, x: mapCenter[1], y: mapCenter[0], radius: 20000 });
   }
 
   // 카카오 검색 결과 → 지도 이동 (등록 다이얼로그 없이)

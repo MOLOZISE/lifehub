@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell,
@@ -89,6 +89,9 @@ interface ChartMeta {
 
 export default function ChartPage() {
   const [inputTicker, setInputTicker] = useState("");
+  const [suggestions, setSuggestions] = useState<{ ticker: string; name: string; market: "KR" | "US" }[]>([]);
+  const [showSugg, setShowSugg] = useState(false);
+  const searchBoxRef = useRef<HTMLDivElement>(null);
   const [activeTicker, setActiveTicker] = useState<{ yahoo: string; label: string; currency: string } | null>(null);
   const [period, setPeriod] = useState<Period>("3M");
   const [loading, setLoading] = useState(false);
@@ -137,11 +140,27 @@ export default function ChartPage() {
     }
   }
 
+  useEffect(() => {
+    if (!inputTicker.trim()) { setSuggestions([]); return; }
+    const t = setTimeout(() => {
+      fetch(`/api/portfolio/search?q=${encodeURIComponent(inputTicker)}`)
+        .then(r => r.json()).then(d => { setSuggestions(d.slice(0, 8)); setShowSugg(true); });
+    }, 150);
+    return () => clearTimeout(t);
+  }, [inputTicker]);
+
   async function handleSearch() {
     if (!inputTicker.trim()) return;
     const t = inputTicker.trim();
-    await fetchChart(toYahooTicker(t), t.toUpperCase(), "USD");
+    setShowSugg(false);
+    await fetchChart(toYahooTicker(t), t.toUpperCase(), /^\d{6}$/.test(t) ? "KRW" : "USD");
     setInputTicker("");
+  }
+
+  async function selectSuggestion(s: { ticker: string; name: string; market: "KR" | "US" }) {
+    setShowSugg(false);
+    setInputTicker("");
+    await fetchChart(toYahooTicker(s.ticker, s.market), `${s.name} (${s.ticker})`, s.market === "KR" ? "KRW" : "USD");
   }
 
   function handlePeriodChange(p: Period) {
@@ -177,14 +196,29 @@ export default function ChartPage() {
     <div className="max-w-5xl mx-auto space-y-4">
       {/* Search */}
       <div className="space-y-2">
-        <div className="flex gap-2">
-          <Input
-            placeholder="티커 입력 (AAPL, 005930, TSLA, 005930.KS ...)"
-            value={inputTicker}
-            onChange={e => setInputTicker(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && handleSearch()}
-            className="flex-1"
-          />
+        <div ref={searchBoxRef} className="flex gap-2 relative">
+          <div className="flex-1 relative">
+            <Input
+              placeholder="종목명 또는 티커 검색 (삼성전자, AAPL ...)"
+              value={inputTicker}
+              onChange={e => setInputTicker(e.target.value)}
+              onFocus={() => inputTicker && setShowSugg(true)}
+              onBlur={() => setTimeout(() => setShowSugg(false), 150)}
+              onKeyDown={e => e.key === "Enter" && handleSearch()}
+            />
+            {showSugg && suggestions.length > 0 && (
+              <div className="absolute z-50 w-full mt-1 bg-white dark:bg-zinc-900 border rounded-lg shadow-lg max-h-52 overflow-y-auto">
+                {suggestions.map(s => (
+                  <button key={s.ticker} className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted text-left"
+                    onMouseDown={() => selectSuggestion(s)}>
+                    <span className="text-xs">{s.market === "KR" ? "🇰🇷" : "🇺🇸"}</span>
+                    <span className="font-medium text-sm flex-1">{s.name}</span>
+                    <span className="text-xs text-muted-foreground font-mono">{s.ticker}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <Button onClick={handleSearch} disabled={loading || !inputTicker.trim()}>
             {loading && !activeTicker ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
           </Button>

@@ -3,7 +3,7 @@
 import { useState, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { ArrowLeft, Loader2, ImageIcon, Youtube } from "lucide-react";
+import { ArrowLeft, Loader2, Eye, EyeOff } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,45 @@ const CATEGORIES = [
   { value: "restaurant", label: "🍜 맛집추천" },
 ];
 
+// 유튜브 URL에서 videoId 추출
+function extractYoutubeId(text: string): string | null {
+  const m = text.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+  return m ? m[1] : null;
+}
+
+// 이미지 URL 감지
+function isImageUrl(text: string): boolean {
+  return /^https?:\/\/.+\.(jpg|jpeg|png|gif|webp|svg)(\?.*)?$/i.test(text.trim());
+}
+
+// 컨텐츠 렌더링 (미리보기용)
+function renderContent(content: string) {
+  const parts = content.split(/(\[IMG:[^\]]+\]|\[YT:[A-Za-z0-9_-]{11}\])/g);
+  return parts.map((part, i) => {
+    const imgMatch = part.match(/^\[IMG:(.+)\]$/);
+    if (imgMatch) {
+      return (
+        <img key={i} src={imgMatch[1]} alt="첨부 이미지"
+          className="max-w-full rounded-lg my-2 max-h-96 object-contain" />
+      );
+    }
+    const ytMatch = part.match(/^\[YT:([A-Za-z0-9_-]{11})\]$/);
+    if (ytMatch) {
+      return (
+        <div key={i} className="my-3 aspect-video w-full max-w-xl">
+          <iframe
+            src={`https://www.youtube.com/embed/${ytMatch[1]}`}
+            className="w-full h-full rounded-lg"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+      );
+    }
+    return <span key={i} className="whitespace-pre-wrap">{part}</span>;
+  });
+}
+
 function NewPostForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -29,6 +68,7 @@ function NewPostForm() {
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [preview, setPreview] = useState(false);
   const contentRef = useRef<HTMLTextAreaElement>(null);
 
   function insertAtCursor(marker: string) {
@@ -36,25 +76,38 @@ function NewPostForm() {
     if (!el) return;
     const start = el.selectionStart;
     const end = el.selectionEnd;
-    const next = content.slice(0, start) + "\n" + marker + "\n" + content.slice(end);
+    const next = content.slice(0, start) + marker + content.slice(end);
     setContent(next);
     setTimeout(() => {
       el.focus();
-      el.selectionStart = el.selectionEnd = start + marker.length + 2;
+      el.selectionStart = el.selectionEnd = start + marker.length;
     }, 0);
   }
 
-  function handleInsertImage() {
-    const url = window.prompt("이미지 URL을 입력하세요:");
-    if (url?.trim()) insertAtCursor(`[IMG:${url.trim()}]`);
-  }
+  function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const text = e.clipboardData.getData("text");
+    if (!text) return;
 
-  function handleInsertYoutube() {
-    const input = window.prompt("유튜브 URL 또는 영상 ID를 입력하세요:");
-    if (!input?.trim()) return;
-    const match = input.match(/(?:v=|youtu\.be\/|shorts\/)([A-Za-z0-9_-]{11})/);
-    const videoId = match ? match[1] : input.trim();
-    insertAtCursor(`[YT:${videoId}]`);
+    const trimmed = text.trim();
+
+    // 유튜브 URL → 자동 임베딩
+    const ytId = extractYoutubeId(trimmed);
+    if (ytId) {
+      e.preventDefault();
+      insertAtCursor(`\n[YT:${ytId}]\n`);
+      toast.success("유튜브 영상이 삽입되었습니다.");
+      return;
+    }
+
+    // 이미지 URL → 자동 이미지
+    if (isImageUrl(trimmed)) {
+      e.preventDefault();
+      insertAtCursor(`\n[IMG:${trimmed}]\n`);
+      toast.success("이미지가 삽입되었습니다.");
+      return;
+    }
+
+    // 그 외: 기본 붙여넣기
   }
 
   function addTag() {
@@ -101,13 +154,9 @@ function NewPostForm() {
               <label className="text-sm font-medium">카테고리</label>
               <div className="flex gap-2 flex-wrap">
                 {CATEGORIES.map((cat) => (
-                  <Button
-                    key={cat.value}
-                    type="button"
-                    variant={category === cat.value ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setCategory(cat.value)}
-                  >
+                  <Button key={cat.value} type="button"
+                    variant={category === cat.value ? "default" : "outline"} size="sm"
+                    onClick={() => setCategory(cat.value)}>
                     {cat.label}
                   </Button>
                 ))}
@@ -117,55 +166,57 @@ function NewPostForm() {
             {/* 제목 */}
             <div className="space-y-1.5">
               <label className="text-sm font-medium">제목</label>
-              <Input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="제목을 입력하세요"
-                required
-              />
+              <Input value={title} onChange={(e) => setTitle(e.target.value)}
+                placeholder="제목을 입력하세요" required />
             </div>
 
-            {/* 내용 */}
+            {/* 내용 에디터 */}
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">내용</label>
-              <div className="flex gap-1 pb-1">
-                <Button type="button" variant="outline" size="sm" onClick={handleInsertImage} className="gap-1.5 text-xs h-7">
-                  <ImageIcon className="w-3.5 h-3.5" /> 이미지 URL
-                </Button>
-                <Button type="button" variant="outline" size="sm" onClick={handleInsertYoutube} className="gap-1.5 text-xs h-7">
-                  <Youtube className="w-3.5 h-3.5" /> 유튜브
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">내용</label>
+                <Button type="button" variant="ghost" size="sm"
+                  className="gap-1.5 text-xs h-7" onClick={() => setPreview(p => !p)}>
+                  {preview ? <><EyeOff className="w-3.5 h-3.5" /> 편집</> : <><Eye className="w-3.5 h-3.5" /> 미리보기</>}
                 </Button>
               </div>
-              <Textarea
-                ref={contentRef}
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                placeholder={`내용을 입력하세요\n\n이미지/유튜브 버튼으로 미디어를 추가할 수 있습니다.`}
-                className="min-h-[200px] font-mono text-sm"
-                required
-              />
+
+              {preview ? (
+                <div className="min-h-[200px] p-3 border rounded-md text-sm bg-muted/30">
+                  {content ? renderContent(content) : <span className="text-muted-foreground">내용을 입력하면 여기에 미리보기가 표시됩니다.</span>}
+                </div>
+              ) : (
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    💡 유튜브/이미지 URL을 <strong>붙여넣기</strong>하면 자동으로 삽입됩니다.
+                  </p>
+                  <Textarea
+                    ref={contentRef}
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    onPaste={handlePaste}
+                    placeholder={`내용을 입력하세요\n\n유튜브 URL을 붙여넣으면 자동으로 영상이 삽입되고,\n이미지 URL(.jpg, .png 등)을 붙여넣으면 이미지가 삽입됩니다.`}
+                    className="min-h-[200px] text-sm"
+                    required
+                  />
+                </>
+              )}
             </div>
 
             {/* 태그 */}
             <div className="space-y-1.5">
               <label className="text-sm font-medium">태그 (최대 5개)</label>
               <div className="flex gap-2">
-                <Input
-                  value={tagInput}
-                  onChange={(e) => setTagInput(e.target.value)}
+                <Input value={tagInput} onChange={(e) => setTagInput(e.target.value)}
                   placeholder="#태그 입력 후 추가"
-                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }}
-                />
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }} />
                 <Button type="button" variant="outline" size="sm" onClick={addTag}>추가</Button>
               </div>
               {tags.length > 0 && (
                 <div className="flex gap-1 flex-wrap">
                   {tags.map((tag) => (
-                    <span
-                      key={tag}
+                    <span key={tag}
                       className="text-xs bg-accent px-2 py-0.5 rounded-full cursor-pointer hover:bg-destructive hover:text-destructive-foreground"
-                      onClick={() => setTags(tags.filter((t) => t !== tag))}
-                    >
+                      onClick={() => setTags(tags.filter((t) => t !== tag))}>
                       #{tag} ✕
                     </span>
                   ))}
@@ -175,12 +226,8 @@ function NewPostForm() {
 
             {/* 익명 */}
             <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={isAnonymous}
-                onChange={(e) => setIsAnonymous(e.target.checked)}
-                className="w-4 h-4"
-              />
+              <input type="checkbox" checked={isAnonymous}
+                onChange={(e) => setIsAnonymous(e.target.checked)} className="w-4 h-4" />
               <span className="text-sm">익명으로 게시</span>
             </label>
 

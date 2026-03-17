@@ -14,29 +14,32 @@ export async function GET(req: NextRequest) {
 
   const x = searchParams.get("x");       // longitude
   const y = searchParams.get("y");       // latitude
-  const radius = searchParams.get("radius") ?? "5000"; // meters, default 5km
+  const radius = searchParams.get("radius") ?? "0"; // 0 = 반경 제한 없음
 
   const key = process.env.KAKAO_REST_API_KEY;
   if (!key) {
     return NextResponse.json({ places: [], message: "KAKAO_REST_API_KEY not configured" });
   }
 
+  // category_group_code: FD6=음식점, CE7=카페 — 제한 없이 전체 검색 (카카오 키워드 검색 기본)
+  const categoryCode = searchParams.get("category") ?? "";
+
   try {
     const params = new URLSearchParams({
       query,
-      category_group_code: "FD6",
       size: "30",
       sort: x && y ? "distance" : "accuracy",
     });
+    if (categoryCode) params.set("category_group_code", categoryCode);
     if (x && y) {
       params.set("x", x);
       params.set("y", y);
-      params.set("radius", radius);
+      if (radius !== "0") params.set("radius", radius);
     }
     const url = `https://dapi.kakao.com/v2/local/search/keyword.json?${params}`;
     const res = await fetch(url, {
       headers: { Authorization: `KakaoAK ${key}` },
-      next: { revalidate: 300 },
+      cache: "no-store",
     });
 
     if (!res.ok) {

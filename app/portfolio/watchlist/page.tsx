@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus, Trash2, Pencil, BarChart2, Newspaper, ExternalLink, ChevronDown, ChevronUp, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import type { PortfolioSector } from "@/lib/types";
+import type { StockMeta } from "@/lib/stocks-list";
 
 interface WatchlistGroup {
   id: string; name: string; emoji: string; color: string; description?: string;
@@ -122,7 +123,7 @@ function GroupDialog({
   );
 }
 
-// ─── Ticker Dialog ─────────────────────────────────────────────────────────────
+// ─── Ticker Dialog (자동완성 검색) ──────────────────────────────────────────────
 
 const emptyTickerForm = {
   ticker: "", name: "", market: "KR" as "KR" | "US", sector: "other" as PortfolioSector,
@@ -140,6 +141,11 @@ function TickerDialog({
   onSave: (item: WatchlistItem) => void;
 }) {
   const [form, setForm] = useState(emptyTickerForm);
+  const [searchQ, setSearchQ] = useState("");
+  const [suggestions, setSuggestions] = useState<StockMeta[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [fetchingPrice, setFetchingPrice] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (open) {
@@ -150,11 +156,49 @@ function TickerDialog({
           targetPrice: initial.targetPrice ? String(initial.targetPrice) : "",
           memo: initial.memo ?? "", groupId: initial.groupId ?? "",
         });
+        setSearchQ(initial.name);
       } else {
         setForm({ ...emptyTickerForm, groupId: defaultGroupId ?? "" });
+        setSearchQ("");
+        // 처음 열면 인기 종목 50 표시
+        fetch("/api/portfolio/search?q=").then(r => r.json()).then(setSuggestions);
+        setShowSuggestions(true);
       }
     }
   }, [open, initial, defaultGroupId]);
+
+  useEffect(() => {
+    if (!open || initial) return;
+    const timer = setTimeout(() => {
+      fetch(`/api/portfolio/search?q=${encodeURIComponent(searchQ)}`)
+        .then(r => r.json()).then(setSuggestions);
+      setShowSuggestions(true);
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [searchQ, open, initial]);
+
+  async function selectStock(stock: StockMeta) {
+    setShowSuggestions(false);
+    setSearchQ(stock.name);
+    setForm(f => ({
+      ...f,
+      ticker: stock.ticker,
+      name: stock.name,
+      market: stock.market,
+      sector: stock.sector as PortfolioSector,
+    }));
+    // KIS API로 현재가 자동 조회
+    setFetchingPrice(true);
+    try {
+      const res = await fetch(`/api/portfolio/price?ticker=${stock.ticker}&market=${stock.market}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.price) setForm(f => ({ ...f, currentPrice: String(data.price) }));
+      }
+    } finally {
+      setFetchingPrice(false);
+    }
+  }
 
   function handleSave() {
     if (!form.ticker.trim() || !form.name.trim()) return;
@@ -180,46 +224,69 @@ function TickerDialog({
           <DialogTitle>{initial ? "종목 편집" : "관심 종목 추가"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
+          {/* 종목 검색 자동완성 */}
+          {!initial && (
+            <div ref={searchRef} className="relative">
+              <p className="text-xs mb-1 font-medium">종목 검색 *</p>
+              <Input
+                value={searchQ}
+                onChange={e => { setSearchQ(e.target.value); setShowSuggestions(true); }}
+                onFocus={() => setShowSuggestions(true)}
+                placeholder="종목명 또는 티커 입력 (예: 삼성, AAPL)"
+                autoFocus
+              />
+              {showSuggestions && suggestions.length > 0 && (
+                <div className="absolute z-50 w-full mt-1 bg-white dark:bg-zinc-900 border rounded-lg shadow-lg max-h-56 overflow-y-auto">
+                  {!searchQ && (
+                    <p className="px-3 py-1.5 text-xs text-muted-foreground border-b">인기 종목 TOP 50</p>
+                  )}
+                  {suggestions.map(s => (
+                    <button
+                      key={s.ticker}
+                      className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted text-left"
+                      onMouseDown={() => selectStock(s)}
+                    >
+                      <span className="text-xs">{s.market === "KR" ? "🇰🇷" : "🇺🇸"}</span>
+                      <span className="font-medium text-sm flex-1">{s.name}</span>
+                      <span className="text-xs text-muted-foreground font-mono">{s.ticker}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 선택된 종목 정보 표시 */}
+          {form.ticker && (
+            <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg text-sm">
+              <span>{form.market === "KR" ? "🇰🇷" : "🇺🇸"}</span>
+              <span className="font-medium">{form.name}</span>
+              <span className="text-muted-foreground font-mono text-xs">{form.ticker}</span>
+              {fetchingPrice && <span className="text-xs text-muted-foreground ml-auto">가격 조회 중...</span>}
+              {form.currentPrice && !fetchingPrice && (
+                <span className="ml-auto text-xs font-semibold text-green-600">
+                  {form.market === "KR" ? `₩${Number(form.currentPrice).toLocaleString()}` : `$${Number(form.currentPrice).toLocaleString()}`}
+                </span>
+              )}
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-2">
-            <div>
-              <p className="text-xs mb-1 font-medium">티커 *</p>
-              <Input value={form.ticker} onChange={e => setForm(f => ({ ...f, ticker: e.target.value }))} placeholder="AAPL / 005930" className="uppercase" />
-            </div>
-            <div>
-              <p className="text-xs mb-1 font-medium">시장</p>
-              <Select value={form.market} onValueChange={v => v && setForm(f => ({ ...f, market: v as "KR" | "US" }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="KR">🇰🇷 한국</SelectItem>
-                  <SelectItem value="US">🇺🇸 미국</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div>
-            <p className="text-xs mb-1 font-medium">종목명 *</p>
-            <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="예: 삼성전자, Apple" />
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <p className="text-xs mb-1 font-medium">현재가</p>
-              <Input type="number" value={form.currentPrice} onChange={e => setForm(f => ({ ...f, currentPrice: e.target.value }))} placeholder="0" />
-            </div>
             <div>
               <p className="text-xs mb-1 font-medium">목표가</p>
               <Input type="number" value={form.targetPrice} onChange={e => setForm(f => ({ ...f, targetPrice: e.target.value }))} placeholder="선택" />
             </div>
-          </div>
-          <div>
-            <p className="text-xs mb-1 font-medium">섹터</p>
-            <Select value={form.sector} onValueChange={v => v && setForm(f => ({ ...f, sector: v as PortfolioSector }))}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {(Object.entries(SECTOR_LABELS) as [PortfolioSector, string][]).map(([k, v]) => (
-                  <SelectItem key={k} value={k}>{v}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div>
+              <p className="text-xs mb-1 font-medium">섹터</p>
+              <Select value={form.sector} onValueChange={v => v && setForm(f => ({ ...f, sector: v as PortfolioSector }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {(Object.entries(SECTOR_LABELS) as [PortfolioSector, string][]).map(([k, v]) => (
+                    <SelectItem key={k} value={k}>{v}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           {groups.length > 0 && (
             <div>
