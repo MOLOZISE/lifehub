@@ -257,28 +257,32 @@ export default function RestaurantPage() {
     loadAll();
   }
 
-  // Map data
-  const mapRestaurants: MapRestaurant[] = allRestaurants
-    .filter(r => r.latitude && r.longitude)
-    .map(r => ({
-      id: r.id,
-      name: r.name,
-      category: r.category,
-      address: r.address,
-      avgRating: r.avgRating,
-      latitude: r.latitude!,
-      longitude: r.longitude!,
-    }));
+  // Map data - useMemo로 안정화 (리렌더시 새 배열 생성 → setBounds 루프 방지)
+  const mapRestaurants = useMemo<MapRestaurant[]>(() =>
+    allRestaurants
+      .filter(r => r.latitude && r.longitude)
+      .map(r => ({
+        id: r.id,
+        name: r.name,
+        category: r.category,
+        address: r.address,
+        avgRating: r.avgRating,
+        latitude: r.latitude!,
+        longitude: r.longitude!,
+      })),
+  [allRestaurants]);
 
-  const mapKakaoPlaces: MapKakaoPlace[] = kakaoResults.map(p => ({
-    id: p.id,
-    name: p.name,
-    category: p.category,
-    address: p.address,
-    roadAddress: p.roadAddress,
-    latitude: p.latitude,
-    longitude: p.longitude,
-  }));
+  const mapKakaoPlaces = useMemo<MapKakaoPlace[]>(() =>
+    kakaoResults.map(p => ({
+      id: p.id,
+      name: p.name,
+      category: p.category,
+      address: p.address,
+      roadAddress: p.roadAddress,
+      latitude: p.latitude,
+      longitude: p.longitude,
+    })),
+  [kakaoResults]);
 
   // Center map - useMemo로 참조 안정화 (같은 좌표면 effect 재실행 안 됨)
   const selectedRestaurant = selectedId ? allRestaurants.find(r => r.id === selectedId) : null;
