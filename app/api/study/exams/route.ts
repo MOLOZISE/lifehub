@@ -28,7 +28,7 @@ export async function POST(req: Request) {
       userId: session.user.id,
       name,
       category: category || null,
-      examDate: new Date(examDate),
+      examDate: examDate,
       targetScore: targetScore ? Number(targetScore) : null,
       passScore: passScore ? Number(passScore) : null,
       actualScore: actualScore ? Number(actualScore) : null,

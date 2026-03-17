@@ -59,7 +59,7 @@ export default function SubjectDetailPage() {
 
   if (!subject) return null;
 
-  const colors = COLOR_MAP[subject.color] ?? COLOR_MAP["blue"];
+  const colors = COLOR_MAP[subject.color as import("@/lib/types").SubjectColor] ?? COLOR_MAP["blue"];
   const { notes: noteCount, flashcards: flashcardCount, quizQuestions: questionCount } = subject._count;
 
   return (

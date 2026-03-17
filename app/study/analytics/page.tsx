@@ -270,7 +270,7 @@ ${weeklyData.map(d => `${d.day}: ${d.minutes}분`).join(", ")}`;
             <div className="space-y-2">
               {subjectChartData.map(item => {
                 const pct = totalMin30 > 0 ? (item.minutes / totalMin30) * 100 : 0;
-                const colors = COLOR_MAP[item.color];
+                const colors = COLOR_MAP[item.color as import("@/lib/types").SubjectColor];
                 return (
                   <div key={item.id} className="flex items-center gap-3">
                     <span className="text-sm w-5">{item.emoji}</span>

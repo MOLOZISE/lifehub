@@ -17,9 +17,9 @@ import { toast } from "sonner";
 import type { PortfolioSector } from "@/lib/types";
 
 interface Holding {
-  id: string; ticker: string; name: string; market: string;
+  id: string; ticker: string; name: string; market: "KR" | "US";
   sector: PortfolioSector | null; quantity: number; avgPrice: number;
-  currentPrice: number; currency: string; memo?: string;
+  currentPrice: number; currency: "KRW" | "USD"; memo?: string;
 }
 
 const CHART_COLORS = ["#6366f1","#8b5cf6","#ec4899","#f59e0b","#10b981","#3b82f6","#ef4444","#14b8a6"];
@@ -90,7 +90,7 @@ export default function PortfolioPage() {
   const totalProfitUSD = totalUSD - totalCostUSD;
   const totalProfitRate = totalCostUSD > 0 ? (totalProfitUSD / totalCostUSD) * 100 : 0;
 
-  const risk = analyzePortfolioRisk(holdings);
+  const risk = analyzePortfolioRisk(holdings as unknown as import("@/lib/types").Holding[]);
 
   const chartData = holdings.map(h => ({
     name: h.name,

@@ -207,7 +207,7 @@ export default function SessionsPage() {
               <div className="col-span-2"><p className="text-xs mb-1 font-medium">사용 자료</p><Input value={form.materialName} onChange={e => setForm(f => ({ ...f, materialName: e.target.value }))} placeholder="예: 시나공 필기" /></div>
               {exams.length > 0 && (
                 <div className="col-span-2"><p className="text-xs mb-1 font-medium">연결 시험 (선택)</p>
-                  <Select value={form.examId} onValueChange={v => setForm(f => ({ ...f, examId: v === "none" ? "" : v }))}>
+                  <Select value={form.examId} onValueChange={v => setForm(f => ({ ...f, examId: v === "none" ? "" : (v ?? f.examId) }))}>
                     <SelectTrigger><SelectValue placeholder="시험 선택" /></SelectTrigger>
                     <SelectContent><SelectItem value="none">없음</SelectItem>{exams.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}</SelectContent>
                   </Select>

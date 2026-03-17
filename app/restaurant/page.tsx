@@ -453,7 +453,7 @@ export default function RestaurantPage() {
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <p className="text-xs mb-1">카테고리</p>
-                <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v }))}>
+                <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v ?? f.category }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>{CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                 </Select>

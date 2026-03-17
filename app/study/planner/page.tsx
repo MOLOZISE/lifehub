@@ -181,7 +181,7 @@ export default function PlannerPage() {
                   <div className="space-y-1.5">
                     {day.tasks.map((task, j) => {
                       const subj = subjects.find(s => s.name === task.subject);
-                      const colors = subj ? COLOR_MAP[subj.color] : null;
+                      const colors = subj ? COLOR_MAP[subj.color as import("@/lib/types").SubjectColor] : null;
                       return (
                         <div key={j} className={`flex items-center gap-2 p-2 rounded-lg text-sm ${colors ? `${colors.light} ${colors.text}` : "bg-muted"}`}>
                           <span>{task.emoji}</span>

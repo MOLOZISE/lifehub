@@ -42,7 +42,7 @@ export async function PUT(
       ...(name !== undefined && { name }),
       ...(color !== undefined && { color }),
       ...(emoji !== undefined && { emoji }),
-      examDate: examDate ? new Date(examDate) : null,
+      examDate: examDate ? examDate : null,
     },
   });
 

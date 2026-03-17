@@ -34,7 +34,7 @@ export async function POST(req: Request) {
       name,
       color: color ?? "blue",
       emoji: emoji ?? null,
-      examDate: examDate ? new Date(examDate) : null,
+      examDate: examDate ? examDate : null,
     },
     include: {
       _count: {

@@ -207,7 +207,7 @@ export default function DashboardPage() {
                 const cards = getFlashcards(s.id);
                 const known = cards.filter(c => c.known).length;
                 const prog = cards.length > 0 ? (known / cards.length) * 100 : 0;
-                const colors = COLOR_MAP[s.color];
+                const colors = COLOR_MAP[s.color as import("@/lib/types").SubjectColor];
                 return (
                   <Link key={s.id} href={`/study/subjects/${s.id}`} className="block">
                     <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent transition-colors">
