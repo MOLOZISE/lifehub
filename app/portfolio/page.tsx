@@ -146,16 +146,16 @@ export default function PortfolioPage() {
     if (holdings.length === 0) return;
     setRefreshing(true);
     try {
-      const tickers = holdings.map(h => h.market === "KR" ? `${h.ticker}.KS` : h.ticker);
-      const res = await fetch(`/api/stock/price?tickers=${tickers.join(",")}`);
+      const tickers = holdings.map(h => h.ticker).join(",");
+      const markets = holdings.map(h => h.market).join(",");
+      const res = await fetch(`/api/portfolio/price?tickers=${tickers}&markets=${markets}`);
       if (!res.ok) { toast.error("가격 조회 실패"); return; }
-      const { prices } = await res.json() as { prices: Record<string, { price: number }> };
+      const prices = await res.json() as Record<string, { price: number; error?: string }>;
 
       let updated = 0;
       for (const h of holdings) {
-        const yahooTicker = h.market === "KR" ? `${h.ticker}.KS` : h.ticker;
-        const data = prices[yahooTicker];
-        if (!data || data.price === 0 || data.price === h.currentPrice) continue;
+        const data = prices[h.ticker];
+        if (!data || data.error || data.price === 0 || data.price === h.currentPrice) continue;
         await fetch(`/api/portfolio/holdings/${h.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -164,7 +164,7 @@ export default function PortfolioPage() {
         updated++;
       }
       await loadHoldings();
-      toast.success(updated > 0 ? `${updated}개 종목 현재가 갱신 완료` : "변동된 가격이 없습니다");
+      toast.success(updated > 0 ? `${updated}개 종목 현재가 갱신 완료 (KIS)` : "변동된 가격이 없습니다");
     } catch { toast.error("갱신 실패"); }
     finally { setRefreshing(false); }
   }
