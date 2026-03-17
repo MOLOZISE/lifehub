@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, ImageIcon, Youtube } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +29,33 @@ function NewPostForm() {
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const contentRef = useRef<HTMLTextAreaElement>(null);
+
+  function insertAtCursor(marker: string) {
+    const el = contentRef.current;
+    if (!el) return;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const next = content.slice(0, start) + "\n" + marker + "\n" + content.slice(end);
+    setContent(next);
+    setTimeout(() => {
+      el.focus();
+      el.selectionStart = el.selectionEnd = start + marker.length + 2;
+    }, 0);
+  }
+
+  function handleInsertImage() {
+    const url = window.prompt("이미지 URL을 입력하세요:");
+    if (url?.trim()) insertAtCursor(`[IMG:${url.trim()}]`);
+  }
+
+  function handleInsertYoutube() {
+    const input = window.prompt("유튜브 URL 또는 영상 ID를 입력하세요:");
+    if (!input?.trim()) return;
+    const match = input.match(/(?:v=|youtu\.be\/|shorts\/)([A-Za-z0-9_-]{11})/);
+    const videoId = match ? match[1] : input.trim();
+    insertAtCursor(`[YT:${videoId}]`);
+  }
 
   function addTag() {
     const t = tagInput.trim().replace(/^#/, "");
@@ -101,11 +128,20 @@ function NewPostForm() {
             {/* 내용 */}
             <div className="space-y-1.5">
               <label className="text-sm font-medium">내용</label>
+              <div className="flex gap-1 pb-1">
+                <Button type="button" variant="outline" size="sm" onClick={handleInsertImage} className="gap-1.5 text-xs h-7">
+                  <ImageIcon className="w-3.5 h-3.5" /> 이미지 URL
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={handleInsertYoutube} className="gap-1.5 text-xs h-7">
+                  <Youtube className="w-3.5 h-3.5" /> 유튜브
+                </Button>
+              </div>
               <Textarea
+                ref={contentRef}
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                placeholder="내용을 입력하세요"
-                className="min-h-[200px]"
+                placeholder={`내용을 입력하세요\n\n이미지/유튜브 버튼으로 미디어를 추가할 수 있습니다.`}
+                className="min-h-[200px] font-mono text-sm"
                 required
               />
             </div>

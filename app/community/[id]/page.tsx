@@ -5,6 +5,38 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { Heart, MessageSquare, Eye, ArrowLeft, Send, Loader2, Trash2 } from "lucide-react";
+
+function renderContent(content: string) {
+  const parts = content.split(/(\[IMG:[^\]]+\]|\[YT:[A-Za-z0-9_-]{11}\])/g);
+  return parts.map((part, i) => {
+    const imgMatch = part.match(/^\[IMG:(.+)\]$/);
+    if (imgMatch) {
+      return (
+        <img
+          key={i}
+          src={imgMatch[1]}
+          alt="첨부 이미지"
+          className="max-w-full rounded-md my-2 border"
+          loading="lazy"
+        />
+      );
+    }
+    const ytMatch = part.match(/^\[YT:([A-Za-z0-9_-]{11})\]$/);
+    if (ytMatch) {
+      return (
+        <div key={i} className="my-3 aspect-video w-full max-w-xl">
+          <iframe
+            src={`https://www.youtube.com/embed/${ytMatch[1]}`}
+            className="w-full h-full rounded-md border"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+      );
+    }
+    return <span key={i} className="whitespace-pre-wrap">{part}</span>;
+  });
+}
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -148,8 +180,8 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
           )}
         </CardHeader>
         <CardContent className="pt-0 space-y-4">
-          <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap text-sm leading-relaxed border-t pt-4">
-            {post.content}
+          <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed border-t pt-4">
+            {renderContent(post.content)}
           </div>
           {/* 좋아요 */}
           <div className="flex items-center gap-4 pt-2 border-t">

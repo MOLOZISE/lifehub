@@ -107,6 +107,8 @@ export default function RestaurantMap({
   const kakaoMarkersRef = useRef<{ overlay: AnyKakao; id: string }[]>([]);
   const popupRef = useRef<AnyKakao>(null);
   const [mapReady, setMapReady] = useState(false);
+  const [sdkStatus, setSdkStatus] = useState<"loading" | "loaded" | "error">("loading");
+  const [sdkError, setSdkError] = useState<string | null>(null);
 
   const appKey = process.env.NEXT_PUBLIC_KAKAO_MAP_KEY;
 
@@ -171,15 +173,20 @@ export default function RestaurantMap({
 
     function createMap() {
       if (mapInstanceRef.current || !mapRef.current) return;
-      const kakao = window.kakao;
-      const map = new kakao.maps.Map(mapRef.current, {
-        center: new kakao.maps.LatLng(DEFAULT_CENTER[0], DEFAULT_CENTER[1]),
-        level: DEFAULT_LEVEL,
-      });
-      // Close popup when clicking map background
-      kakao.maps.event.addListener(map, "click", closePopup);
-      mapInstanceRef.current = map;
-      setMapReady(true);
+      try {
+        const kakao = window.kakao;
+        const map = new kakao.maps.Map(mapRef.current, {
+          center: new kakao.maps.LatLng(DEFAULT_CENTER[0], DEFAULT_CENTER[1]),
+          level: DEFAULT_LEVEL,
+        });
+        kakao.maps.event.addListener(map, "click", closePopup);
+        mapInstanceRef.current = map;
+        setSdkStatus("loaded");
+        setMapReady(true);
+      } catch (e) {
+        setSdkStatus("error");
+        setSdkError(`지도 초기화 실패: ${e instanceof Error ? e.message : String(e)}`);
+      }
     }
 
     if (window.kakao?.maps) {
@@ -196,7 +203,18 @@ export default function RestaurantMap({
     const script = document.createElement("script");
     script.id = "kakao-maps-sdk";
     script.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${appKey}&autoload=false`;
-    script.onload = () => window.kakao.maps.load(createMap);
+    script.onload = () => {
+      try {
+        window.kakao.maps.load(createMap);
+      } catch (e) {
+        setSdkStatus("error");
+        setSdkError(`SDK load 실패: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    };
+    script.onerror = () => {
+      setSdkStatus("error");
+      setSdkError("SDK 스크립트 로드 실패 — API 키가 올바른지, Vercel에 NEXT_PUBLIC_KAKAO_MAP_KEY 가 등록됐는지 확인하세요.");
+    };
     document.head.appendChild(script);
 
     return () => { closePopup(); };
@@ -321,14 +339,31 @@ export default function RestaurantMap({
         <div>
           <p className="text-2xl mb-2">🗺️</p>
           <p className="text-sm font-medium mb-1">카카오 지도 API 키 미설정</p>
+          <p className="text-xs text-muted-foreground mb-2">
+            Vercel 환경 변수에{" "}
+            <code className="bg-background px-1 rounded font-mono">NEXT_PUBLIC_KAKAO_MAP_KEY</code>
+            를 추가한 뒤 재배포하세요.
+          </p>
           <p className="text-xs text-muted-foreground">
-            <code className="bg-background px-1 rounded">NEXT_PUBLIC_KAKAO_MAP_KEY</code>를{" "}
-            <code className="bg-background px-1 rounded">.env.local</code>에 추가하세요
+            (현재 빌드 시점에 키가 없어 지도를 표시할 수 없습니다)
           </p>
         </div>
       </div>
     );
   }
 
-  return <div ref={mapRef} className="w-full h-full" />;
+  return (
+    <div className="relative w-full h-full">
+      <div ref={mapRef} className="w-full h-full" />
+      {/* 디버그 오버레이 */}
+      {sdkStatus !== "loaded" && (
+        <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs rounded px-2 py-1 max-w-[90%] z-50">
+          {sdkStatus === "loading" && "🔄 카카오 지도 SDK 로딩 중..."}
+          {sdkStatus === "error" && (
+            <span className="text-red-300">❌ {sdkError}</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
