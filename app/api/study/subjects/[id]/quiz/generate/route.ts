@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import Groq from "groq-sdk";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY ?? "");
+function getGroq() {
+  return new Groq({ apiKey: process.env.GROQ_API_KEY ?? "" });
+}
 
 export async function POST(
   req: Request,
@@ -67,12 +69,16 @@ export async function POST(
 ${context.slice(0, 8000)}`;
 
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-    const result = await model.generateContent(prompt);
-    const text = result.response.text().trim();
+    const completion = await getGroq().chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.7,
+      max_tokens: 3000,
+    });
 
+    const raw = completion.choices[0]?.message?.content ?? "";
     // Strip markdown code fences if present
-    const json = text.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
+    const json = raw.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
     const questions: {
       type: string;
       question: string;
@@ -82,7 +88,6 @@ ${context.slice(0, 8000)}`;
     }[] = JSON.parse(json);
 
     const userId = session.user.id!;
-    // Bulk-save to DB
     const saved = await Promise.all(
       questions.map(q =>
         prisma.quizQuestion.create({
