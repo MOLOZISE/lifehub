@@ -31,6 +31,7 @@ interface Props {
   centerLatLng?: [number, number] | null;
   userLocation?: [number, number] | null;
   onMapIdle?: (lat: number, lng: number) => void;
+  zoomLevel?: number;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -104,6 +105,7 @@ export default function RestaurantMap({
   centerLatLng,
   userLocation,
   onMapIdle,
+  zoomLevel,
 }: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<AnyKakao>(null);
@@ -355,13 +357,15 @@ export default function RestaurantMap({
   }, [mapReady, onMapIdle]);
 
   // ── 5. Pan to custom center ─────────────────────────────────────────────
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!mapReady || !centerLatLng) return;
     const map = mapInstanceRef.current;
     const kakao = window.kakao;
     map.setCenter(new kakao.maps.LatLng(centerLatLng[0], centerLatLng[1]));
-    map.setLevel(3, { animate: true });
-  }, [mapReady, centerLatLng]);
+    if (zoomLevel != null) map.setLevel(zoomLevel, { animate: true });
+    // level 8 ≈ 10km, level 4 ≈ 500m
+  }, [mapReady, centerLatLng?.[0], centerLatLng?.[1]]);
 
   // ── 6. Global handler for popup button ──────────────────────────────────
   useEffect(() => {

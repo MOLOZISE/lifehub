@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { Plus, Search, Star, MapPin, Phone, Bookmark, BookmarkCheck, Loader2, Map, List, Navigation, RotateCcw, ExternalLink } from "lucide-react";
@@ -280,15 +280,18 @@ export default function RestaurantPage() {
     longitude: p.longitude,
   }));
 
-  // Center map on selected restaurant or selected kakao place
+  // Center map - useMemo로 참조 안정화 (같은 좌표면 effect 재실행 안 됨)
   const selectedRestaurant = selectedId ? allRestaurants.find(r => r.id === selectedId) : null;
   const selectedKakaoPlace = selectedKakaoId ? kakaoResults.find(p => p.id === selectedKakaoId) : null;
-  const centerLatLng: [number, number] | null =
-    selectedKakaoPlace
-      ? [selectedKakaoPlace.latitude, selectedKakaoPlace.longitude]
-      : selectedRestaurant?.latitude && selectedRestaurant?.longitude
-        ? [selectedRestaurant.latitude, selectedRestaurant.longitude]
-        : userLocation ?? null;
+  const centerLatLng = useMemo<[number, number] | null>(() => {
+    if (selectedKakaoPlace?.latitude && selectedKakaoPlace?.longitude)
+      return [selectedKakaoPlace.latitude, selectedKakaoPlace.longitude];
+    if (selectedRestaurant?.latitude && selectedRestaurant?.longitude)
+      return [selectedRestaurant.latitude, selectedRestaurant.longitude];
+    return userLocation ?? null;
+  // 좌표가 실제로 바뀔 때만 재계산
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedKakaoId, selectedId, userLocation]);
 
   return (
     <div className="flex flex-col -mx-4 md:-mx-6 -mt-4 md:-mt-6 -mb-20 md:-mb-6" style={{ height: "calc(100vh - 3.5rem)" }}>
@@ -485,6 +488,7 @@ export default function RestaurantPage() {
               onSelectRestaurant={handleSelectOnMap}
               onSelectKakaoPlace={place => focusKakaoPlace({ ...place, phone: "", url: "" })}
               centerLatLng={centerLatLng}
+              zoomLevel={selectedKakaoId ? 4 : selectedId ? 4 : kakaoResults.length > 0 ? 8 : undefined}
               userLocation={userLocation}
               onMapIdle={(lat, lng) => {
                 setMapCenter([lat, lng]);
