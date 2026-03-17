@@ -14,9 +14,13 @@ export async function GET(req: NextRequest) {
   const limit = Math.min(Number(searchParams.get("limit") ?? 20), 500);
   const skip = (page - 1) * limit;
 
+  const sort = searchParams.get("sort") ?? "latest"; // latest | rating
+  const minRating = parseFloat(searchParams.get("minRating") ?? "0");
+
   const where: Record<string, unknown> = {};
   if (category) where.category = category;
   if (myOnly) where.userId = session.user.id;
+  if (minRating > 0) where.avgRating = { gte: minRating };
   if (search) {
     where.OR = [
       { name: { contains: search, mode: "insensitive" } },
@@ -25,10 +29,14 @@ export async function GET(req: NextRequest) {
     ];
   }
 
+  const orderBy = sort === "rating"
+    ? [{ avgRating: "desc" as const }, { createdAt: "desc" as const }]
+    : { createdAt: "desc" as const };
+
   const [restaurants, total] = await Promise.all([
     prisma.restaurant.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy,
       skip,
       take: limit,
       include: {

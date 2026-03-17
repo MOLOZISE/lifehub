@@ -4,7 +4,14 @@ import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { Heart, MessageSquare, Eye, ArrowLeft, Send, Loader2, Trash2 } from "lucide-react";
+import { Heart, MessageSquare, Eye, ArrowLeft, Send, Loader2, Trash2, Pencil, X, Check } from "lucide-react";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
+import { formatDistanceToNow } from "@/lib/utils-app";
 
 function renderContent(content: string) {
   const parts = content.split(/(\[IMG:[^\]]+\]|\[YT:[A-Za-z0-9_-]{11}\])/g);
@@ -37,12 +44,6 @@ function renderContent(content: string) {
     return <span key={i} className="whitespace-pre-wrap">{part}</span>;
   });
 }
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { toast } from "sonner";
-import { formatDistanceToNow } from "@/lib/utils-app";
 
 const CATEGORY_LABELS: Record<string, string> = {
   free: "🗣️ 자유게시판",
@@ -87,6 +88,10 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
   const [commentAnon, setCommentAnon] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [replyTo, setReplyTo] = useState<string | null>(null);
+  const [editMode, setEditMode] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editContent, setEditContent] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
 
   useEffect(() => {
     fetch(`/api/community/posts/${id}`)
@@ -137,6 +142,32 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
     }
   }
 
+  function startEdit() {
+    if (!post) return;
+    setEditTitle(post.title);
+    setEditContent(post.content);
+    setEditMode(true);
+  }
+
+  async function handleEdit() {
+    if (!editTitle.trim() || !editContent.trim()) return;
+    setEditSaving(true);
+    const res = await fetch(`/api/community/posts/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: editTitle, content: editContent, tags: post?.tags }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setPost(p => p ? { ...p, title: data.post.title, content: data.post.content } : p);
+      setEditMode(false);
+      toast.success("수정됐습니다.");
+    } else {
+      toast.error("수정에 실패했습니다.");
+    }
+    setEditSaving(false);
+  }
+
   if (loading) {
     return <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin" /></div>;
   }
@@ -165,10 +196,25 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
                 <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{post.viewCount}</span>
               </div>
             </div>
-            {isAuthor && (
-              <Button variant="ghost" size="sm" onClick={handleDelete} className="text-destructive hover:text-destructive shrink-0">
-                <Trash2 className="w-4 h-4" />
-              </Button>
+            {isAuthor && !editMode && (
+              <div className="flex gap-1 shrink-0">
+                <Button variant="ghost" size="sm" onClick={startEdit} className="text-muted-foreground hover:text-foreground">
+                  <Pencil className="w-4 h-4" />
+                </Button>
+                <Button variant="ghost" size="sm" onClick={handleDelete} className="text-destructive hover:text-destructive">
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
+            )}
+            {editMode && (
+              <div className="flex gap-1 shrink-0">
+                <Button variant="ghost" size="sm" onClick={handleEdit} disabled={editSaving} className="text-primary hover:text-primary">
+                  {editSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setEditMode(false)} className="text-muted-foreground">
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
             )}
           </div>
           {post.tags.length > 0 && (
@@ -180,9 +226,16 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
           )}
         </CardHeader>
         <CardContent className="pt-0 space-y-4">
+          {editMode ? (
+            <div className="space-y-2 border-t pt-4">
+              <Input value={editTitle} onChange={e => setEditTitle(e.target.value)} className="font-semibold" placeholder="제목" />
+              <Textarea value={editContent} onChange={e => setEditContent(e.target.value)} className="min-h-[200px] text-sm font-mono" placeholder="내용" />
+            </div>
+          ) : (
           <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed border-t pt-4">
             {renderContent(post.content)}
           </div>
+          )}
           {/* 좋아요 */}
           <div className="flex items-center gap-4 pt-2 border-t">
             <button

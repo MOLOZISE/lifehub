@@ -79,6 +79,8 @@ export default function RestaurantPage() {
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [category, setCategory] = useState("");
+  const [sort, setSort] = useState<"latest" | "rating">("latest");
+  const [minRating, setMinRating] = useState(0);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
@@ -104,9 +106,10 @@ export default function RestaurantPage() {
 
   async function load(p = 1) {
     setLoading(true);
-    const params = new URLSearchParams({ page: String(p), limit: "100" });
+    const params = new URLSearchParams({ page: String(p), limit: "100", sort });
     if (category) params.set("category", category);
     if (search) params.set("search", search);
+    if (minRating > 0) params.set("minRating", String(minRating));
     const res = await fetch(`/api/restaurant?${params}`);
     if (res.ok) {
       const data = await res.json();
@@ -131,7 +134,7 @@ export default function RestaurantPage() {
     load(1);
     loadAll();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category, search]);
+  }, [category, search, sort, minRating]);
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -424,6 +427,16 @@ export default function RestaurantPage() {
             <Button size="sm" variant={category === "" ? "default" : "outline"} className="h-6 text-[10px] px-2 shrink-0" onClick={() => setCategory("")}>전체</Button>
             {CATEGORIES.map(c => (
               <Button key={c} size="sm" variant={category === c ? "default" : "outline"} className="h-6 text-[10px] px-2 shrink-0" onClick={() => setCategory(c)}>{c}</Button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
+            <Button size="sm" variant={sort === "latest" ? "default" : "outline"} className="h-6 text-[10px] px-2 shrink-0" onClick={() => setSort("latest")}>최신순</Button>
+            <Button size="sm" variant={sort === "rating" ? "default" : "outline"} className="h-6 text-[10px] px-2 shrink-0" onClick={() => setSort("rating")}>별점순</Button>
+            <span className="text-[10px] text-muted-foreground shrink-0 ml-1">최소별점:</span>
+            {[0, 3, 4, 5].map(r => (
+              <Button key={r} size="sm" variant={minRating === r ? "default" : "outline"} className="h-6 text-[10px] px-2 shrink-0" onClick={() => setMinRating(r)}>
+                {r === 0 ? "전체" : `${r}★+`}
+              </Button>
             ))}
           </div>
         </div>

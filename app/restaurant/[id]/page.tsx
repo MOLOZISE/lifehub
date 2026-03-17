@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Star, MapPin, Phone, ExternalLink, Trash2, ArrowLeft, Bookmark, BookmarkCheck } from "lucide-react";
+import { Star, MapPin, Phone, ExternalLink, Trash2, ArrowLeft, Bookmark, BookmarkCheck, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 
@@ -72,6 +73,11 @@ export default function RestaurantDetailPage() {
   const [reviewDialog, setReviewDialog] = useState(false);
   const [reviewForm, setReviewForm] = useState({ rating: 5, content: "", visitedAt: "", isAnonymous: false });
   const [submitting, setSubmitting] = useState(false);
+  const [editDialog, setEditDialog] = useState(false);
+  const [editForm, setEditForm] = useState({ name: "", category: "", address: "", phone: "", url: "", description: "" });
+  const [editSaving, setEditSaving] = useState(false);
+
+  const CATEGORIES = ["한식", "중식", "일식", "양식", "카페", "기타"];
 
   async function loadDetail() {
     const res = await fetch(`/api/restaurant/${id}`);
@@ -93,6 +99,26 @@ export default function RestaurantDetailPage() {
     if (!res.ok) { toast.error("실패했습니다."); return; }
     const data = await res.json();
     toast.success(data.bookmarked ? "북마크에 추가했습니다." : "북마크를 해제했습니다.");
+    loadDetail();
+  }
+
+  function openEdit() {
+    if (!restaurant) return;
+    setEditForm({ name: restaurant.name, category: restaurant.category, address: restaurant.address, phone: restaurant.phone ?? "", url: restaurant.url ?? "", description: restaurant.description ?? "" });
+    setEditDialog(true);
+  }
+
+  async function handleEdit() {
+    setEditSaving(true);
+    const res = await fetch(`/api/restaurant/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(editForm),
+    });
+    setEditSaving(false);
+    if (!res.ok) { toast.error("수정 실패"); return; }
+    toast.success("수정됐습니다.");
+    setEditDialog(false);
     loadDetail();
   }
 
@@ -194,9 +220,14 @@ export default function RestaurantDetailPage() {
                 </a>
               )}
               {isOwner && (
-                <button onClick={handleDelete} className="p-2 rounded-md hover:bg-accent transition-colors text-destructive">
-                  <Trash2 className="w-5 h-5" />
-                </button>
+                <>
+                  <button onClick={openEdit} className="p-2 rounded-md hover:bg-accent transition-colors text-muted-foreground">
+                    <Pencil className="w-5 h-5" />
+                  </button>
+                  <button onClick={handleDelete} className="p-2 rounded-md hover:bg-accent transition-colors text-destructive">
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -331,6 +362,50 @@ export default function RestaurantDetailPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setReviewDialog(false)}>취소</Button>
             <Button onClick={handleReviewSubmit} disabled={submitting}>등록</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 맛집 수정 다이얼로그 */}
+      <Dialog open={editDialog} onOpenChange={setEditDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>맛집 정보 수정</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <p className="text-xs mb-1">카테고리</p>
+                <Select value={editForm.category} onValueChange={v => setEditForm(f => ({ ...f, category: v ?? f.category }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div>
+                <p className="text-xs mb-1">상호명</p>
+                <Input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} />
+              </div>
+            </div>
+            <div>
+              <p className="text-xs mb-1">주소</p>
+              <Input value={editForm.address} onChange={e => setEditForm(f => ({ ...f, address: e.target.value }))} />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <p className="text-xs mb-1">전화번호</p>
+                <Input value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} placeholder="02-1234-5678" />
+              </div>
+              <div>
+                <p className="text-xs mb-1">지도 URL</p>
+                <Input value={editForm.url} onChange={e => setEditForm(f => ({ ...f, url: e.target.value }))} />
+              </div>
+            </div>
+            <div>
+              <p className="text-xs mb-1">한줄 소개</p>
+              <Input value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialog(false)}>취소</Button>
+            <Button onClick={handleEdit} disabled={editSaving}>{editSaving ? "저장 중..." : "저장"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

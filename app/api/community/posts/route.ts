@@ -6,16 +6,31 @@ import { prisma } from "@/lib/prisma";
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const category = searchParams.get("category");
+  const search = searchParams.get("search");
+  const sort = searchParams.get("sort") ?? "latest"; // latest | popular
   const page = parseInt(searchParams.get("page") ?? "1");
   const limit = parseInt(searchParams.get("limit") ?? "20");
   const skip = (page - 1) * limit;
 
-  const where = category ? { category } : {};
+  const where = {
+    ...(category ? { category } : {}),
+    ...(search ? {
+      OR: [
+        { title: { contains: search, mode: "insensitive" as const } },
+        { content: { contains: search, mode: "insensitive" as const } },
+        { tags: { has: search } },
+      ],
+    } : {}),
+  };
+
+  const orderBy = sort === "popular"
+    ? [{ likes: { _count: "desc" as const } }, { createdAt: "desc" as const }]
+    : { createdAt: "desc" as const };
 
   const [posts, total] = await Promise.all([
     prisma.post.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy,
       skip,
       take: limit,
       include: {

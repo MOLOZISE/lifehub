@@ -3,10 +3,11 @@
 import { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { MessageSquare, Heart, Eye, PenSquare, Loader2 } from "lucide-react";
+import { MessageSquare, Heart, Eye, PenSquare, Loader2, Search, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { formatDistanceToNow } from "@/lib/utils-app";
 
 const CATEGORIES = [
@@ -39,12 +40,16 @@ function CommunityContent() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<"latest" | "popular">("latest");
 
   const fetchPosts = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ page: String(page), limit: "20" });
+      const params = new URLSearchParams({ page: String(page), limit: "20", sort });
       if (category) params.set("category", category);
+      if (search) params.set("search", search);
       const res = await fetch(`/api/community/posts?${params}`);
       const data = await res.json();
       setPosts(data.posts ?? []);
@@ -52,11 +57,11 @@ function CommunityContent() {
     } finally {
       setLoading(false);
     }
-  }, [category, page]);
+  }, [category, page, search, sort]);
 
   useEffect(() => {
     setPage(1);
-  }, [category]);
+  }, [category, search, sort]);
 
   useEffect(() => {
     fetchPosts();
@@ -77,6 +82,31 @@ function CommunityContent() {
         </Button>
       </div>
 
+      {/* 검색 + 정렬 */}
+      <div className="flex gap-2">
+        <form className="flex-1 flex gap-1.5" onSubmit={e => { e.preventDefault(); setSearch(searchInput); }}>
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            <Input
+              value={searchInput}
+              onChange={e => setSearchInput(e.target.value)}
+              placeholder="제목·내용·태그 검색"
+              className="pl-8 h-8 text-sm"
+            />
+            {searchInput && (
+              <button type="button" onClick={() => { setSearchInput(""); setSearch(""); }} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+          <Button type="submit" size="sm" variant="outline" className="h-8 px-3 shrink-0">검색</Button>
+        </form>
+        <div className="flex gap-1 shrink-0">
+          <Button size="sm" variant={sort === "latest" ? "default" : "outline"} className="h-8 text-xs px-2.5" onClick={() => setSort("latest")}>최신</Button>
+          <Button size="sm" variant={sort === "popular" ? "default" : "outline"} className="h-8 text-xs px-2.5" onClick={() => setSort("popular")}>인기</Button>
+        </div>
+      </div>
+
       {/* 카테고리 탭 */}
       <div className="flex gap-2 flex-wrap">
         {CATEGORIES.map((cat) => (
@@ -90,6 +120,7 @@ function CommunityContent() {
           </Button>
         ))}
       </div>
+      {search && <p className="text-xs text-muted-foreground">"{search}" 검색 결과 {total}건</p>}
 
       {/* 게시글 목록 */}
       {loading ? (
