@@ -99,6 +99,8 @@ export default function RestaurantPage() {
   // Map center (for "이 지역 재검색")
   const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
   const [showReSearch, setShowReSearch] = useState(false);
+  // GPS 위치 한 번만 이동용 (이후 사용자가 자유롭게 이동 가능)
+  const [flyToOnce, setFlyToOnce] = useState<[number, number] | null>(null);
 
   async function load(p = 1) {
     setLoading(true);
@@ -167,6 +169,7 @@ export default function RestaurantPage() {
         const lng = pos.coords.longitude;
         setUserLocation([lat, lng]);
         setMapCenter([lat, lng]);
+        setFlyToOnce([lat, lng]); // 딱 한 번만 이동
         // 내 위치 근처 맛집 자동 검색
         if (kakaoQuery.trim()) {
           await searchKakao({ x: lng, y: lat, radius: 5000 });
@@ -287,15 +290,15 @@ export default function RestaurantPage() {
   // Center map - useMemo로 참조 안정화 (같은 좌표면 effect 재실행 안 됨)
   const selectedRestaurant = selectedId ? allRestaurants.find(r => r.id === selectedId) : null;
   const selectedKakaoPlace = selectedKakaoId ? kakaoResults.find(p => p.id === selectedKakaoId) : null;
+  // centerLatLng: 선택된 장소 or GPS 최초 1회만
   const centerLatLng = useMemo<[number, number] | null>(() => {
     if (selectedKakaoPlace?.latitude && selectedKakaoPlace?.longitude)
       return [selectedKakaoPlace.latitude, selectedKakaoPlace.longitude];
     if (selectedRestaurant?.latitude && selectedRestaurant?.longitude)
       return [selectedRestaurant.latitude, selectedRestaurant.longitude];
-    return userLocation ?? null;
-  // 좌표가 실제로 바뀔 때만 재계산
+    return flyToOnce ?? null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedKakaoId, selectedId, userLocation]);
+  }, [selectedKakaoId, selectedId, flyToOnce]);
 
   return (
     <div className="flex flex-col -mx-4 md:-mx-6 -mt-4 md:-mt-6 -mb-20 md:-mb-6" style={{ height: "calc(100vh - 3.5rem)" }}>
@@ -497,6 +500,7 @@ export default function RestaurantPage() {
               onMapIdle={(lat, lng) => {
                 setMapCenter([lat, lng]);
                 setShowReSearch(true);
+                setFlyToOnce(null); // GPS 이동 완료 후 자유 이동 허용
               }}
             />
             {/* 이 지역 재검색 버튼 */}

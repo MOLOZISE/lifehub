@@ -113,6 +113,7 @@ export default function RestaurantMap({
   const kakaoMarkersRef = useRef<{ overlay: AnyKakao; id: string }[]>([]);
   const userMarkerRef = useRef<AnyKakao>(null);
   const popupRef = useRef<AnyKakao>(null);
+  const onMapIdleRef = useRef(onMapIdle);
   const [mapReady, setMapReady] = useState(false);
   const [sdkStatus, setSdkStatus] = useState<"loading" | "loaded" | "error">("loading");
   const [sdkError, setSdkError] = useState<string | null>(null);
@@ -343,18 +344,22 @@ export default function RestaurantMap({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapReady, userLocation]);
 
-  // ── 5b. Map idle → notify parent ────────────────────────────────────────
+  // onMapIdle ref 최신화 (리렌더마다 새 함수여도 리스너 재등록 안 함)
+  useEffect(() => { onMapIdleRef.current = onMapIdle; }, [onMapIdle]);
+
+  // ── 5b. Map idle → notify parent (맵 준비 시 딱 한 번만 등록)
   useEffect(() => {
-    if (!mapReady || !onMapIdle) return;
+    if (!mapReady) return;
     const kakao = window.kakao;
     const map = mapInstanceRef.current;
-    const listener = kakao.maps.event.addListener(map, "idle", () => {
+    const handler = () => {
       const center = map.getCenter();
-      onMapIdle(center.getLat(), center.getLng());
-    });
-    return () => kakao.maps.event.removeListener(map, "idle", listener);
+      onMapIdleRef.current?.(center.getLat(), center.getLng());
+    };
+    kakao.maps.event.addListener(map, "idle", handler);
+    return () => kakao.maps.event.removeListener(map, "idle", handler);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapReady, onMapIdle]);
+  }, [mapReady]);
 
   // ── 5. Pan to custom center ─────────────────────────────────────────────
   // eslint-disable-next-line react-hooks/exhaustive-deps

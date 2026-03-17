@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
     const params = new URLSearchParams({
       query,
       category_group_code: "FD6",
-      size: "15",
+      size: "30",
       sort: x && y ? "distance" : "accuracy",
     });
     if (x && y) {
