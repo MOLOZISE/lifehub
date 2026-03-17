@@ -302,220 +302,179 @@ export default function RestaurantPage() {
 
   return (
     <div className="flex flex-col -mx-4 md:-mx-6 -mt-4 md:-mt-6 -mb-20 md:-mb-6" style={{ height: "calc(100vh - 3.5rem)" }}>
-      {/* Header bar */}
-      <div className="flex items-center justify-between px-4 py-2 border-b shrink-0 bg-background">
-        <h1 className="text-base font-bold">맛집 지도</h1>
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 text-xs gap-1"
+
+      {/* ── 지도 영역 (상단 60%) ── */}
+      <div className="relative flex-[3] min-h-0">
+        {/* 지도 위 검색 overlay */}
+        <div className="absolute top-3 left-3 right-3 z-20 flex gap-1.5">
+          <div className="flex-1 flex gap-1 bg-white/95 dark:bg-zinc-900/95 shadow-md rounded-lg px-2 py-1.5 backdrop-blur">
+            <Search className="w-4 h-4 text-muted-foreground shrink-0 self-center" />
+            <input
+              className="flex-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground"
+              placeholder="전국 맛집 검색 (예: 강남 삼겹살)"
+              value={kakaoQuery}
+              onChange={e => setKakaoQuery(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && searchKakao()}
+            />
+            {kakaoLoading
+              ? <Loader2 className="w-4 h-4 animate-spin text-muted-foreground shrink-0 self-center" />
+              : kakaoQuery && <button onClick={() => { setKakaoQuery(""); setKakaoResults([]); setSelectedKakaoId(null); }} className="text-muted-foreground hover:text-foreground shrink-0 self-center text-xs">✕</button>
+            }
+          </div>
+          <button
+            onClick={() => searchKakao()}
+            className="bg-primary text-primary-foreground rounded-lg px-3 text-xs font-medium shadow-md hover:bg-primary/90"
+          >
+            검색
+          </button>
+          <button
             onClick={handleMyLocation}
             disabled={locating}
+            className="bg-white/95 dark:bg-zinc-900/95 shadow-md rounded-lg px-2.5 backdrop-blur hover:bg-accent"
             title="현재 위치 근처 검색"
           >
-            {locating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Navigation className="w-3.5 h-3.5" />}
-            <span className="hidden sm:inline">내 위치</span>
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 text-xs gap-1"
-            onClick={() => setShowMap(v => !v)}
-          >
-            {showMap ? <List className="w-3.5 h-3.5" /> : <Map className="w-3.5 h-3.5" />}
-            {showMap ? "목록만" : "지도 보기"}
-          </Button>
-          <Button size="sm" className="h-7 text-xs" onClick={() => setDialogOpen(true)}>
-            <Plus className="w-3.5 h-3.5 mr-1" />맛집 등록
-          </Button>
+            {locating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
+          </button>
         </div>
-      </div>
 
-      {/* Main content */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left panel: filters + list */}
-        <div
-          className={`flex flex-col ${showMap ? "w-80 shrink-0 border-r" : "w-full"} overflow-hidden bg-background`}
-        >
-          {/* Filters */}
-          <div className="p-3 space-y-2 border-b shrink-0">
-            <form onSubmit={handleSearch} className="flex gap-1.5">
-              <Input
-                placeholder="맛집 이름, 주소 검색..."
-                value={searchInput}
-                onChange={e => setSearchInput(e.target.value)}
-                className="h-7 text-xs"
-              />
-              <Button type="submit" size="sm" variant="outline" className="h-7 px-2"><Search className="w-3 h-3" /></Button>
-            </form>
-            {/* Kakao map search */}
-            <div className="flex gap-1.5">
-              <Input
-                placeholder="카카오 지도 검색..."
-                value={kakaoQuery}
-                onChange={e => setKakaoQuery(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && searchKakao()}
-                className="h-7 text-xs"
-              />
-              <Button size="sm" variant="outline" onClick={() => searchKakao()} disabled={kakaoLoading} className="h-7 px-2 shrink-0">
-                {kakaoLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <MapPin className="w-3 h-3" />}
-              </Button>
+        {/* 카카오 검색 결과 드롭다운 */}
+        {kakaoResults.length > 0 && (
+          <div className="absolute top-14 left-3 right-3 z-20 bg-white dark:bg-zinc-900 shadow-xl rounded-xl border overflow-hidden max-h-64">
+            <div className="flex items-center justify-between px-3 py-1.5 border-b bg-muted/30">
+              <span className="text-[10px] font-medium text-blue-600">검색 결과 {kakaoResults.length}건 · 지도에 표시됨</span>
+              <button onClick={() => { setKakaoResults([]); setSelectedKakaoId(null); }} className="text-[10px] text-muted-foreground hover:text-foreground">닫기</button>
             </div>
-            <div className="flex gap-1 flex-wrap">
-              <Button size="sm" variant={category === "" ? "default" : "outline"} className="h-6 text-[10px] px-2" onClick={() => setCategory("")}>전체</Button>
-              {CATEGORIES.map(c => (
-                <Button key={c} size="sm" variant={category === c ? "default" : "outline"} className="h-6 text-[10px] px-2" onClick={() => setCategory(c)}>{c}</Button>
+            <div className="overflow-y-auto max-h-52">
+              {kakaoResults.map(place => (
+                <div
+                  key={place.id}
+                  className={`border-b last:border-0 transition-colors ${selectedKakaoId === place.id ? "bg-blue-50 dark:bg-blue-950/30" : "hover:bg-muted/40"}`}
+                >
+                  <button onClick={() => focusKakaoPlace(place)} className="w-full text-left px-3 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-sm truncate">{place.name}</span>
+                      {place.distance != null && (
+                        <span className="text-[10px] text-blue-500 shrink-0">
+                          {place.distance >= 1000 ? `${(place.distance / 1000).toFixed(1)}km` : `${place.distance}m`}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground truncate">{place.category} · {place.roadAddress || place.address}</div>
+                  </button>
+                  <div className="flex gap-2 px-3 pb-1.5">
+                    <button onClick={() => registerKakaoPlace(place)} className="text-[11px] text-primary hover:underline font-medium">+ 내 맛집 등록</button>
+                    {place.url && (
+                      <a href={place.url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-0.5">
+                        <ExternalLink className="w-2.5 h-2.5" /> 카카오맵
+                      </a>
+                    )}
+                  </div>
+                </div>
               ))}
             </div>
           </div>
+        )}
 
-          {/* Kakao search results */}
-          {kakaoResults.length > 0 && (
-            <div className="border-b shrink-0">
-              <div className="px-3 py-1.5 flex items-center justify-between">
-                <p className="text-[10px] font-medium text-blue-600">카카오 검색 {kakaoResults.length}건</p>
-                <button onClick={() => { setKakaoResults([]); setSelectedKakaoId(null); }} className="text-[10px] text-muted-foreground hover:text-foreground">닫기</button>
-              </div>
-              <div className="max-h-56 overflow-y-auto px-2 pb-2 space-y-1">
-                {kakaoResults.map(place => (
-                  <div
-                    key={place.id}
-                    className={`rounded-md border text-xs transition-all ${selectedKakaoId === place.id ? "border-blue-400 bg-blue-50 dark:bg-blue-950/30" : "hover:bg-accent"}`}
-                  >
-                    <button
-                      onClick={() => focusKakaoPlace(place)}
-                      className="w-full text-left px-2 py-1.5"
-                    >
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="font-medium truncate">{place.name}</span>
-                        {place.distance != null && (
-                          <span className="text-[10px] text-blue-500 shrink-0">
-                            {place.distance >= 1000 ? `${(place.distance / 1000).toFixed(1)}km` : `${place.distance}m`}
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-muted-foreground truncate text-[10px]">{place.category} · {place.roadAddress || place.address}</div>
-                    </button>
-                    <div className="flex gap-1 px-2 pb-1.5">
-                      <button
-                        onClick={() => registerKakaoPlace(place)}
-                        className="text-[10px] text-primary hover:underline"
-                      >
-                        + 내 맛집 등록
-                      </button>
-                      {place.url && (
-                        <a href={place.url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
-                          <ExternalLink className="w-2.5 h-2.5" /> 카카오맵
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+        {/* 이 지역 재검색 */}
+        {showReSearch && kakaoQuery && (
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20">
+            <button
+              onClick={handleReSearch}
+              className="flex items-center gap-1.5 bg-white dark:bg-zinc-800 shadow-lg rounded-full px-3 py-1.5 text-xs font-medium border hover:bg-accent transition-colors"
+            >
+              <RotateCcw className="w-3 h-3" /> 이 지역 재검색
+            </button>
+          </div>
+        )}
 
-          {/* Restaurant list */}
-          <div ref={listRef} className="flex-1 overflow-y-auto">
-            <div className="px-3 py-2 flex items-center justify-between">
-              <p className="text-xs text-muted-foreground">총 {total}개</p>
-            </div>
-            {loading ? (
-              <div className="text-center py-8 text-muted-foreground text-xs">불러오는 중...</div>
-            ) : restaurants.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground text-xs">
-                <p className="text-2xl mb-2">🍽️</p>
-                <p>등록된 맛집이 없습니다.</p>
-              </div>
-            ) : (
-              <div className="space-y-1.5 px-3 pb-3">
-                {restaurants.map(r => (
-                  <Card
-                    key={r.id}
-                    data-id={r.id}
-                    className={`cursor-pointer transition-all ${selectedId === r.id ? "ring-2 ring-primary shadow-md" : "hover:shadow-sm"}`}
-                    onClick={() => setSelectedId(selectedId === r.id ? null : r.id)}
-                  >
-                    <CardContent className="p-3">
-                      <div className="flex items-start justify-between gap-1.5">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 mb-0.5">
-                            <Badge variant="secondary" className="text-[9px] px-1 shrink-0">{r.category}</Badge>
-                            <Link
-                              href={`/restaurant/${r.id}`}
-                              className="font-semibold text-xs hover:underline truncate"
-                              onClick={e => e.stopPropagation()}
-                            >
-                              {r.name}
-                            </Link>
-                          </div>
-                          <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                            <MapPin className="w-2.5 h-2.5 shrink-0" />
-                            <span className="truncate">{r.address}</span>
-                          </div>
-                          <div className="flex items-center justify-between mt-1.5">
-                            <StarRating value={r.avgRating} />
-                            <span className="text-[10px] text-muted-foreground">리뷰 {r.reviewCount}개</span>
-                          </div>
-                        </div>
-                        <button
-                          onClick={e => { e.stopPropagation(); handleBookmark(r); }}
-                          className="shrink-0 p-1 rounded-md hover:bg-accent transition-colors"
-                        >
-                          {r.bookmarks.length > 0
-                            ? <BookmarkCheck className="w-3.5 h-3.5 text-primary" />
-                            : <Bookmark className="w-3.5 h-3.5 text-muted-foreground" />
-                          }
-                        </button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
+        <RestaurantMap
+          restaurants={mapRestaurants}
+          kakaoPlaces={mapKakaoPlaces}
+          selectedId={selectedId}
+          onSelectRestaurant={handleSelectOnMap}
+          onSelectKakaoPlace={place => focusKakaoPlace({ ...place, phone: "", url: "" })}
+          centerLatLng={centerLatLng}
+          zoomLevel={selectedKakaoId ? 4 : selectedId ? 4 : undefined}
+          userLocation={userLocation}
+          onMapIdle={(lat, lng) => {
+            setMapCenter([lat, lng]);
+            setShowReSearch(true);
+            setFlyToOnce(null);
+          }}
+        />
+      </div>
 
-            {totalPages > 1 && (
-              <div className="flex justify-center gap-1.5 pb-3">
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-                  <Button key={p} size="sm" variant={p === page ? "default" : "outline"} className="w-7 h-7 p-0 text-xs" onClick={() => load(p)}>{p}</Button>
-                ))}
-              </div>
-            )}
+      {/* ── 내 맛집 리스트 (하단) ── */}
+      <div className="flex-[2] min-h-0 flex flex-col border-t bg-background">
+        {/* 헤더 + 필터 */}
+        <div className="px-3 pt-2 pb-1.5 shrink-0 space-y-1.5 border-b">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold">내 맛집 <span className="text-xs font-normal text-muted-foreground">{total}개</span></span>
+            <Button size="sm" className="h-7 text-xs" onClick={() => setDialogOpen(true)}>
+              <Plus className="w-3.5 h-3.5 mr-1" />등록
+            </Button>
+          </div>
+          <div className="flex gap-1.5">
+            <form onSubmit={handleSearch} className="flex gap-1 flex-1">
+              <Input placeholder="내 맛집 검색..." value={searchInput} onChange={e => setSearchInput(e.target.value)} className="h-7 text-xs" />
+              <Button type="submit" size="sm" variant="outline" className="h-7 px-2 shrink-0"><Search className="w-3 h-3" /></Button>
+            </form>
+          </div>
+          <div className="flex gap-1 overflow-x-auto pb-0.5 no-scrollbar">
+            <Button size="sm" variant={category === "" ? "default" : "outline"} className="h-6 text-[10px] px-2 shrink-0" onClick={() => setCategory("")}>전체</Button>
+            {CATEGORIES.map(c => (
+              <Button key={c} size="sm" variant={category === c ? "default" : "outline"} className="h-6 text-[10px] px-2 shrink-0" onClick={() => setCategory(c)}>{c}</Button>
+            ))}
           </div>
         </div>
 
-        {/* Right panel: map */}
-        {showMap && (
-          <div className="flex-1 relative">
-            <RestaurantMap
-              restaurants={mapRestaurants}
-              kakaoPlaces={mapKakaoPlaces}
-              selectedId={selectedId}
-              onSelectRestaurant={handleSelectOnMap}
-              onSelectKakaoPlace={place => focusKakaoPlace({ ...place, phone: "", url: "" })}
-              centerLatLng={centerLatLng}
-              zoomLevel={selectedKakaoId ? 4 : selectedId ? 4 : kakaoResults.length > 0 ? 8 : undefined}
-              userLocation={userLocation}
-              onMapIdle={(lat, lng) => {
-                setMapCenter([lat, lng]);
-                setShowReSearch(true);
-                setFlyToOnce(null); // GPS 이동 완료 후 자유 이동 허용
-              }}
-            />
-            {/* 이 지역 재검색 버튼 */}
-            {showReSearch && (
-              <div className="absolute top-3 left-1/2 -translate-x-1/2 z-50">
-                <button
-                  onClick={handleReSearch}
-                  className="flex items-center gap-1.5 bg-white dark:bg-zinc-800 shadow-md rounded-full px-3 py-1.5 text-xs font-medium border hover:bg-accent transition-colors"
+        {/* 리스트 */}
+        <div ref={listRef} className="flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="text-center py-6 text-muted-foreground text-xs">불러오는 중...</div>
+          ) : restaurants.length === 0 ? (
+            <div className="text-center py-6 text-muted-foreground text-xs">
+              <p className="text-xl mb-1">🍽️</p><p>등록된 맛집이 없습니다.</p>
+            </div>
+          ) : (
+            <div className="divide-y">
+              {restaurants.map(r => (
+                <div
+                  key={r.id}
+                  data-id={r.id}
+                  className={`flex items-center gap-2.5 px-3 py-2.5 cursor-pointer transition-colors ${selectedId === r.id ? "bg-primary/5 border-l-2 border-primary" : "hover:bg-muted/40"}`}
+                  onClick={() => setSelectedId(selectedId === r.id ? null : r.id)}
                 >
-                  <RotateCcw className="w-3 h-3" /> 이 지역 재검색
-                </button>
-              </div>
-            )}
-          </div>
-        )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <Badge variant="secondary" className="text-[9px] px-1 shrink-0">{r.category}</Badge>
+                      <Link href={`/restaurant/${r.id}`} className="font-semibold text-sm hover:underline truncate" onClick={e => e.stopPropagation()}>
+                        {r.name}
+                      </Link>
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <StarRating value={r.avgRating} />
+                      <span className="text-[10px] text-muted-foreground truncate">{r.address}</span>
+                    </div>
+                  </div>
+                  <button onClick={e => { e.stopPropagation(); handleBookmark(r); }} className="shrink-0 p-1 rounded hover:bg-accent">
+                    {r.bookmarks.length > 0
+                      ? <BookmarkCheck className="w-4 h-4 text-primary" />
+                      : <Bookmark className="w-4 h-4 text-muted-foreground" />
+                    }
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {totalPages > 1 && (
+            <div className="flex justify-center gap-1.5 py-2">
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                <Button key={p} size="sm" variant={p === page ? "default" : "outline"} className="w-7 h-7 p-0 text-xs" onClick={() => load(p)}>{p}</Button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Add dialog with Kakao search */}
