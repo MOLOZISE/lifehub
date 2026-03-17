@@ -21,7 +21,7 @@ export async function PUT(
     data: {
       name: name ?? exam.name,
       category: category ?? exam.category,
-      examDate: examDate ? new Date(examDate) : exam.examDate,
+      examDate: examDate ? examDate : exam.examDate,
       targetScore: targetScore !== undefined ? (targetScore ? Number(targetScore) : null) : exam.targetScore,
       passScore: passScore !== undefined ? (passScore ? Number(passScore) : null) : exam.passScore,
       actualScore: actualScore !== undefined ? (actualScore ? Number(actualScore) : null) : exam.actualScore,
