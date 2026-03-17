@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Plus, Play, XCircle, Trash2, Upload, Timer, RotateCcw, Filter } from "lucide-react";
+import { ArrowLeft, Plus, Play, XCircle, Trash2, Upload, Timer, RotateCcw, Filter, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LinkButton } from "@/components/ui/link-button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { toast } from "sonner";
 
 type QuestionType = "multiple" | "ox" | "short";
 type Mode = "list" | "quiz" | "result" | "add";
@@ -56,6 +57,10 @@ export default function QuizPage() {
   const [answers, setAnswers] = useState<{ qId: string; answer: string; correct: boolean }[]>([]);
   const [elapsed, setElapsed] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // AI generation
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiCount, setAiCount] = useState(5);
+
   // Add form
   const [addType, setAddType] = useState<QuestionType>("multiple");
   const [addQ, setAddQ] = useState("");
@@ -206,6 +211,23 @@ export default function QuizPage() {
   async function handleDelete(qId: string) {
     await fetch(`/api/study/subjects/${id}/quiz/${qId}`, { method: "DELETE" });
     setQuestions(prev => prev.filter(q => q.id !== qId));
+  }
+
+  async function handleAiGenerate() {
+    setAiGenerating(true);
+    try {
+      const res = await fetch(`/api/study/subjects/${id}/quiz/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ count: aiCount }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error ?? "AI 생성 실패"); return; }
+      setQuestions(prev => [...prev, ...data.questions]);
+      toast.success(`${data.questions.length}개 문제가 생성됐습니다!`);
+    } finally {
+      setAiGenerating(false);
+    }
   }
 
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -371,12 +393,27 @@ export default function QuizPage() {
       <div className="flex items-center gap-2 flex-wrap">
         <LinkButton variant="ghost" size="icon" href={`/study/subjects/${id}`}><ArrowLeft className="w-4 h-4" /></LinkButton>
         <h2 className="font-semibold">{subject?.emoji} {subject?.name} — 문제풀이</h2>
-        <div className="ml-auto flex gap-2">
+        <div className="ml-auto flex gap-2 flex-wrap justify-end">
+          {/* AI 생성 */}
+          <div className="flex items-center gap-1 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-lg px-2 py-1">
+            <Sparkles className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+            <select
+              value={aiCount}
+              onChange={e => setAiCount(Number(e.target.value))}
+              className="text-xs bg-transparent outline-none text-purple-700 dark:text-purple-300 w-12"
+              disabled={aiGenerating}
+            >
+              {[3, 5, 7, 10].map(n => <option key={n} value={n}>{n}개</option>)}
+            </select>
+            <Button size="sm" variant="ghost" className="h-6 text-xs text-purple-700 dark:text-purple-300 px-2 hover:bg-purple-100 dark:hover:bg-purple-900" onClick={handleAiGenerate} disabled={aiGenerating}>
+              {aiGenerating ? <><RotateCcw className="w-3 h-3 animate-spin mr-1" />생성 중...</> : "AI 생성"}
+            </Button>
+          </div>
           <label className="cursor-pointer">
-            <Button variant="outline" size="sm"><Upload className="w-3.5 h-3.5 mr-1" />CSV 가져오기</Button>
+            <Button variant="outline" size="sm"><Upload className="w-3.5 h-3.5 mr-1" />CSV</Button>
             <input type="file" accept=".csv" className="hidden" onChange={handleCSVImport} />
           </label>
-          <Button variant="outline" size="sm" onClick={() => setMode("add")}><Plus className="w-3.5 h-3.5 mr-1" />문제 추가</Button>
+          <Button variant="outline" size="sm" onClick={() => setMode("add")}><Plus className="w-3.5 h-3.5 mr-1" />추가</Button>
           <Button size="sm" onClick={startQuiz} disabled={questions.length === 0}><Play className="w-3.5 h-3.5 mr-1" />시작</Button>
         </div>
       </div>

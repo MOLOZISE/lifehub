@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { BookOpen, TrendingUp, Layers, CalendarDays, ArrowRight, Flame, Target, AlertCircle } from "lucide-react";
+import { BookOpen, TrendingUp, Layers, CalendarDays, ArrowRight, Flame, Target, AlertCircle, MessageSquare, Utensils, Heart, Eye, Star } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -11,8 +11,32 @@ import {
   getDueWrongAnswers, getStudySessions,
 } from "@/lib/storage";
 import { generateStudyRecommendations, analyzePortfolioRisk } from "@/lib/recommendation";
-import { getProfitColor, todayString, COLOR_MAP } from "@/lib/utils-app";
+import { getProfitColor, todayString, COLOR_MAP, formatDistanceToNow } from "@/lib/utils-app";
 import type { Subject, StudyLog, Holding, Exam, StudyRecommendation } from "@/lib/types";
+
+interface CommunityPost {
+  id: string;
+  title: string;
+  category: string;
+  isAnonymous: boolean;
+  createdAt: string;
+  user: { name: string } | null;
+  _count: { likes: number; comments: number };
+  viewCount: number;
+}
+
+interface RestaurantItem {
+  id: string;
+  name: string;
+  category: string;
+  avgRating: number;
+  reviewCount: number;
+  address: string;
+}
+
+const CATEGORY_LABELS: Record<string, string> = {
+  free: "🗣️ 자유", stock: "📈 주식", study: "📖 스터디", restaurant: "🍜 맛집",
+};
 
 const KRW_TO_USD = 1350;
 function toUSD(h: Holding) {
@@ -43,6 +67,8 @@ export default function DashboardPage() {
   const [exams, setExams] = useState<Exam[]>([]);
   const [dueWrongAnswers, setDueWrongAnswers] = useState(0);
   const [recommendations, setRecommendations] = useState<StudyRecommendation[]>([]);
+  const [recentPosts, setRecentPosts] = useState<CommunityPost[]>([]);
+  const [topRestaurants, setTopRestaurants] = useState<RestaurantItem[]>([]);
   const today = todayString();
 
   useEffect(() => {
@@ -62,6 +88,14 @@ export default function DashboardPage() {
       due += cards.filter(c => c.nextReviewAt.slice(0, 10) <= today).length;
     });
     setDueCards(due);
+
+    // Fetch community + restaurant from DB
+    fetch("/api/community/posts?limit=4&sort=latest")
+      .then(r => r.ok ? r.json() : null)
+      .then(d => d?.posts && setRecentPosts(d.posts));
+    fetch("/api/restaurant?limit=4&sort=rating")
+      .then(r => r.ok ? r.json() : null)
+      .then(d => d?.restaurants && setTopRestaurants(d.restaurants));
   }, [today]);
 
   const todaySessions = getStudySessions ? (() => {
@@ -301,6 +335,84 @@ export default function DashboardPage() {
                 </div>
               );
             })}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Community + Restaurant widgets */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Community recent posts */}
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <MessageSquare className="w-4 h-4" />커뮤니티
+              </CardTitle>
+              <Link href="/community" className="text-xs flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
+                전체 보기<ArrowRight className="w-3 h-3" />
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-2 pt-0">
+            {recentPosts.length === 0 ? (
+              <div className="text-center py-4 text-muted-foreground text-sm">
+                <p>게시글이 없습니다</p>
+                <Link href="/community/new" className="text-xs text-primary mt-1 inline-block">첫 글 작성 →</Link>
+              </div>
+            ) : recentPosts.map(post => (
+              <Link key={post.id} href={`/community/${post.id}`} className="block">
+                <div className="flex items-start gap-2 p-2 rounded-lg hover:bg-accent transition-colors">
+                  <Badge variant="secondary" className="text-[9px] px-1 shrink-0 mt-0.5">
+                    {CATEGORY_LABELS[post.category] ?? post.category}
+                  </Badge>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate leading-snug">{post.title}</p>
+                    <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted-foreground">
+                      <span>{post.isAnonymous ? "익명" : post.user?.name ?? "알 수 없음"}</span>
+                      <span>{formatDistanceToNow(post.createdAt)}</span>
+                      <span className="flex items-center gap-0.5"><Heart className="w-2.5 h-2.5" />{post._count.likes}</span>
+                      <span className="flex items-center gap-0.5"><Eye className="w-2.5 h-2.5" />{post.viewCount}</span>
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+
+        {/* Top restaurants */}
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Utensils className="w-4 h-4" />맛집
+              </CardTitle>
+              <Link href="/restaurant" className="text-xs flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
+                전체 보기<ArrowRight className="w-3 h-3" />
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-2 pt-0">
+            {topRestaurants.length === 0 ? (
+              <div className="text-center py-4 text-muted-foreground text-sm">
+                <p>등록된 맛집이 없습니다</p>
+                <Link href="/restaurant" className="text-xs text-primary mt-1 inline-block">맛집 등록 →</Link>
+              </div>
+            ) : topRestaurants.map(r => (
+              <Link key={r.id} href={`/restaurant/${r.id}`} className="block">
+                <div className="flex items-center gap-2 p-2 rounded-lg hover:bg-accent transition-colors">
+                  <Badge variant="secondary" className="text-[9px] px-1 shrink-0">{r.category}</Badge>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{r.name}</p>
+                    <p className="text-[10px] text-muted-foreground truncate">{r.address}</p>
+                  </div>
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                    <span className="text-xs font-medium">{r.avgRating > 0 ? r.avgRating.toFixed(1) : "-"}</span>
+                  </div>
+                </div>
+              </Link>
+            ))}
           </CardContent>
         </Card>
       </div>
