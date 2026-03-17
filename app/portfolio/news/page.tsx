@@ -90,7 +90,7 @@ export default function NewsPage() {
       setAnalyzed(t);
       setAnalyzedAt(new Date().toLocaleString("ko-KR"));
     } catch {
-      setError("분석 실패. .env.local 의 GEMINI_API_KEY를 확인해주세요.");
+      setError("분석 실패. GROQ_API_KEY 및 TAVILY_API_KEY 환경변수를 확인해주세요.");
     } finally {
       setLoading(false);
     }
@@ -100,7 +100,7 @@ export default function NewsPage() {
     <div className="max-w-3xl mx-auto space-y-5">
       <div>
         <h2 className="text-xl font-bold mb-1">AI 뉴스 분석</h2>
-        <p className="text-sm text-muted-foreground">Google 검색 기반 실시간 뉴스 · Gemini 2.0 Flash</p>
+        <p className="text-sm text-muted-foreground">Tavily 실시간 검색 + Groq AI 분석</p>
       </div>
 
       <div className="flex gap-2">
@@ -151,7 +151,7 @@ export default function NewsPage() {
         <div className="flex flex-col items-center justify-center py-14 text-muted-foreground gap-3">
           <Loader2 className="w-7 h-7 animate-spin" />
           <div className="text-center">
-            <p className="text-sm font-medium">Google 검색으로 최신 뉴스 수집 중...</p>
+            <p className="text-sm font-medium">Tavily로 최신 뉴스 수집 후 AI 분석 중...</p>
             <p className="text-xs mt-1 opacity-60">실시간 검색이라 10~20초 소요될 수 있습니다</p>
           </div>
         </div>
@@ -203,7 +203,7 @@ export default function NewsPage() {
         <div className="text-center py-14 text-muted-foreground">
           <p className="text-4xl mb-3">📰</p>
           <p>종목을 입력하거나 보유/관심 종목을 클릭하세요</p>
-          <p className="text-sm mt-1 opacity-60">Google 검색 기반 실시간 뉴스 분석</p>
+          <p className="text-sm mt-1 opacity-60">Tavily 실시간 검색 기반 뉴스 분석</p>
         </div>
       )}
     </div>

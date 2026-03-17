@@ -17,6 +17,7 @@
     "@prisma/adapter-pg": "^7.5.0",
     "@prisma/client": "^7.5.0",
     "@supabase/supabase-js": "^2.99.1",
+    "@tavily/core": "^0.7.2",
     "@types/leaflet": "^1.9.21",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
