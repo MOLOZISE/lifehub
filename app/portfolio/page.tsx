@@ -83,12 +83,23 @@ export default function PortfolioPage() {
   const suggRef = useRef<HTMLDivElement>(null);
 
   async function loadHoldings() {
-    const res = await fetch("/api/portfolio/holdings");
-    if (res.ok) setHoldings(await res.json());
+    try {
+      const res = await fetch("/api/portfolio/holdings");
+      if (res.ok) setHoldings(await res.json());
+    } catch { /* ignore */ }
     setLoading(false);
   }
 
   useEffect(() => { loadHoldings(); }, []);
+
+  // 3분마다 자동 갱신 (장중에만 의미 있지만 항상 실행)
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") refreshPricesSilent();
+    }, 3 * 60 * 1000);
+    return () => clearInterval(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const totalUSD = holdings.reduce((s, h) => s + toUSD(h), 0);
   const totalCostUSD = holdings.reduce((s, h) => {
@@ -178,32 +189,55 @@ export default function PortfolioPage() {
     loadHoldings();
   }
 
-  async function handleRefreshPrices() {
-    if (holdings.length === 0) return;
-    setRefreshing(true);
+  async function refreshPrices(silent = false): Promise<void> {
+    // 현재 holdings를 직접 fetch해서 최신 상태 사용 (stale closure 방지)
+    let currentHoldings = holdings;
+    if (currentHoldings.length === 0) {
+      try {
+        const r = await fetch("/api/portfolio/holdings");
+        if (r.ok) currentHoldings = await r.json();
+      } catch { return; }
+    }
+    if (currentHoldings.length === 0) return;
+
+    if (!silent) setRefreshing(true);
     try {
-      const tickers = holdings.map(h => h.ticker).join(",");
-      const markets = holdings.map(h => h.market).join(",");
+      const tickers = currentHoldings.map(h => h.ticker).join(",");
+      const markets = currentHoldings.map(h => h.market).join(",");
       const res = await fetch(`/api/portfolio/price?tickers=${tickers}&markets=${markets}`);
-      if (!res.ok) { toast.error("가격 조회 실패"); return; }
+      if (!res.ok) {
+        if (!silent) toast.error("가격 조회 실패 (KIS API 확인 필요)");
+        return;
+      }
       const prices = await res.json() as Record<string, { price: number; error?: string }>;
 
       let updated = 0;
-      for (const h of holdings) {
+      await Promise.all(currentHoldings.map(async h => {
         const data = prices[h.ticker];
-        if (!data || data.error || data.price === 0 || data.price === h.currentPrice) continue;
-        await fetch(`/api/portfolio/holdings/${h.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ currentPrice: data.price }),
-        });
-        updated++;
-      }
+        if (!data || data.error || !data.price || data.price === h.currentPrice) return;
+        try {
+          await fetch(`/api/portfolio/holdings/${h.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ currentPrice: data.price }),
+          });
+          updated++;
+        } catch { /* individual update failure is ok */ }
+      }));
+
       await loadHoldings();
-      toast.success(updated > 0 ? `${updated}개 종목 현재가 갱신 완료 (KIS)` : "변동된 가격이 없습니다");
-    } catch { toast.error("갱신 실패"); }
-    finally { setRefreshing(false); }
+      if (!silent) {
+        toast.success(updated > 0 ? `${updated}개 종목 현재가 갱신 완료` : "변동된 가격이 없습니다");
+      }
+    } catch (e) {
+      if (!silent) toast.error(`갱신 실패: ${e instanceof Error ? e.message : "오류"}`);
+    } finally {
+      if (!silent) setRefreshing(false);
+    }
   }
+
+  function refreshPricesSilent() { refreshPrices(true); }
+  function handleRefreshPrices() { refreshPrices(false); }
 
   async function handleDelete(id: string) {
     const res = await fetch(`/api/portfolio/holdings/${id}`, { method: "DELETE" });

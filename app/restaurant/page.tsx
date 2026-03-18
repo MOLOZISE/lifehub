@@ -148,20 +148,31 @@ export default function RestaurantPage() {
     setKakaoResults([]);
     setSelectedKakaoId(null);
     setShowReSearch(false);
+
     const params = new URLSearchParams({ query: q });
-    if (opts?.x != null && opts?.y != null) {
-      params.set("x", String(opts.x));
-      params.set("y", String(opts.y));
-      if (opts.radius) params.set("radius", String(opts.radius));
+
+    // 명시적 좌표가 없어도, 이미 알고 있는 내 위치를 자동 전달 → 거리순 정렬
+    const coordX = opts?.x ?? (userLocation ? userLocation[1] : null);
+    const coordY = opts?.y ?? (userLocation ? userLocation[0] : null);
+    if (coordX != null && coordY != null) {
+      params.set("x", String(coordX));
+      params.set("y", String(coordY));
+      if (opts?.radius) params.set("radius", String(opts.radius));
     }
+
     const res = await fetch(`/api/places/search?${params}`);
     if (res.ok) {
       const data = await res.json();
-      setKakaoResults(data.places ?? []);
+      const places: KakaoPlace[] = data.places ?? [];
+      setKakaoResults(places);
       if (data.error) {
         toast.error(`검색 오류: ${data.error} ${JSON.stringify(data.kakaoError ?? "")}`);
-      } else if (!data.places?.length) {
+      } else if (!places.length) {
         toast.info("검색 결과가 없습니다.");
+      } else {
+        // 첫 번째 결과 자동 선택 + 지도 이동
+        setSelectedKakaoId(places[0].id);
+        setFlyToOnce([places[0].latitude, places[0].longitude]);
       }
     }
     setKakaoLoading(false);
