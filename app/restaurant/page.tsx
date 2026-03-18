@@ -542,7 +542,9 @@ export default function RestaurantPage() {
                   <Button type="submit" size="sm" variant="outline" className="h-7 px-2 shrink-0"><Search className="w-3 h-3" /></Button>
                 </form>
                 <Select value={sort} onValueChange={v => setSort(v as "latest" | "rating")}>
-                  <SelectTrigger className="h-7 w-20 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-7 w-20 text-xs">
+                    <span>{sort === "rating" ? "별점순" : "최신순"}</span>
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="latest">최신순</SelectItem>
                     <SelectItem value="rating">별점순</SelectItem>

@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import {
   BookOpen, TrendingUp, CalendarDays, ArrowRight, Flame,
-  AlertCircle, MessageSquare, Utensils, Heart, Eye, Star, Target,
+  AlertCircle, MessageSquare, Utensils, Heart, Eye, Star, Target, Pencil, Check,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -107,7 +107,7 @@ function getLast14Days(): string[] {
   return days;
 }
 
-const WEEKLY_GOAL_MINUTES = 600; // 주간 목표 10시간
+const DEFAULT_WEEKLY_GOAL = 600;
 
 function getThisWeekMonday(): Date {
   const now = new Date();
@@ -135,7 +135,16 @@ export default function DashboardPage() {
   const [recentPosts, setRecentPosts] = useState<CommunityPost[]>([]);
   const [topRestaurants, setTopRestaurants] = useState<RestaurantItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [weeklyGoal, setWeeklyGoal] = useState(DEFAULT_WEEKLY_GOAL);
+  const [editingGoal, setEditingGoal] = useState(false);
+  const [goalInput, setGoalInput] = useState("");
+  const goalInputRef = useRef<HTMLInputElement>(null);
   const today = todayString();
+
+  useEffect(() => {
+    const saved = localStorage.getItem("weeklyGoalMinutes");
+    if (saved) setWeeklyGoal(Number(saved));
+  }, []);
 
   useEffect(() => {
     Promise.allSettled([
@@ -148,10 +157,10 @@ export default function DashboardPage() {
     ]).then(results => {
       const [sessRes, subRes, holdRes, examRes, postsRes, restRes] = results;
       if (sessRes.status === "fulfilled" && sessRes.value?.sessions) setSessions(sessRes.value.sessions);
-      if (subRes.status === "fulfilled" && subRes.value?.subjects) setSubjects(subRes.value.subjects);
+      if (subRes.status === "fulfilled" && Array.isArray(subRes.value)) setSubjects(subRes.value);
       if (holdRes.status === "fulfilled" && Array.isArray(holdRes.value)) setHoldings(holdRes.value);
-      if (examRes.status === "fulfilled" && examRes.value?.exams) {
-        const upcoming = examRes.value.exams.filter((e: Exam) => e.status === "preparing" && e.examDate >= today);
+      if (examRes.status === "fulfilled" && Array.isArray(examRes.value)) {
+        const upcoming = examRes.value.filter((e: Exam) => e.status === "upcoming" && e.examDate >= today);
         setExams(upcoming);
       }
       if (postsRes.status === "fulfilled" && postsRes.value?.posts) setRecentPosts(postsRes.value.posts);
@@ -169,7 +178,7 @@ export default function DashboardPage() {
   const weeklyMinutes = sessions
     .filter(s => s.date && new Date(s.date) >= weekMonday)
     .reduce((sum, s) => sum + s.durationMinutes, 0);
-  const weeklyGoalPct = Math.min(100, Math.round((weeklyMinutes / WEEKLY_GOAL_MINUTES) * 100));
+  const weeklyGoalPct = Math.min(100, Math.round((weeklyMinutes / weeklyGoal) * 100));
   const last14 = getLast14Days();
   const sessionDateMap = sessions.reduce<Record<string, number>>((acc, s) => {
     const d = s.date?.slice(0, 10);
@@ -306,11 +315,49 @@ export default function DashboardPage() {
               <span>이번 주 <span className="font-semibold text-foreground">{Math.floor(weeklyMinutes / 60)}h {weeklyMinutes % 60}m</span></span>
               <span>오늘 <span className="font-semibold text-foreground">{todayMinutes}분</span></span>
             </div>
-            <div className="flex items-center gap-2 flex-1 max-w-40">
-              <div className="flex-1 bg-muted rounded-full h-1.5 overflow-hidden">
-                <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${weeklyGoalPct}%` }} />
+            <div className="flex items-center gap-2">
+              {editingGoal ? (
+                <div className="flex items-center gap-1">
+                  <input
+                    ref={goalInputRef}
+                    type="number"
+                    value={goalInput}
+                    onChange={e => setGoalInput(e.target.value)}
+                    className="w-16 text-xs border rounded px-1.5 py-0.5 bg-background text-center"
+                    onKeyDown={e => {
+                      if (e.key === "Enter") {
+                        const v = Math.max(1, Number(goalInput));
+                        setWeeklyGoal(v);
+                        localStorage.setItem("weeklyGoalMinutes", String(v));
+                        setEditingGoal(false);
+                      }
+                      if (e.key === "Escape") setEditingGoal(false);
+                    }}
+                  />
+                  <span className="text-[10px] text-muted-foreground">분</span>
+                  <button onClick={() => {
+                    const v = Math.max(1, Number(goalInput));
+                    setWeeklyGoal(v);
+                    localStorage.setItem("weeklyGoalMinutes", String(v));
+                    setEditingGoal(false);
+                  }} className="text-green-500 hover:text-green-600">
+                    <Check className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => { setGoalInput(String(weeklyGoal)); setEditingGoal(true); setTimeout(() => goalInputRef.current?.select(), 50); }}
+                  className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  목표 {Math.floor(weeklyGoal / 60)}h<Pencil className="w-2.5 h-2.5" />
+                </button>
+              )}
+              <div className="flex items-center gap-1.5 w-28">
+                <div className="flex-1 bg-muted rounded-full h-1.5 overflow-hidden">
+                  <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${weeklyGoalPct}%` }} />
+                </div>
+                <span className="text-[10px] text-muted-foreground shrink-0">{weeklyGoalPct}%</span>
               </div>
-              <span className="text-[10px] text-muted-foreground shrink-0">{weeklyGoalPct}%</span>
             </div>
           </div>
         </CardContent>
