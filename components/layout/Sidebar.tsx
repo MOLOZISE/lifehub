@@ -24,6 +24,7 @@ const navItems = [
       { label: "📚 과목 · 학습", href: "/study/subjects" },
       { label: "📊 학습 분석", href: "/study/analytics" },
       { label: "📅 시험 관리", href: "/study/exams" },
+      { label: "🤖 AI 플래너", href: "/study/planner" },
     ],
   },
   {

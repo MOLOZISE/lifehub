@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getSubjects } from "@/lib/storage";
 import { todayString, COLOR_MAP } from "@/lib/utils-app";
 import type { Subject } from "@/lib/types";
 import { toast } from "sonner";
@@ -26,7 +25,11 @@ export default function PlannerPage() {
   const [loading, setLoading] = useState(false);
   const [memo, setMemo] = useState("");
 
-  useEffect(() => { setSubjects(getSubjects()); }, []);
+  useEffect(() => {
+    fetch("/api/study/subjects")
+      .then(r => r.ok ? r.json() : [])
+      .then(data => setSubjects(Array.isArray(data) ? data : (data.subjects ?? [])));
+  }, []);
 
   async function generatePlan() {
     if (!examDate) { toast.error("시험일을 입력해주세요"); return; }

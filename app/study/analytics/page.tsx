@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { TrendingUp, Clock, Zap, AlertTriangle, Sparkles, Loader2 } from "lucide-react";
+import { TrendingUp, Clock, Zap, Sparkles, Loader2 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar,
@@ -17,7 +17,6 @@ interface StudySession {
   id: string; date: string; subjectId: string; durationMinutes: number;
   focusScore: number; fatigueScore: number; satisfactionScore: number;
 }
-interface WrongAnswer { id: string; resolved: boolean; nextReviewAt: string; }
 
 function getLast7Days(): string[] {
   return Array.from({ length: 7 }, (_, i) => {
@@ -30,7 +29,6 @@ function getLast7Days(): string[] {
 export default function AnalyticsPage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [sessions, setSessions] = useState<StudySession[]>([]);
-  const [wrongAnswers, setWrongAnswers] = useState<WrongAnswer[]>([]);
   const [loading, setLoading] = useState(true);
   const [aiRecs, setAiRecs] = useState<string>("");
   const [aiLoading, setAiLoading] = useState(false);
@@ -39,17 +37,15 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     async function loadAll() {
-      const [subRes, sessRes, wrongRes] = await Promise.all([
+      const [subRes, sessRes] = await Promise.all([
         fetch("/api/study/subjects"),
         fetch("/api/study/sessions?limit=500"),
-        fetch("/api/study/wrong-answers"),
       ]);
       if (subRes.ok) setSubjects(await subRes.json());
       if (sessRes.ok) {
         const d = await sessRes.json();
         setSessions(d.sessions ?? d);
       }
-      if (wrongRes.ok) setWrongAnswers(await wrongRes.json());
       setLoading(false);
     }
     loadAll();
@@ -105,10 +101,21 @@ export default function AnalyticsPage() {
     { metric: "활력", value: Math.round((5 - avgFatigue + 1) * 20) },
   ];
 
-  // Wrong answer stats
-  const dueWrong = wrongAnswers.filter(w => !w.resolved && w.nextReviewAt <= today).length;
-  const totalActive = wrongAnswers.filter(w => !w.resolved).length;
-  const totalResolved = wrongAnswers.filter(w => w.resolved).length;
+  // Today's study minutes
+  const todayMinutes = sessions.filter(s => s.date === today).reduce((sum, s) => sum + s.durationMinutes, 0);
+  // Weekly streak
+  const streak = (() => {
+    const dateSet = new Set(sessions.map(s => s.date?.slice(0, 10)));
+    let count = 0;
+    const now = new Date();
+    while (true) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - count);
+      if (dateSet.has(d.toISOString().slice(0, 10))) count++;
+      else break;
+    }
+    return count;
+  })();
 
   async function generateRecommendations() {
     setAiLoading(true);
@@ -116,15 +123,14 @@ export default function AnalyticsPage() {
     try {
       const subjectSummary = subjects.map(s => {
         const mins = subjectMinutes[s.id] ?? 0;
-        const wrong = wrongAnswers.filter(w => !w.resolved).length;
-        return `- ${s.emoji} ${s.name}: 최근30일 ${mins}분 학습, 미해결 오답 ${wrong}개`;
+        return `- ${s.emoji} ${s.name}: 최근30일 ${mins}분 학습`;
       }).join("\n");
 
       const prompt = `학습 현황:
 총 학습 (최근 30일): ${Math.round(totalMin30 / 60)}시간 ${totalMin30 % 60}분
 평균 집중도: ${avgFocus > 0 ? avgFocus.toFixed(1) : "기록 없음"}/5
 평균 만족도: ${avgSatisfaction > 0 ? avgSatisfaction.toFixed(1) : "기록 없음"}/5
-오답 복습 대기: ${dueWrong}개 / 전체 미해결: ${totalActive}개
+연속 학습일: ${streak}일
 
 과목별 현황:
 ${subjectSummary || "과목 없음"}
@@ -197,22 +203,20 @@ ${weeklyData.map(d => `${d.day}: ${d.minutes}분`).join(", ")}`;
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-1.5 mb-1">
-              <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
-              <p className="text-xs text-muted-foreground">오답 복습 예정</p>
+              <TrendingUp className="w-3.5 h-3.5 text-green-500" />
+              <p className="text-xs text-muted-foreground">오늘 학습</p>
             </div>
-            <p className={`text-xl font-bold ${dueWrong > 0 ? "text-red-500" : ""}`}>{dueWrong}</p>
+            <p className="text-xl font-bold">{todayMinutes}<span className="text-sm font-normal ml-1">분</span></p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-1.5 mb-1">
-              <TrendingUp className="w-3.5 h-3.5 text-green-500" />
-              <p className="text-xs text-muted-foreground">오답 해결률</p>
+              <Zap className="w-3.5 h-3.5 text-orange-500" />
+              <p className="text-xs text-muted-foreground">연속 학습</p>
             </div>
-            <p className="text-xl font-bold">
-              {totalActive + totalResolved > 0
-                ? Math.round(totalResolved / (totalActive + totalResolved) * 100)
-                : 0}%
+            <p className={`text-xl font-bold ${streak >= 3 ? "text-orange-500" : ""}`}>
+              {streak}<span className="text-sm font-normal ml-1">일</span>
             </p>
           </CardContent>
         </Card>
@@ -331,7 +335,7 @@ ${weeklyData.map(d => `${d.day}: ${d.minutes}분`).join(", ")}`;
         {[
           { href: "/study/exams", label: "시험 관리", icon: "🎯" },
           { href: "/study/sessions", label: "세션 기록", icon: "📝" },
-          { href: "/study/wrong-answers", label: "오답 노트", icon: "❌" },
+          { href: "/study/planner", label: "AI 플래너", icon: "🤖" },
           { href: "/study/subjects", label: "과목 관리", icon: "📚" },
         ].map(item => (
           <Link key={item.href} href={item.href}>
