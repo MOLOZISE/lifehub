@@ -331,7 +331,12 @@ function TickerCard({ item, onEdit, onDelete }: {
     <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg border bg-background hover:bg-accent/30 transition-colors group">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-mono text-sm font-semibold">{item.ticker}</span>
+          <Link
+            href={`/portfolio/stock/${encodeURIComponent(item.ticker)}?market=${item.market}`}
+            className="font-mono text-sm font-semibold hover:underline"
+          >
+            {item.ticker}
+          </Link>
           <span className="text-xs text-muted-foreground truncate">{item.name}</span>
           <Badge variant="outline" className="text-xs h-4 px-1.5">{item.market}</Badge>
           {item.sector && item.sector !== "other" && (

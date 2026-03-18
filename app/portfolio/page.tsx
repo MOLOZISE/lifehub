@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import Link from "next/link";
 import { Plus, Pencil, Trash2, TrendingUp, TrendingDown, AlertTriangle, ShieldCheck, RefreshCw } from "lucide-react";
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
@@ -219,10 +220,21 @@ export default function PortfolioPage() {
         const data = prices[h.ticker];
         if (!data || data.error || !data.price || data.price === h.currentPrice) return;
         try {
+          // 전체 필드 포함하여 수량/평균단가가 초기화되는 버그 방지
           await fetch(`/api/portfolio/holdings/${h.id}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ currentPrice: data.price }),
+            body: JSON.stringify({
+              ticker: h.ticker,
+              name: h.name,
+              market: h.market,
+              sector: h.sector,
+              quantity: h.quantity,
+              avgPrice: h.avgPrice,
+              currentPrice: data.price,
+              currency: h.currency,
+              memo: h.memo,
+            }),
           });
           updated++;
         } catch { /* individual update failure is ok */ }
@@ -387,10 +399,15 @@ export default function PortfolioPage() {
                   return (
                     <tr key={h.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                       <td className="px-3 py-2.5">
-                        <div>
-                          <span className="font-medium">{h.name}</span>
-                          <span className="text-xs text-muted-foreground ml-1.5">{h.ticker}</span>
-                        </div>
+                        <Link
+                          href={`/portfolio/stock/${encodeURIComponent(h.ticker)}?market=${h.market}`}
+                          className="hover:underline"
+                        >
+                          <div>
+                            <span className="font-medium">{h.name}</span>
+                            <span className="text-xs text-muted-foreground ml-1.5">{h.ticker}</span>
+                          </div>
+                        </Link>
                         <div className="flex gap-1 mt-0.5">
                           <Badge variant="outline" className="text-[10px] h-4">{h.market}</Badge>
                           {h.sector && (
