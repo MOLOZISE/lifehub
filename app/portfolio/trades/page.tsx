@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Trash2, TrendingUp, TrendingDown, ArrowDownCircle, ArrowUpCircle, Pencil } from "lucide-react";
+import { Plus, Trash2, TrendingUp, TrendingDown, ArrowDownCircle, ArrowUpCircle, Pencil, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +27,7 @@ interface StockTrade {
 interface TickerSummary {
   ticker: string;
   name: string;
+  market: string;
   currency: string;
   avgPrice: number;
   totalQty: number;
@@ -60,7 +61,7 @@ function calcSummaries(trades: StockTrade[]): TickerSummary[] {
 
   for (const t of sorted) {
     if (!map[t.ticker]) {
-      map[t.ticker] = { ticker: t.ticker, name: t.name, currency: t.currency, avgPrice: 0, totalQty: 0, totalCost: 0, realizedPnl: 0 };
+      map[t.ticker] = { ticker: t.ticker, name: t.name, market: t.market, currency: t.currency, avgPrice: 0, totalQty: 0, totalCost: 0, realizedPnl: 0 };
     }
     const s = map[t.ticker];
     if (t.type === "buy") {
@@ -164,11 +165,60 @@ export default function TradesPage() {
 
   const totalRealizedPnl = summaries.reduce((s, x) => s + x.realizedPnl, 0);
 
+  const [syncing, setSyncing] = useState(false);
+  async function syncToPortfolio() {
+    const toSync = summaries.filter(s => s.totalQty > 0);
+    if (!toSync.length) { return; }
+    setSyncing(true);
+    try {
+      const holdingsRes = await fetch("/api/portfolio/holdings");
+      const holdings: { id: string; ticker: string; quantity: number; avgPrice: number; currentPrice: number; sector: string | null; memo: string | null }[] = holdingsRes.ok ? await holdingsRes.json() : [];
+
+      await Promise.all(toSync.map(s => {
+        const existing = holdings.find(h => h.ticker === s.ticker);
+        if (existing) {
+          return fetch(`/api/portfolio/holdings/${existing.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ticker: s.ticker, name: s.name, market: s.market, sector: existing.sector,
+              quantity: s.totalQty, avgPrice: s.avgPrice,
+              currentPrice: existing.currentPrice, currency: s.currency, memo: existing.memo,
+            }),
+          });
+        } else {
+          return fetch("/api/portfolio/holdings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ticker: s.ticker, name: s.name, market: s.market, sector: "other",
+              quantity: s.totalQty, avgPrice: s.avgPrice,
+              currentPrice: s.avgPrice, currency: s.currency, memo: null,
+            }),
+          });
+        }
+      }));
+      toast.success(`${toSync.length}개 종목을 포트폴리오에 반영했습니다.`);
+    } catch {
+      toast.error("포트폴리오 반영 실패");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">거래 이력</h1>
-        <Button size="sm" onClick={openAdd}><Plus className="w-3.5 h-3.5 mr-1" />거래 추가</Button>
+        <div className="flex gap-2">
+          {summaries.some(s => s.totalQty > 0) && (
+            <Button size="sm" variant="outline" onClick={syncToPortfolio} disabled={syncing} className="gap-1.5">
+              <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
+              포트폴리오 반영
+            </Button>
+          )}
+          <Button size="sm" onClick={openAdd}><Plus className="w-3.5 h-3.5 mr-1" />거래 추가</Button>
+        </div>
       </div>
 
       {/* Summary cards */}

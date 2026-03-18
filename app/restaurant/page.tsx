@@ -17,6 +17,13 @@ const RestaurantMap = dynamic(() => import("@/components/restaurant/RestaurantMa
 
 const CATEGORIES = ["한식", "중식", "일식", "양식", "카페", "기타"];
 
+const SITUATION_TAGS: { label: string; emoji: string; categories: string[]; keywords?: string[] }[] = [
+  { label: "혼밥", emoji: "🍱", categories: ["한식", "일식", "카페"] },
+  { label: "단체", emoji: "👥", categories: ["한식", "중식", "양식"] },
+  { label: "데이트", emoji: "💑", categories: ["카페", "양식", "일식"] },
+  { label: "야외", emoji: "🌿", categories: [], keywords: ["야외", "테라스", "루프탑", "정원"] },
+];
+
 interface Restaurant {
   id: string;
   name: string;
@@ -88,6 +95,7 @@ export default function RestaurantPage() {
 
   // 탭 상태
   const [activeTab, setActiveTab] = useState<"search" | "mylist">("search");
+  const [situationTag, setSituationTag] = useState<string>("");
 
   // Kakao search
   const [kakaoQuery, setKakaoQuery] = useState("");
@@ -298,6 +306,20 @@ export default function RestaurantPage() {
     })),
   [kakaoResults]);
 
+  // 상황별 태그 클라이언트 필터
+  const filteredRestaurants = useMemo(() => {
+    if (!situationTag) return restaurants;
+    const tag = SITUATION_TAGS.find(t => t.label === situationTag);
+    if (!tag) return restaurants;
+    return restaurants.filter(r => {
+      const matchCategory = tag.categories.length === 0 || tag.categories.includes(r.category);
+      const matchKeyword = tag.keywords?.some(kw =>
+        r.name.includes(kw) || r.description?.includes(kw) || r.address?.includes(kw)
+      ) ?? false;
+      return tag.keywords && tag.keywords.length > 0 ? matchKeyword : matchCategory;
+    });
+  }, [restaurants, situationTag]);
+
   const selectedRestaurant = selectedId ? allRestaurants.find(r => r.id === selectedId) : null;
   const selectedKakaoPlace = selectedKakaoId ? kakaoResults.find(p => p.id === selectedKakaoId) : null;
   const centerLatLng = useMemo<[number, number] | null>(() => {
@@ -492,6 +514,19 @@ export default function RestaurantPage() {
                   <Button key={c} size="sm" variant={category === c ? "default" : "outline"} className="h-6 text-[10px] px-2 shrink-0" onClick={() => setCategory(c)}>{c}</Button>
                 ))}
               </div>
+              <div className="flex gap-1 overflow-x-auto pb-0.5 no-scrollbar">
+                {SITUATION_TAGS.map(t => (
+                  <Button
+                    key={t.label}
+                    size="sm"
+                    variant={situationTag === t.label ? "default" : "ghost"}
+                    className="h-6 text-[10px] px-2 shrink-0 gap-0.5"
+                    onClick={() => setSituationTag(situationTag === t.label ? "" : t.label)}
+                  >
+                    {t.emoji} {t.label}
+                  </Button>
+                ))}
+              </div>
             </div>
 
             {/* 내 맛집 리스트 (카카오 결과와 동일한 스타일) */}
@@ -500,14 +535,14 @@ export default function RestaurantPage() {
                 <div className="flex items-center justify-center h-full text-muted-foreground text-xs gap-2">
                   <Loader2 className="w-4 h-4 animate-spin" /> 불러오는 중...
                 </div>
-              ) : restaurants.length === 0 ? (
+              ) : filteredRestaurants.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground text-xs gap-2 pb-4">
                   <p className="text-3xl">🍽️</p>
-                  <p className="font-medium">등록된 맛집이 없습니다</p>
-                  <button onClick={() => setDialogOpen(true)} className="text-primary hover:underline">+ 첫 맛집 등록하기</button>
+                  <p className="font-medium">{situationTag ? `'${situationTag}' 조건의 맛집이 없습니다` : "등록된 맛집이 없습니다"}</p>
+                  {!situationTag && <button onClick={() => setDialogOpen(true)} className="text-primary hover:underline">+ 첫 맛집 등록하기</button>}
                 </div>
               ) : (
-                restaurants.map(r => (
+                filteredRestaurants.map(r => (
                   <div
                     key={r.id}
                     data-id={r.id}

@@ -2,18 +2,29 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
-// GET /api/community/posts?category=free&page=1&limit=20
+// GET /api/community/posts?category=free&page=1&limit=20&my=1
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const category = searchParams.get("category");
   const search = searchParams.get("search");
+  const tag = searchParams.get("tag");
+  const my = searchParams.get("my") === "1";
   const sort = searchParams.get("sort") ?? "latest"; // latest | popular
   const page = parseInt(searchParams.get("page") ?? "1");
   const limit = parseInt(searchParams.get("limit") ?? "20");
   const skip = (page - 1) * limit;
 
+  let myUserId: string | null = null;
+  if (my) {
+    const session = await auth();
+    if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    myUserId = session.user.id;
+  }
+
   const where = {
+    ...(myUserId ? { userId: myUserId } : {}),
     ...(category ? { category } : {}),
+    ...(tag ? { tags: { has: tag } } : {}),
     ...(search ? {
       OR: [
         { title: { contains: search, mode: "insensitive" as const } },

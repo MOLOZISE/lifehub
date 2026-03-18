@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Star, MapPin, Phone, ExternalLink, Trash2, ArrowLeft, Bookmark, BookmarkCheck, Pencil } from "lucide-react";
+import { Star, MapPin, Phone, ExternalLink, Trash2, ArrowLeft, Bookmark, BookmarkCheck, Pencil, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -76,6 +76,8 @@ export default function RestaurantDetailPage() {
   const [editDialog, setEditDialog] = useState(false);
   const [editForm, setEditForm] = useState({ name: "", category: "", address: "", phone: "", url: "", description: "" });
   const [editSaving, setEditSaving] = useState(false);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
 
   const CATEGORIES = ["한식", "중식", "일식", "양식", "카페", "기타"];
 
@@ -144,6 +146,38 @@ export default function RestaurantDetailPage() {
     setReviewDialog(false);
     setReviewForm({ rating: 5, content: "", visitedAt: "", isAnonymous: false });
     loadDetail();
+  }
+
+  async function handleAiSummary() {
+    if (!restaurant || restaurant.reviews.length < 2) return;
+    const cacheKey = `ai_summary_${restaurant.id}_${new Date().toISOString().slice(0, 10)}`;
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) { setAiSummary(cached); return; }
+    setAiLoading(true);
+    try {
+      const reviewTexts = restaurant.reviews
+        .map(r => `별점 ${r.rating}점: ${r.content}`)
+        .join("\n");
+      const res = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemPrompt: "당신은 맛집 리뷰 분석 전문가입니다. 주어진 리뷰들을 분석해서 맛/서비스/분위기/가성비를 각각 별점(★☆ 5점 기준)으로 표현하고, 이 맛집의 특징을 2-3문장으로 요약하세요. 한국어로 간결하게 답변하세요.",
+          userMessage: `다음은 "${restaurant.name}" 맛집의 리뷰입니다:\n\n${reviewTexts}`,
+          useSearch: false,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const text = data.text ?? data.result ?? null;
+        setAiSummary(text);
+        if (text) localStorage.setItem(cacheKey, text);
+      } else {
+        toast.error("AI 요약에 실패했습니다.");
+      }
+    } finally {
+      setAiLoading(false);
+    }
   }
 
   async function handleDeleteReview(reviewId: string) {
@@ -286,10 +320,28 @@ export default function RestaurantDetailPage() {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base">리뷰 ({restaurant.reviewCount})</CardTitle>
-            <Button size="sm" onClick={() => setReviewDialog(true)}>리뷰 작성</Button>
+            <div className="flex gap-2">
+              {restaurant.reviewCount >= 2 && (
+                <Button size="sm" variant="outline" onClick={handleAiSummary} disabled={aiLoading} className="gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  {aiLoading ? "분석 중..." : "AI 요약"}
+                </Button>
+              )}
+              <Button size="sm" onClick={() => setReviewDialog(true)}>리뷰 작성</Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
+          {aiSummary && (
+            <div className="mb-4 p-3 rounded-lg bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-950/30 dark:to-indigo-950/30 border border-purple-200 dark:border-purple-800">
+              <div className="flex items-center gap-1.5 mb-2">
+                <Sparkles className="w-3.5 h-3.5 text-purple-500" />
+                <span className="text-xs font-semibold text-purple-700 dark:text-purple-300">AI 리뷰 요약</span>
+                <button onClick={() => setAiSummary(null)} className="ml-auto text-muted-foreground hover:text-foreground text-xs">닫기</button>
+              </div>
+              <p className="text-sm whitespace-pre-line leading-relaxed">{aiSummary}</p>
+            </div>
+          )}
           {restaurant.reviews.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-6">아직 리뷰가 없습니다. 첫 리뷰를 남겨보세요!</p>
           ) : (

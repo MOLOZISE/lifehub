@@ -74,6 +74,10 @@ export async function POST(req: NextRequest) {
       phone: phone || null,
       url: url || null,
       description: description || null,
+      // 등록 즉시 내 맛집으로 자동 저장
+      bookmarks: {
+        create: { userId: session.user.id, listName: "내 맛집" },
+      },
     },
   });
 

@@ -22,8 +22,9 @@ const navItems = [
     icon: BookOpen,
     children: [
       { label: "📚 과목 · 학습", href: "/study/subjects" },
-      { label: "🍅 오늘의 플래너", href: "/study/daily" },
       { label: "📊 학습 분석", href: "/study/analytics" },
+      { label: "📅 시험 관리", href: "/study/exams" },
+      { label: "🧠 오답 노트", href: "/study/wrong-answers" },
     ],
   },
   {
@@ -34,6 +35,7 @@ const navItems = [
       { label: "⭐ 관심 종목", href: "/portfolio/watchlist" },
       { label: "📈 차트 분석", href: "/portfolio/chart" },
       { label: "📰 AI 뉴스·전략", href: "/portfolio/news" },
+      { label: "📋 거래 내역", href: "/portfolio/trades" },
     ],
   },
   {

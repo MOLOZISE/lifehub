@@ -3,11 +3,12 @@
 import { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { MessageSquare, Heart, Eye, PenSquare, Loader2, Search, X } from "lucide-react";
+import { MessageSquare, Heart, Eye, PenSquare, Loader2, Search, X, User } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useSession } from "next-auth/react";
 import { formatDistanceToNow } from "@/lib/utils-app";
 
 const CATEGORIES = [
@@ -34,7 +35,10 @@ type Post = {
 function CommunityContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { data: session } = useSession();
   const category = searchParams.get("category") ?? "";
+  const activeTag = searchParams.get("tag") ?? "";
+  const myOnly = searchParams.get("my") === "1";
 
   const [posts, setPosts] = useState<Post[]>([]);
   const [total, setTotal] = useState(0);
@@ -49,7 +53,9 @@ function CommunityContent() {
     try {
       const params = new URLSearchParams({ page: String(page), limit: "20", sort });
       if (category) params.set("category", category);
+      if (activeTag) params.set("tag", activeTag);
       if (search) params.set("search", search);
+      if (myOnly) params.set("my", "1");
       const res = await fetch(`/api/community/posts?${params}`);
       const data = await res.json();
       setPosts(data.posts ?? []);
@@ -57,11 +63,11 @@ function CommunityContent() {
     } finally {
       setLoading(false);
     }
-  }, [category, page, search, sort]);
+  }, [category, activeTag, page, search, sort]);
 
   useEffect(() => {
     setPage(1);
-  }, [category, search, sort]);
+  }, [category, activeTag, search, sort, myOnly]);
 
   useEffect(() => {
     fetchPosts();
@@ -112,15 +118,38 @@ function CommunityContent() {
         {CATEGORIES.map((cat) => (
           <Button
             key={cat.value}
-            variant={category === cat.value ? "default" : "outline"}
+            variant={!myOnly && category === cat.value ? "default" : "outline"}
             size="sm"
             onClick={() => router.push(cat.value ? `/community?category=${cat.value}` : "/community")}
           >
             {cat.label}
           </Button>
         ))}
+        {session?.user && (
+          <Button
+            variant={myOnly ? "default" : "outline"}
+            size="sm"
+            className="gap-1.5"
+            onClick={() => router.push(myOnly ? "/community" : "/community?my=1")}
+          >
+            <User className="w-3.5 h-3.5" />내 글
+          </Button>
+        )}
       </div>
-      {search && <p className="text-xs text-muted-foreground">"{search}" 검색 결과 {total}건</p>}
+      {(search || activeTag) && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          {search && <span>"{search}" 검색 결과</span>}
+          {activeTag && (
+            <span className="flex items-center gap-1 bg-primary/10 text-primary rounded-full px-2 py-0.5 font-medium">
+              #{activeTag}
+              <button onClick={() => router.push(category ? `/community?category=${category}` : "/community")} className="hover:text-primary/70 ml-0.5">
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          <span>{total}건</span>
+        </div>
+      )}
 
       {/* 게시글 목록 */}
       {loading ? (
@@ -145,8 +174,12 @@ function CommunityContent() {
                         <Badge variant="secondary" className="text-xs shrink-0">
                           {CATEGORIES.find((c) => c.value === post.category)?.label ?? post.category}
                         </Badge>
-                        {post.tags.slice(0, 2).map((tag) => (
-                          <span key={tag} className="text-xs text-muted-foreground">#{tag}</span>
+                        {post.tags.slice(0, 2).map((t) => (
+                          <button
+                            key={t}
+                            onClick={(e) => { e.preventDefault(); router.push(`/community?tag=${encodeURIComponent(t)}`); }}
+                            className={`text-xs hover:underline ${activeTag === t ? "text-primary font-medium" : "text-muted-foreground"}`}
+                          >#{t}</button>
                         ))}
                       </div>
                       <h3 className="font-medium text-sm leading-snug line-clamp-1">{post.title}</h3>

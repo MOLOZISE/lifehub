@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Clock, Trophy, CalendarClock, ChevronDown, ChevronUp } from "lucide-react";
+import Link from "next/link";
+import { Plus, Clock, Trophy, CalendarClock, ChevronDown, ChevronUp, Timer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -100,6 +101,19 @@ export default function SubjectsPage() {
   const weekMinutes = allSessions.filter(s => isThisWeek(s.date)).reduce((a, s) => a + s.durationMinutes, 0);
   const totalSessions = allSessions.length;
 
+  const streak = (() => {
+    const dateSet = new Set(allSessions.map(s => s.date?.slice(0, 10)));
+    let count = 0;
+    const now = new Date();
+    while (true) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - count);
+      if (dateSet.has(d.toISOString().slice(0, 10))) count++;
+      else break;
+    }
+    return count;
+  })();
+
   const upcomingDDay = upcomingExam
     ? Math.ceil((new Date(upcomingExam.examDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
     : null;
@@ -173,7 +187,21 @@ export default function SubjectsPage() {
 
       {/* ── 학습 현황 요약 ── */}
       <div>
-        <h2 className="text-sm font-semibold text-muted-foreground mb-3">📊 오늘 학습 현황</h2>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-muted-foreground">📊 오늘 학습 현황</h2>
+            {streak >= 2 && (
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-orange-600 bg-orange-100 dark:bg-orange-950 px-2 py-0.5 rounded-full">
+                🔥 {streak}일 연속
+              </span>
+            )}
+          </div>
+          <Link href="/study/daily">
+            <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground">
+              <Timer className="w-3.5 h-3.5" />집중 타이머
+            </Button>
+          </Link>
+        </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <Card>
             <CardContent className="p-4 text-center">

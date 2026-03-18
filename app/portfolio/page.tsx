@@ -4,7 +4,8 @@ import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { Plus, Pencil, Trash2, TrendingUp, TrendingDown, AlertTriangle, ShieldCheck, RefreshCw } from "lucide-react";
 import {
-  PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend, Treemap,
+  LineChart, Line, XAxis, YAxis, CartesianGrid,
 } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -74,8 +75,10 @@ interface StockMeta { ticker: string; name: string; market: "KR" | "US"; sector:
 
 export default function PortfolioPage() {
   const [holdings, setHoldings] = useState<Holding[]>([]);
+  const [snapshots, setSnapshots] = useState<{ date: string; totalValue: number; totalCost: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const snapshotSaved = useRef(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Holding | null>(null);
   const [form, setForm] = useState(emptyHolding);
@@ -95,6 +98,25 @@ export default function PortfolioPage() {
   }
 
   useEffect(() => { loadHoldings(); }, []);
+
+  useEffect(() => {
+    if (holdings.length === 0 || snapshotSaved.current) return;
+    snapshotSaved.current = true;
+    const val = holdings.reduce((s, h) => s + toUSD(h), 0);
+    const cost = holdings.reduce((s, h) => {
+      const c = h.quantity * h.avgPrice;
+      return s + (h.currency === "KRW" ? c / KRW_TO_USD : c);
+    }, 0);
+    fetch("/api/portfolio/snapshot", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ totalValue: val, totalCost: cost }),
+    }).then(() =>
+      fetch("/api/portfolio/snapshot?days=30")
+        .then(r => r.ok ? r.json() : [])
+        .then(data => setSnapshots(Array.isArray(data) ? data : []))
+    );
+  }, [holdings]);
 
   // 3분마다 자동 갱신 (장중에만 의미 있지만 항상 실행)
   useEffect(() => {
@@ -118,6 +140,14 @@ export default function PortfolioPage() {
   const chartData = holdings.map(h => ({
     name: h.name,
     value: Math.round((toUSD(h) / totalUSD) * 100),
+  }));
+
+  // Treemap data (size = 평가금액, profit = 수익률)
+  const treemapData = holdings.map(h => ({
+    name: h.ticker,
+    fullName: h.name,
+    size: Math.max(toUSD(h), 1),
+    profit: profitRate(h),
   }));
 
   // Sector chart data
@@ -442,6 +472,87 @@ export default function PortfolioPage() {
           </div>
         </div>
       </div>
+
+      {/* 자산 변화 추이 */}
+      {snapshots.length >= 2 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">자산 변화 추이 <span className="text-xs font-normal text-muted-foreground ml-1">최근 30일 (USD)</span></CardTitle>
+          </CardHeader>
+          <CardContent className="h-48 px-2 pb-3">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={snapshots.map(s => ({ date: s.date.slice(5), value: Math.round(s.totalValue), cost: Math.round(s.totalCost) }))}>
+                <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="opacity-10" />
+                <XAxis dataKey="date" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={v => `$${(v / 1000).toFixed(0)}k`} />
+                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                <Tooltip formatter={(v: any) => [`$${Number(v ?? 0).toLocaleString()}`, ""]} labelStyle={{ fontSize: 11 }} />
+                <Line type="monotone" dataKey="value" stroke="#6366f1" strokeWidth={2} dot={false} name="평가금액" />
+                <Line type="monotone" dataKey="cost" stroke="#94a3b8" strokeWidth={1.5} dot={false} strokeDasharray="4 2" name="매입금액" />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Treemap */}
+      {treemapData.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">수익률 맵 <span className="text-xs font-normal text-muted-foreground ml-1">크기=평가금액, 색상=수익률</span></CardTitle>
+          </CardHeader>
+          <CardContent className="h-52 px-3 pb-3">
+            <ResponsiveContainer width="100%" height="100%">
+              <Treemap
+                data={treemapData}
+                dataKey="size"
+                aspectRatio={4 / 3}
+                stroke="#fff"
+                content={({ x, y, width, height, profit, name, fullName }: {
+                  x?: number; y?: number; width?: number; height?: number;
+                  profit?: number; name?: string; fullName?: string;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                }) => {
+                  if (!width || !height || width < 20 || height < 20) return <g /> as any;
+                  const p = profit ?? 0;
+                  let bg = "#94a3b8";
+                  if (p >= 5) bg = "#16a34a";
+                  else if (p >= 2) bg = "#4ade80";
+                  else if (p >= 0) bg = "#86efac";
+                  else if (p >= -2) bg = "#fca5a5";
+                  else if (p >= -5) bg = "#f87171";
+                  else bg = "#dc2626";
+                  return (
+                    <g>
+                      <rect x={x} y={y} width={width} height={height} fill={bg} rx={4} />
+                      {width > 40 && height > 30 && (
+                        <text x={(x ?? 0) + (width ?? 0) / 2} y={(y ?? 0) + (height ?? 0) / 2 - 4}
+                          textAnchor="middle" fill="#fff" fontSize={Math.min(12, width / 6)} fontWeight={600}>
+                          {name}
+                        </text>
+                      )}
+                      {width > 40 && height > 44 && (
+                        <text x={(x ?? 0) + (width ?? 0) / 2} y={(y ?? 0) + (height ?? 0) / 2 + 10}
+                          textAnchor="middle" fill="rgba(255,255,255,0.85)" fontSize={Math.min(10, width / 7)}>
+                          {p >= 0 ? "+" : ""}{p.toFixed(1)}%
+                        </text>
+                      )}
+                    </g>
+                  );
+                }}
+              >
+                <Tooltip
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  formatter={(value: any, name: any, props: any) => [
+                    `$${Number(value ?? 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}`,
+                    `${props?.payload?.fullName ?? name} (${(props?.payload?.profit ?? 0) >= 0 ? "+" : ""}${Number(props?.payload?.profit ?? 0).toFixed(2)}%)`,
+                  ]}
+                />
+              </Treemap>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Sector breakdown */}
       {sectorData.length > 1 && (
