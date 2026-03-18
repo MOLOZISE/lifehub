@@ -33,9 +33,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AuthProvider>
         <MigrationProvider>
         <ThemeProvider>
-          <div className="flex min-h-screen bg-background text-foreground">
+          <div className="flex min-h-dvh bg-background text-foreground">
             <Sidebar />
-            <div className="flex-1 flex flex-col min-h-screen">
+            <div className="flex-1 flex flex-col min-h-dvh">
               <Header />
               <main className="flex-1 p-4 md:p-6 pb-20 md:pb-6 overflow-auto">
                 {children}
