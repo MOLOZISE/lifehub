@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Trash2, Clock, Zap, Brain } from "lucide-react";
+import { Plus, Trash2, Clock, Zap, Brain, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -49,9 +49,27 @@ function ScorePicker({ value, onChange, color }: { value: number; onChange: (v: 
 const emptyForm = {
   date: "", subjectId: "", examId: "", materialName: "",
   activityType: "reading" as SessionActivityType,
-  durationMinutes: "60", pagesOrQuestions: "", correctRate: "",
+  durationMinutes: "60",
   focusScore: 3, fatigueScore: 3, satisfactionScore: 3, memo: "",
 };
+
+function getMonthKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function buildCalendarDays(yearMonth: string) {
+  const [y, m] = yearMonth.split("-").map(Number);
+  const firstDay = new Date(y, m - 1, 1);
+  const lastDay = new Date(y, m, 0);
+  const startDow = firstDay.getDay(); // 0=Sun
+  const days: (string | null)[] = [];
+  for (let i = 0; i < startDow; i++) days.push(null);
+  for (let d = 1; d <= lastDay.getDate(); d++) {
+    days.push(`${yearMonth}-${String(d).padStart(2, "0")}`);
+  }
+  while (days.length % 7 !== 0) days.push(null);
+  return days;
+}
 
 export default function SessionsPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -60,7 +78,8 @@ export default function SessionsPage() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState({ ...emptyForm, date: todayString() });
-  const [filterDate, setFilterDate] = useState(todayString());
+  const [currentMonth, setCurrentMonth] = useState(() => getMonthKey(new Date()));
+  const [selectedDate, setSelectedDate] = useState<string | null>(todayString());
 
   async function loadAll() {
     const [sessRes, subRes, examRes] = await Promise.all([
@@ -86,8 +105,6 @@ export default function SessionsPage() {
         examId: form.examId || null, materialName: form.materialName || null,
         activityType: form.activityType,
         durationMinutes: Number(form.durationMinutes),
-        pagesOrQuestions: form.pagesOrQuestions ? Number(form.pagesOrQuestions) : null,
-        correctRate: form.correctRate ? Number(form.correctRate) : null,
         focusScore: form.focusScore, fatigueScore: form.fatigueScore, satisfactionScore: form.satisfactionScore,
         memo: form.memo || null,
       }),
@@ -104,10 +121,37 @@ export default function SessionsPage() {
     setSessions(s => s.filter(x => x.id !== id));
   }
 
-  const filtered = filterDate ? sessions.filter(s => s.date === filterDate) : sessions;
-  const todayTotal = sessions.filter(s => s.date === todayString()).reduce((sum, s) => sum + s.durationMinutes, 0);
-  const avgFocus = sessions.length > 0
-    ? (sessions.slice(0, 10).reduce((sum, s) => sum + (s.focusScore ?? 3), 0) / Math.min(sessions.length, 10)).toFixed(1) : "-";
+  function changeMonth(delta: number) {
+    const [y, m] = currentMonth.split("-").map(Number);
+    const d = new Date(y, m - 1 + delta, 1);
+    setCurrentMonth(getMonthKey(d));
+    setSelectedDate(null);
+  }
+
+  // Sessions in current month
+  const monthSessions = sessions.filter(s => s.date.startsWith(currentMonth));
+
+  // Minutes per day map
+  const minutesByDay: Record<string, number> = {};
+  const sessionsByDay: Record<string, Session[]> = {};
+  for (const s of monthSessions) {
+    minutesByDay[s.date] = (minutesByDay[s.date] ?? 0) + s.durationMinutes;
+    if (!sessionsByDay[s.date]) sessionsByDay[s.date] = [];
+    sessionsByDay[s.date].push(s);
+  }
+
+  const calendarDays = buildCalendarDays(currentMonth);
+  const today = todayString();
+  const monthTotal = monthSessions.reduce((sum, s) => sum + s.durationMinutes, 0);
+  const studyDays = Object.keys(minutesByDay).length;
+  const avgFocus = monthSessions.length > 0
+    ? (monthSessions.reduce((sum, s) => sum + (s.focusScore ?? 3), 0) / monthSessions.length).toFixed(1)
+    : "-";
+
+  const [year, month] = currentMonth.split("-").map(Number);
+  const monthLabel = `${year}년 ${month}월`;
+
+  const displayedSessions = selectedDate ? (sessionsByDay[selectedDate] ?? []) : monthSessions.sort((a, b) => b.date.localeCompare(a.date));
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -116,71 +160,131 @@ export default function SessionsPage() {
           <h1 className="text-xl font-bold">학습 세션 기록</h1>
           <p className="text-sm text-muted-foreground mt-0.5">집중도·피로도·만족도를 함께 기록하세요</p>
         </div>
-        <Button onClick={() => { setForm({ ...emptyForm, date: todayString() }); setDialogOpen(true); }}>
+        <Button onClick={() => { setForm({ ...emptyForm, date: selectedDate ?? todayString() }); setDialogOpen(true); }}>
           <Plus className="w-4 h-4 mr-1.5" />세션 추가
         </Button>
       </div>
 
+      {/* Monthly Stats */}
       <div className="grid grid-cols-3 gap-3">
         <Card><CardContent className="p-4">
-          <div className="flex items-center gap-2 mb-1"><Clock className="w-4 h-4 text-blue-500" /><span className="text-xs text-muted-foreground">오늘 총 학습</span></div>
-          <p className="text-2xl font-bold">{todayTotal}<span className="text-sm font-normal text-muted-foreground ml-1">분</span></p>
+          <div className="flex items-center gap-2 mb-1"><Clock className="w-4 h-4 text-blue-500" /><span className="text-xs text-muted-foreground">{monthLabel} 총 학습</span></div>
+          <p className="text-2xl font-bold">{Math.floor(monthTotal / 60)}<span className="text-sm font-normal text-muted-foreground ml-1">시간</span> {monthTotal % 60}<span className="text-sm font-normal text-muted-foreground ml-0.5">분</span></p>
         </CardContent></Card>
         <Card><CardContent className="p-4">
-          <div className="flex items-center gap-2 mb-1"><Zap className="w-4 h-4 text-amber-500" /><span className="text-xs text-muted-foreground">최근 평균 집중도</span></div>
+          <div className="flex items-center gap-2 mb-1"><Zap className="w-4 h-4 text-amber-500" /><span className="text-xs text-muted-foreground">이달 평균 집중도</span></div>
           <p className="text-2xl font-bold">{avgFocus}<span className="text-sm font-normal text-muted-foreground ml-1">/ 5</span></p>
         </CardContent></Card>
         <Card><CardContent className="p-4">
-          <div className="flex items-center gap-2 mb-1"><Brain className="w-4 h-4 text-purple-500" /><span className="text-xs text-muted-foreground">총 세션</span></div>
-          <p className="text-2xl font-bold">{sessions.length}</p>
+          <div className="flex items-center gap-2 mb-1"><Brain className="w-4 h-4 text-purple-500" /><span className="text-xs text-muted-foreground">학습일 / 세션</span></div>
+          <p className="text-2xl font-bold">{studyDays}<span className="text-sm font-normal text-muted-foreground ml-1">일</span> <span className="text-lg">{monthSessions.length}</span><span className="text-sm font-normal text-muted-foreground ml-0.5">건</span></p>
         </CardContent></Card>
       </div>
 
-      <div className="flex items-center gap-3">
-        <span className="text-sm text-muted-foreground">날짜 필터:</span>
-        <Input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} className="w-40 h-8 text-sm" />
-        <Button variant="ghost" size="sm" onClick={() => setFilterDate("")} className="text-xs">전체 보기</Button>
-      </div>
+      {/* Calendar */}
+      <Card>
+        <CardContent className="p-4">
+          {/* Month navigation */}
+          <div className="flex items-center justify-between mb-4">
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => changeMonth(-1)}>
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <span className="font-semibold text-sm">{monthLabel}</span>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => changeMonth(1)}>
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
 
-      <div className="space-y-2">
-        {loading ? <p className="text-center py-8 text-muted-foreground">불러오는 중...</p>
-        : filtered.length === 0 ? (
-          <Card className="border-dashed"><CardContent className="p-8 text-center">
-            <p className="text-2xl mb-2">📝</p><p className="text-sm text-muted-foreground">기록된 세션이 없습니다</p>
-          </CardContent></Card>
-        ) : filtered.map(session => {
-          const subj = session.subject ?? subjects.find(s => s.id === session.subjectId);
-          return (
-            <Card key={session.id}><CardContent className="p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 space-y-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-sm">{subj?.emoji} {subj?.name ?? "알 수 없음"}</span>
-                    <Badge variant="outline" className="text-xs">{ACTIVITY_LABELS[session.activityType as SessionActivityType]}</Badge>
-                    <span className="text-xs text-muted-foreground">{session.date}</span>
-                  </div>
-                  <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{session.durationMinutes}분</span>
-                    {session.pagesOrQuestions && <span>📄 {session.pagesOrQuestions}페이지/문제</span>}
-                    {session.correctRate != null && <span>✅ 정답률 {session.correctRate}%</span>}
-                    {session.materialName && <span>📚 {session.materialName}</span>}
-                  </div>
-                  {(session.focusScore || session.fatigueScore || session.satisfactionScore) && (
-                    <div className="flex gap-4 text-xs">
-                      <span>집중 <span className={`font-bold ${(session.focusScore??3) >= 4 ? "text-green-600" : (session.focusScore??3) <= 2 ? "text-red-500" : "text-amber-500"}`}>{session.focusScore}/5</span></span>
-                      <span>피로 <span className={`font-bold ${(session.fatigueScore??3) >= 4 ? "text-red-500" : (session.fatigueScore??3) <= 2 ? "text-green-600" : "text-amber-500"}`}>{session.fatigueScore}/5</span></span>
-                      <span>만족 <span className={`font-bold ${(session.satisfactionScore??3) >= 4 ? "text-green-600" : (session.satisfactionScore??3) <= 2 ? "text-red-500" : "text-amber-500"}`}>{session.satisfactionScore}/5</span></span>
-                    </div>
+          {/* Day of week headers */}
+          <div className="grid grid-cols-7 mb-1">
+            {["일","월","화","수","목","금","토"].map(d => (
+              <div key={d} className={`text-center text-xs font-medium py-1 ${d === "일" ? "text-red-500" : d === "토" ? "text-blue-500" : "text-muted-foreground"}`}>{d}</div>
+            ))}
+          </div>
+
+          {/* Calendar grid */}
+          <div className="grid grid-cols-7 gap-0.5">
+            {calendarDays.map((dateStr, i) => {
+              if (!dateStr) return <div key={i} />;
+              const mins = minutesByDay[dateStr] ?? 0;
+              const isToday = dateStr === today;
+              const isSelected = dateStr === selectedDate;
+              const dayNum = Number(dateStr.slice(8));
+              const dow = (i % 7);
+              return (
+                <button
+                  key={dateStr}
+                  onClick={() => setSelectedDate(isSelected ? null : dateStr)}
+                  className={`relative flex flex-col items-center py-1.5 rounded-lg transition-colors text-xs
+                    ${isSelected ? "bg-primary text-primary-foreground" : isToday ? "bg-primary/10 ring-1 ring-primary" : "hover:bg-accent"}
+                    ${dow === 0 && !isSelected ? "text-red-500" : dow === 6 && !isSelected ? "text-blue-500" : ""}`}
+                >
+                  <span className={`font-medium ${isToday && !isSelected ? "text-primary font-bold" : ""}`}>{dayNum}</span>
+                  {mins > 0 && (
+                    <span className={`text-[10px] mt-0.5 ${isSelected ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
+                      {mins >= 60 ? `${Math.floor(mins/60)}h${mins%60>0?`${mins%60}m`:""}` : `${mins}m`}
+                    </span>
                   )}
-                  {session.memo && <p className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">{session.memo}</p>}
-                </div>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive shrink-0" onClick={() => handleDelete(session.id)}>
-                  <Trash2 className="w-3.5 h-3.5" />
-                </Button>
-              </div>
+                  {mins > 0 && !isSelected && (
+                    <div className={`absolute bottom-1 w-1 h-1 rounded-full ${mins >= 120 ? "bg-green-500" : "bg-blue-400"}`} />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {selectedDate && (
+            <div className="mt-3 pt-3 border-t flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">{selectedDate} 선택됨 ({sessionsByDay[selectedDate]?.length ?? 0}건)</span>
+              <Button variant="ghost" size="sm" className="text-xs h-6" onClick={() => setSelectedDate(null)}>전체 보기</Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Session list */}
+      <div>
+        <p className="text-xs font-medium text-muted-foreground mb-2">
+          {selectedDate ? `${selectedDate} 세션` : `${monthLabel} 전체 세션`} ({displayedSessions.length}건)
+        </p>
+        <div className="space-y-2">
+          {loading ? <p className="text-center py-8 text-muted-foreground">불러오는 중...</p>
+          : displayedSessions.length === 0 ? (
+            <Card className="border-dashed"><CardContent className="p-8 text-center">
+              <p className="text-2xl mb-2">📝</p><p className="text-sm text-muted-foreground">기록된 세션이 없습니다</p>
             </CardContent></Card>
-          );
-        })}
+          ) : displayedSessions.map(session => {
+            const subj = session.subject ?? subjects.find(s => s.id === session.subjectId);
+            return (
+              <Card key={session.id}><CardContent className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 space-y-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-sm">{subj?.emoji} {subj?.name ?? "알 수 없음"}</span>
+                      <Badge variant="outline" className="text-xs">{ACTIVITY_LABELS[session.activityType as SessionActivityType]}</Badge>
+                      {!selectedDate && <span className="text-xs text-muted-foreground">{session.date}</span>}
+                    </div>
+                    <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{session.durationMinutes}분</span>
+{session.materialName && <span>📚 {session.materialName}</span>}
+                    </div>
+                    {(session.focusScore || session.fatigueScore || session.satisfactionScore) && (
+                      <div className="flex gap-4 text-xs">
+                        <span>집중 <span className={`font-bold ${(session.focusScore??3) >= 4 ? "text-green-600" : (session.focusScore??3) <= 2 ? "text-red-500" : "text-amber-500"}`}>{session.focusScore}/5</span></span>
+                        <span>피로 <span className={`font-bold ${(session.fatigueScore??3) >= 4 ? "text-red-500" : (session.fatigueScore??3) <= 2 ? "text-green-600" : "text-amber-500"}`}>{session.fatigueScore}/5</span></span>
+                        <span>만족 <span className={`font-bold ${(session.satisfactionScore??3) >= 4 ? "text-green-600" : (session.satisfactionScore??3) <= 2 ? "text-red-500" : "text-amber-500"}`}>{session.satisfactionScore}/5</span></span>
+                      </div>
+                    )}
+                    {session.memo && <p className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">{session.memo}</p>}
+                  </div>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive shrink-0" onClick={() => handleDelete(session.id)}>
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </CardContent></Card>
+            );
+          })}
+        </div>
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -191,24 +295,32 @@ export default function SessionsPage() {
               <div><p className="text-xs mb-1 font-medium">날짜 *</p><Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
               <div><p className="text-xs mb-1 font-medium">과목 *</p>
                 <Select value={form.subjectId} onValueChange={v => v && setForm(f => ({ ...f, subjectId: v }))}>
-                  <SelectTrigger><SelectValue placeholder="선택" /></SelectTrigger>
+                  <SelectTrigger>
+                    <span className="truncate">
+                      {(() => { const s = subjects.find(x => x.id === form.subjectId); return s ? `${s.emoji ?? ""} ${s.name}`.trim() : "선택"; })()}
+                    </span>
+                  </SelectTrigger>
                   <SelectContent>{subjects.map(s => <SelectItem key={s.id} value={s.id}>{s.emoji} {s.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div><p className="text-xs mb-1 font-medium">학습 유형</p>
                 <Select value={form.activityType} onValueChange={v => setForm(f => ({ ...f, activityType: v as SessionActivityType }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger>
+                    <span className="truncate">{ACTIVITY_LABELS[form.activityType] ?? form.activityType}</span>
+                  </SelectTrigger>
                   <SelectContent>{(Object.entries(ACTIVITY_LABELS) as [SessionActivityType, string][]).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div><p className="text-xs mb-1 font-medium">학습 시간 (분)</p><Input type="number" value={form.durationMinutes} onChange={e => setForm(f => ({ ...f, durationMinutes: e.target.value }))} /></div>
-              <div><p className="text-xs mb-1 font-medium">페이지/문제 수</p><Input type="number" value={form.pagesOrQuestions} onChange={e => setForm(f => ({ ...f, pagesOrQuestions: e.target.value }))} placeholder="선택" /></div>
-              <div><p className="text-xs mb-1 font-medium">정답률 (%)</p><Input type="number" min="0" max="100" value={form.correctRate} onChange={e => setForm(f => ({ ...f, correctRate: e.target.value }))} placeholder="선택" /></div>
-              <div className="col-span-2"><p className="text-xs mb-1 font-medium">사용 자료</p><Input value={form.materialName} onChange={e => setForm(f => ({ ...f, materialName: e.target.value }))} placeholder="예: 시나공 필기" /></div>
+<div className="col-span-2"><p className="text-xs mb-1 font-medium">사용 자료</p><Input value={form.materialName} onChange={e => setForm(f => ({ ...f, materialName: e.target.value }))} placeholder="예: 시나공 필기" /></div>
               {exams.length > 0 && (
                 <div className="col-span-2"><p className="text-xs mb-1 font-medium">연결 시험 (선택)</p>
                   <Select value={form.examId} onValueChange={v => setForm(f => ({ ...f, examId: v === "none" ? "" : (v ?? f.examId) }))}>
-                    <SelectTrigger><SelectValue placeholder="시험 선택" /></SelectTrigger>
+                    <SelectTrigger>
+                      <span className="truncate">
+                        {form.examId ? (exams.find(e => e.id === form.examId)?.name ?? "시험 선택") : "시험 선택"}
+                      </span>
+                    </SelectTrigger>
                     <SelectContent><SelectItem value="none">없음</SelectItem>{exams.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>

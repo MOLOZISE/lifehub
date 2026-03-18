@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Star, MapPin, Phone, ExternalLink, Trash2, ArrowLeft, Bookmark, BookmarkCheck, Pencil, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -67,6 +67,7 @@ function StarDisplay({ value }: { value: number }) {
 export default function RestaurantDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: session } = useSession();
   const [restaurant, setRestaurant] = useState<RestaurantDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -89,6 +90,13 @@ export default function RestaurantDetailPage() {
   }
 
   useEffect(() => { loadDetail(); }, [id]);
+
+  // ?review=1 쿼리로 진입 시 리뷰 다이얼로그 자동 오픈
+  useEffect(() => {
+    if (!loading && restaurant && searchParams.get("review") === "1") {
+      setReviewDialog(true);
+    }
+  }, [loading, restaurant, searchParams]);
 
   async function handleBookmark() {
     if (!restaurant) return;

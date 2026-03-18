@@ -18,8 +18,8 @@ export async function GET(req: NextRequest) {
   const minRating = parseFloat(searchParams.get("minRating") ?? "0");
 
   const where: Record<string, unknown> = {};
+  where.userId = session.user.id; // 항상 본인 것만
   if (category) where.category = category;
-  if (myOnly) where.userId = session.user.id;
   if (minRating > 0) where.avgRating = { gte: minRating };
   if (search) {
     where.OR = [

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useMemo } from "react";
+import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { Plus, Search, Star, MapPin, Phone, Bookmark, BookmarkCheck, Loader2, Navigation, RotateCcw, ExternalLink } from "lucide-react";
@@ -111,6 +111,38 @@ export default function RestaurantPage() {
   const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
   const [showReSearch, setShowReSearch] = useState(false);
   const [flyToOnce, setFlyToOnce] = useState<[number, number] | null>(null);
+
+  // Resizable map/list split
+  const [mapHeightPct, setMapHeightPct] = useState(50);
+  const dragState = useRef<{ startY: number; startH: number } | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const onHandleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    dragState.current = { startY: e.clientY, startH: mapHeightPct };
+    const onMove = (ev: MouseEvent) => {
+      if (!dragState.current || !containerRef.current) return;
+      const h = containerRef.current.clientHeight;
+      const delta = ev.clientY - dragState.current.startY;
+      setMapHeightPct(Math.min(75, Math.max(20, dragState.current.startH + (delta / h) * 100)));
+    };
+    const onUp = () => { dragState.current = null; window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }, [mapHeightPct]);
+
+  const onHandleTouchStart = useCallback((e: React.TouchEvent) => {
+    dragState.current = { startY: e.touches[0].clientY, startH: mapHeightPct };
+    const onMove = (ev: TouchEvent) => {
+      if (!dragState.current || !containerRef.current) return;
+      const h = containerRef.current.clientHeight;
+      const delta = ev.touches[0].clientY - dragState.current.startY;
+      setMapHeightPct(Math.min(75, Math.max(20, dragState.current.startH + (delta / h) * 100)));
+    };
+    const onEnd = () => { dragState.current = null; window.removeEventListener("touchmove", onMove); window.removeEventListener("touchend", onEnd); };
+    window.addEventListener("touchmove", onMove, { passive: false });
+    window.addEventListener("touchend", onEnd);
+  }, [mapHeightPct]);
 
   async function load(p = 1) {
     setLoading(true);
@@ -332,10 +364,10 @@ export default function RestaurantPage() {
   }, [selectedKakaoId, selectedId, flyToOnce]);
 
   return (
-    <div className="flex flex-col -mx-4 md:-mx-6 -mt-4 md:-mt-6 -mb-20 md:-mb-6" style={{ height: "calc(100vh - 3.5rem)" }}>
+    <div ref={containerRef} className="flex flex-col -mx-4 md:-mx-6 -mt-4 md:-mt-6 -mb-20 md:-mb-6" style={{ height: "calc(100vh - 3.5rem)" }}>
 
       {/* ── 지도 영역 ── */}
-      <div className="relative flex-[3] min-h-0">
+      <div className="relative min-h-0" style={{ height: `${mapHeightPct}%` }}>
         {/* GPS 버튼만 지도 위에 */}
         <div className="absolute top-3 right-3 z-20 flex flex-col gap-2">
           <button
@@ -380,8 +412,17 @@ export default function RestaurantPage() {
         />
       </div>
 
+      {/* ── 드래그 핸들 ── */}
+      <div
+        className="shrink-0 flex items-center justify-center h-4 bg-background border-t border-b cursor-row-resize select-none touch-none z-10"
+        onMouseDown={onHandleMouseDown}
+        onTouchStart={onHandleTouchStart}
+      >
+        <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+      </div>
+
       {/* ── 하단 패널 ── */}
-      <div className="flex-[2] min-h-0 flex flex-col border-t bg-background">
+      <div className="flex-1 min-h-0 flex flex-col bg-background">
 
         {/* 탭 바 */}
         <div className="flex items-center border-b shrink-0">
@@ -572,6 +613,13 @@ export default function RestaurantPage() {
                         onClick={e => e.stopPropagation()}
                       >
                         리뷰 보기
+                      </Link>
+                      <Link
+                        href={`/restaurant/${r.id}?review=1`}
+                        className="text-[11px] text-muted-foreground hover:text-primary hover:underline"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        ✏️ 리뷰 쓰기
                       </Link>
                       {r.phone && (
                         <span className="text-[11px] text-muted-foreground flex items-center gap-0.5">
