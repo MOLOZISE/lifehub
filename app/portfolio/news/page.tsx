@@ -61,6 +61,7 @@ export default function NewsPage() {
   const [rawText, setRawText] = useState("");
   const [analyzed, setAnalyzed] = useState("");
   const [analyzedAt, setAnalyzedAt] = useState<string | null>(null);
+  const [usedSources, setUsedSources] = useState<string[]>([]);
   const [holdings, setHoldings] = useState<{ id: string; name: string; ticker: string }[]>([]);
   const [watchlist, setWatchlist] = useState<{ id: string; name: string; ticker: string }[]>([]);
 
@@ -72,14 +73,14 @@ export default function NewsPage() {
   async function handleAnalyze(target?: string) {
     const t = target ?? ticker.trim();
     if (!t) return;
-    setLoading(true); setError(""); setSections([]); setAnalyzedAt(null);
+    setLoading(true); setError(""); setSections([]); setAnalyzedAt(null); setUsedSources([]);
     try {
       const res = await fetch("/api/ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           systemPrompt: SYSTEM_PROMPT,
-          userMessage: `${t} 종목의 최신 뉴스와 시장 동향을 Google 검색으로 조사하고 분석해주세요.`,
+          userMessage: `${t} 종목의 최신 뉴스와 시장 동향을 분석해주세요.`,
           useSearch: true,
         }),
       });
@@ -89,6 +90,7 @@ export default function NewsPage() {
       setSections(parseResponse(data.text));
       setAnalyzed(t);
       setAnalyzedAt(new Date().toLocaleString("ko-KR"));
+      setUsedSources(data.sources ?? []);
     } catch {
       setError("분석 실패. GROQ_API_KEY 및 TAVILY_API_KEY 환경변수를 확인해주세요.");
     } finally {
@@ -100,7 +102,7 @@ export default function NewsPage() {
     <div className="max-w-3xl mx-auto space-y-5">
       <div>
         <h2 className="text-xl font-bold mb-1">AI 뉴스 분석</h2>
-        <p className="text-sm text-muted-foreground">Tavily 실시간 검색 + Groq AI 분석</p>
+        <p className="text-sm text-muted-foreground">Tavily · Finnhub · Google News · Yahoo Finance + Groq AI 분석</p>
       </div>
 
       <div className="flex gap-2">
@@ -151,7 +153,7 @@ export default function NewsPage() {
         <div className="flex flex-col items-center justify-center py-14 text-muted-foreground gap-3">
           <Loader2 className="w-7 h-7 animate-spin" />
           <div className="text-center">
-            <p className="text-sm font-medium">Tavily로 최신 뉴스 수집 후 AI 분석 중...</p>
+            <p className="text-sm font-medium">뉴스 수집 (Tavily·Finnhub·Google News) + AI 분석 중...</p>
             <p className="text-xs mt-1 opacity-60">실시간 검색이라 10~20초 소요될 수 있습니다</p>
           </div>
         </div>
@@ -159,10 +161,19 @@ export default function NewsPage() {
 
       {sections.length > 0 && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
               <span className="font-semibold text-sm">📊 {analyzed} 분석 결과</span>
               {analyzedAt && <span className="text-xs text-muted-foreground ml-2">{analyzedAt}</span>}
+              {usedSources.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {usedSources.map(src => (
+                    <span key={src} className="text-[10px] bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-800">
+                      {src}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
             <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => handleAnalyze(analyzed)} disabled={loading}>
               <RefreshCw className="w-3 h-3" />새로고침

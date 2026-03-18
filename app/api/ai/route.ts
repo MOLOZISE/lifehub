@@ -6,94 +6,115 @@ function getGroq() {
   return new Groq({ apiKey: process.env.GROQ_API_KEY ?? "" });
 }
 
-// 티커 추출 (종목명 → 영문 티커 추정)
 function extractTicker(message: string): string | null {
-  // 영문 대문자 티커 패턴 (AAPL, TSLA 등)
   const engMatch = message.match(/\b([A-Z]{2,5})\b/);
   if (engMatch) return engMatch[1];
-  // 한국 종목코드 (6자리 숫자)
   const krMatch = message.match(/\b(\d{6})\b/);
   if (krMatch) return krMatch[1];
   return null;
 }
 
-// Finnhub 뉴스 (무료, API 키 필요)
-async function fetchFinnhubNews(ticker: string): Promise<string> {
-  const key = process.env.FINNHUB_API_KEY;
-  if (!key) return "";
-  const to = new Date().toISOString().slice(0, 10);
-  const from = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
-  try {
-    const res = await fetch(
-      `https://finnhub.io/api/v1/company-news?symbol=${ticker}&from=${from}&to=${to}&token=${key}`,
-      { cache: "no-store" }
-    );
-    if (!res.ok) return "";
-    const items = await res.json() as { headline: string; summary: string; url: string; datetime: number }[];
-    if (!Array.isArray(items) || items.length === 0) return "";
-    return items.slice(0, 8).map((n, i) => {
-      const date = new Date(n.datetime * 1000).toLocaleDateString("ko-KR");
-      return `[${i + 1}] ${n.headline} (${date})\n출처: ${n.url}\n${n.summary?.slice(0, 400) ?? ""}`;
-    }).join("\n\n");
-  } catch { return ""; }
+function extractKeyword(message: string): string {
+  return message
+    .replace(/종목의?|최신|뉴스|시장\s*동향|분석|해\s*주세요|주세요|조사하고|을|를|의|이|가/g, "")
+    .replace(/Google\s*검색으로|바탕으로/g, "")
+    .trim()
+    .split(/\s+/)[0];
 }
 
-// Google News RSS (API 키 불필요, 한국어/영어 검색 모두 지원)
-async function fetchGoogleNews(query: string): Promise<string> {
+// ── Tavily: 전문 AI 검색 (뉴스 본문 포함) ──────────────────────────────────
+async function fetchTavily(query: string): Promise<{ articles: string[]; source: string }> {
+  if (!process.env.TAVILY_API_KEY) return { articles: [], source: "" };
   try {
-    const isKorean = /[가-힣]/.test(query);
+    const client = tavily({ apiKey: process.env.TAVILY_API_KEY });
+    const result = await client.search(query, {
+      searchDepth: "advanced",
+      maxResults: 6,
+      includeAnswer: false,
+      days: 7,
+    });
+    if (!result.results?.length) return { articles: [], source: "" };
+    const articles = result.results.map((r, i) => {
+      const pub = (r as { published_date?: string }).published_date;
+      return `[Tavily ${i + 1}] ${r.title}${pub ? ` (${pub})` : ""}\n출처: ${r.url}\n${r.content?.slice(0, 500) ?? ""}`;
+    });
+    return { articles, source: "Tavily" };
+  } catch (e) {
+    console.warn("Tavily failed:", e);
+    return { articles: [], source: "" };
+  }
+}
+
+// ── Finnhub: 주식 전문 뉴스 (US 종목 최적) ────────────────────────────────
+async function fetchFinnhub(ticker: string): Promise<{ articles: string[]; source: string }> {
+  if (!process.env.FINNHUB_API_KEY || !ticker) return { articles: [], source: "" };
+  const to = new Date().toISOString().slice(0, 10);
+  const from = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10);
+  try {
+    const res = await fetch(
+      `https://finnhub.io/api/v1/company-news?symbol=${ticker}&from=${from}&to=${to}&token=${process.env.FINNHUB_API_KEY}`,
+      { cache: "no-store" }
+    );
+    if (!res.ok) return { articles: [], source: "" };
+    const items = await res.json() as { headline: string; summary: string; url: string; datetime: number }[];
+    if (!Array.isArray(items) || items.length === 0) return { articles: [], source: "" };
+    const articles = items.slice(0, 6).map((n, i) => {
+      const date = new Date(n.datetime * 1000).toLocaleDateString("ko-KR");
+      return `[Finnhub ${i + 1}] ${n.headline} (${date})\n출처: ${n.url}\n${n.summary?.slice(0, 300) ?? ""}`;
+    });
+    return { articles, source: "Finnhub" };
+  } catch { return { articles: [], source: "" }; }
+}
+
+// ── Google News RSS: 한국어/영어 실시간 헤드라인 ──────────────────────────
+async function fetchGoogleNews(query: string, lang: "ko" | "en" = "ko"): Promise<{ articles: string[]; source: string }> {
+  try {
     const params = new URLSearchParams({
       q: query,
-      hl: isKorean ? "ko" : "en",
-      gl: isKorean ? "KR" : "US",
-      ceid: isKorean ? "KR:ko" : "US:en",
+      hl: lang,
+      gl: lang === "ko" ? "KR" : "US",
+      ceid: lang === "ko" ? "KR:ko" : "US:en",
     });
     const res = await fetch(
       `https://news.google.com/rss/search?${params}`,
       { headers: { "User-Agent": "Mozilla/5.0" }, cache: "no-store" }
     );
-    if (!res.ok) return "";
+    if (!res.ok) return { articles: [], source: "" };
     const xml = await res.text();
-
-    // RSS XML 간단 파싱
-    const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].slice(0, 8);
-    if (items.length === 0) return "";
-
-    const today = new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" });
-    const parsed = items.map((m, i) => {
+    const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].slice(0, 6);
+    if (items.length === 0) return { articles: [], source: "" };
+    const articles = items.map((m, i) => {
       const title = m[1].match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/)?.[1]
         ?? m[1].match(/<title>(.*?)<\/title>/)?.[1] ?? "";
-      const link = m[1].match(/<link>(.*?)<\/link>/)?.[1]
-        ?? m[1].match(/<link\/>(.*?)<\/link>/)?.[1] ?? "";
+      const link = m[1].match(/<link>(.*?)<\/link>/)?.[1] ?? "";
       const pubDate = m[1].match(/<pubDate>(.*?)<\/pubDate>/)?.[1] ?? "";
       const source = m[1].match(/<source[^>]*>(.*?)<\/source>/)?.[1] ?? "";
       const dateStr = pubDate ? new Date(pubDate).toLocaleDateString("ko-KR") : "";
-      return `[${i + 1}] ${title}${dateStr ? ` (${dateStr})` : ""}${source ? ` - ${source}` : ""}\n출처: ${link}`;
+      return `[Google ${lang === "ko" ? "KR" : "EN"} ${i + 1}] ${title}${dateStr ? ` (${dateStr})` : ""}${source ? ` · ${source}` : ""}\n출처: ${link}`;
     });
-
-    return `[Google News 실시간 - ${today}]\n` + parsed.join("\n\n");
-  } catch { return ""; }
+    return { articles, source: `Google News (${lang === "ko" ? "한국어" : "영어"})` };
+  } catch { return { articles: [], source: "" }; }
 }
 
-// Yahoo Finance 비공식 뉴스 (API 키 불필요)
-async function fetchYahooNews(ticker: string): Promise<string> {
+// ── Yahoo Finance 뉴스 ────────────────────────────────────────────────────
+async function fetchYahooNews(ticker: string): Promise<{ articles: string[]; source: string }> {
   try {
     const res = await fetch(
-      `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(ticker)}&newsCount=8&quotesCount=0`,
+      `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(ticker)}&newsCount=6&quotesCount=0`,
       { headers: { "User-Agent": "Mozilla/5.0" }, cache: "no-store" }
     );
-    if (!res.ok) return "";
+    if (!res.ok) return { articles: [], source: "" };
     const data = await res.json() as { news?: { title: string; link: string; providerPublishTime?: number; publisher?: string }[] };
     const news = data.news ?? [];
-    if (news.length === 0) return "";
-    const today = new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" });
-    return `[Yahoo Finance 뉴스 - ${today}]\n` + news.slice(0, 8).map((n, i) => {
+    if (news.length === 0) return { articles: [], source: "" };
+    const articles = news.map((n, i) => {
       const date = n.providerPublishTime
         ? new Date(n.providerPublishTime * 1000).toLocaleDateString("ko-KR")
         : "";
-      return `[${i + 1}] ${n.title}${date ? ` (${date})` : ""}\n출처: ${n.link}`;
-    }).join("\n\n");
-  } catch { return ""; }
+      return `[Yahoo ${i + 1}] ${n.title}${date ? ` (${date})` : ""}${n.publisher ? ` · ${n.publisher}` : ""}\n출처: ${n.link}`;
+    });
+    return { articles, source: "Yahoo Finance" };
+  } catch { return { articles: [], source: "" }; }
 }
 
 export async function POST(req: NextRequest) {
@@ -101,71 +122,38 @@ export async function POST(req: NextRequest) {
     const { systemPrompt, userMessage, history, useSearch } = await req.json();
 
     let contextBlock = "";
+    const usedSources: string[] = [];
     const today = new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" });
 
     if (useSearch) {
-      // 1순위: Tavily (설정된 경우)
-      if (process.env.TAVILY_API_KEY) {
-        try {
-          const client = tavily({ apiKey: process.env.TAVILY_API_KEY });
-          const result = await client.search(userMessage, {
-            searchDepth: "advanced",
-            maxResults: 8,
-            includeAnswer: false,
-            days: 7,
-          });
-          if (result.results?.length) {
-            const articles = result.results
-              .map((r, i) => {
-                const pub = (r as { published_date?: string }).published_date;
-                return `[${i + 1}] ${r.title}${pub ? ` (${pub})` : ""}\n출처: ${r.url}\n${r.content?.slice(0, 600)}`;
-              })
-              .join("\n\n");
-            contextBlock = `\n\n[Tavily 실시간 검색 - ${today}]\n${articles}\n\n반드시 위 최신 뉴스 내용만 바탕으로 분석하세요.`;
-          }
-        } catch (e) {
-          console.warn("Tavily failed:", e);
-        }
-      }
+      const ticker = extractTicker(userMessage);
+      const keyword = extractKeyword(userMessage);
+      const isKorean = /[가-힣]/.test(keyword);
 
-      // 2순위: Finnhub 뉴스 (FINNHUB_API_KEY 있을 때)
-      if (!contextBlock) {
-        const ticker = extractTicker(userMessage);
-        if (ticker) {
-          const finnhubNews = await fetchFinnhubNews(ticker);
-          if (finnhubNews) {
-            contextBlock = `\n\n[Finnhub 실시간 뉴스 - ${today}]\n${finnhubNews}\n\n위 최신 뉴스를 바탕으로 분석하세요.`;
-          }
-        }
-      }
+      // 모든 소스를 병렬 호출
+      const [tavilyRes, finnhubRes, googleKrRes, googleEnRes, yahooRes] = await Promise.all([
+        fetchTavily(userMessage),
+        ticker ? fetchFinnhub(ticker) : Promise.resolve({ articles: [], source: "" }),
+        fetchGoogleNews(keyword, "ko"),
+        ticker && !isKorean ? fetchGoogleNews(ticker, "en") : Promise.resolve({ articles: [], source: "" }),
+        ticker ? fetchYahooNews(ticker) : fetchYahooNews(keyword),
+      ]);
 
-      // 3순위: Google News RSS (API 키 불필요, 한/영 모두)
-      if (!contextBlock) {
-        // 종목명 키워드 추출 (메시지에서 첫 번째 명사)
-        const keyword = userMessage.replace(/종목의|최신|뉴스|분석|주세요|해주세요/g, "").trim();
-        const [googleKr, googleEn] = await Promise.all([
-          fetchGoogleNews(keyword),
-          extractTicker(userMessage) ? fetchGoogleNews(extractTicker(userMessage)!) : Promise.resolve(""),
-        ]);
-        const combined = [googleKr, googleEn].filter(Boolean).join("\n\n");
-        if (combined) {
-          contextBlock = `\n\n${combined}\n\n위 최신 뉴스 기사 제목과 출처를 바탕으로 분석하세요. 기사에 없는 내용은 추측하지 마세요.`;
-        }
-      }
+      // 수집된 뉴스 합치기 (각 소스에서 중복 제거)
+      const allArticles: string[] = [];
 
-      // 4순위: Yahoo Finance 뉴스 (API 키 불필요)
-      if (!contextBlock) {
-        const ticker = extractTicker(userMessage);
-        const searchTarget = ticker ?? userMessage.split(" ")[0];
-        const yahooNews = await fetchYahooNews(searchTarget);
-        if (yahooNews) {
-          contextBlock = `\n\n[${yahooNews}]\n\n위 최신 뉴스를 바탕으로 분석하세요. 기사가 없는 내용은 추측하지 마세요.`;
-        }
-      }
+      if (tavilyRes.articles.length) { allArticles.push(...tavilyRes.articles); usedSources.push(tavilyRes.source); }
+      if (finnhubRes.articles.length) { allArticles.push(...finnhubRes.articles); usedSources.push(finnhubRes.source); }
+      if (googleKrRes.articles.length) { allArticles.push(...googleKrRes.articles); usedSources.push(googleKrRes.source); }
+      if (googleEnRes.articles.length) { allArticles.push(...googleEnRes.articles); usedSources.push(googleEnRes.source); }
+      if (yahooRes.articles.length) { allArticles.push(...yahooRes.articles); usedSources.push(yahooRes.source); }
 
-      // 모두 실패 시 명시적 경고
-      if (!contextBlock) {
-        contextBlock = `\n\n[⚠️ 실시간 뉴스 데이터 없음 - ${today}]\n실시간 뉴스를 가져오지 못했습니다. 훈련 데이터 기반으로만 답변하며, 정보가 최신이 아닐 수 있습니다. 날짜를 명시하고 "최신 정보 확인 필요"라고 반드시 언급하세요.`;
+      if (allArticles.length > 0) {
+        contextBlock = `\n\n[실시간 뉴스 - ${today}] (출처: ${usedSources.join(", ")})\n\n`
+          + allArticles.join("\n\n")
+          + `\n\n위 최신 뉴스들을 종합해서 분석하세요. 뉴스에 없는 내용은 추측하지 말고, 날짜가 오래된 정보는 제외하세요.`;
+      } else {
+        contextBlock = `\n\n[⚠️ 실시간 뉴스 없음 - ${today}]\n실시간 데이터를 가져오지 못했습니다. 훈련 데이터 기반 분석임을 명시하고 "최신 정보 직접 확인 필요"를 언급하세요.`;
       }
     }
 
@@ -186,7 +174,7 @@ export async function POST(req: NextRequest) {
     });
 
     const text = completion.choices[0]?.message?.content ?? "";
-    return NextResponse.json({ text });
+    return NextResponse.json({ text, sources: usedSources });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
