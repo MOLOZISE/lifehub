@@ -38,6 +38,43 @@ async function fetchFinnhubNews(ticker: string): Promise<string> {
   } catch { return ""; }
 }
 
+// Google News RSS (API 키 불필요, 한국어/영어 검색 모두 지원)
+async function fetchGoogleNews(query: string): Promise<string> {
+  try {
+    const isKorean = /[가-힣]/.test(query);
+    const params = new URLSearchParams({
+      q: query,
+      hl: isKorean ? "ko" : "en",
+      gl: isKorean ? "KR" : "US",
+      ceid: isKorean ? "KR:ko" : "US:en",
+    });
+    const res = await fetch(
+      `https://news.google.com/rss/search?${params}`,
+      { headers: { "User-Agent": "Mozilla/5.0" }, cache: "no-store" }
+    );
+    if (!res.ok) return "";
+    const xml = await res.text();
+
+    // RSS XML 간단 파싱
+    const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].slice(0, 8);
+    if (items.length === 0) return "";
+
+    const today = new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" });
+    const parsed = items.map((m, i) => {
+      const title = m[1].match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/)?.[1]
+        ?? m[1].match(/<title>(.*?)<\/title>/)?.[1] ?? "";
+      const link = m[1].match(/<link>(.*?)<\/link>/)?.[1]
+        ?? m[1].match(/<link\/>(.*?)<\/link>/)?.[1] ?? "";
+      const pubDate = m[1].match(/<pubDate>(.*?)<\/pubDate>/)?.[1] ?? "";
+      const source = m[1].match(/<source[^>]*>(.*?)<\/source>/)?.[1] ?? "";
+      const dateStr = pubDate ? new Date(pubDate).toLocaleDateString("ko-KR") : "";
+      return `[${i + 1}] ${title}${dateStr ? ` (${dateStr})` : ""}${source ? ` - ${source}` : ""}\n출처: ${link}`;
+    });
+
+    return `[Google News 실시간 - ${today}]\n` + parsed.join("\n\n");
+  } catch { return ""; }
+}
+
 // Yahoo Finance 비공식 뉴스 (API 키 불필요)
 async function fetchYahooNews(ticker: string): Promise<string> {
   try {
@@ -102,7 +139,21 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // 3순위: Yahoo Finance 뉴스 (API 키 불필요)
+      // 3순위: Google News RSS (API 키 불필요, 한/영 모두)
+      if (!contextBlock) {
+        // 종목명 키워드 추출 (메시지에서 첫 번째 명사)
+        const keyword = userMessage.replace(/종목의|최신|뉴스|분석|주세요|해주세요/g, "").trim();
+        const [googleKr, googleEn] = await Promise.all([
+          fetchGoogleNews(keyword),
+          extractTicker(userMessage) ? fetchGoogleNews(extractTicker(userMessage)!) : Promise.resolve(""),
+        ]);
+        const combined = [googleKr, googleEn].filter(Boolean).join("\n\n");
+        if (combined) {
+          contextBlock = `\n\n${combined}\n\n위 최신 뉴스 기사 제목과 출처를 바탕으로 분석하세요. 기사에 없는 내용은 추측하지 마세요.`;
+        }
+      }
+
+      // 4순위: Yahoo Finance 뉴스 (API 키 불필요)
       if (!contextBlock) {
         const ticker = extractTicker(userMessage);
         const searchTarget = ticker ?? userMessage.split(" ")[0];
