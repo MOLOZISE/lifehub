@@ -354,44 +354,6 @@ export default function RestaurantPage() {
           </button>
         </div>
 
-        {/* 카카오 검색 결과 드롭다운 */}
-        {kakaoResults.length > 0 && (
-          <div className="absolute top-14 left-3 right-3 z-20 bg-white dark:bg-zinc-900 shadow-xl rounded-xl border overflow-hidden max-h-64">
-            <div className="flex items-center justify-between px-3 py-1.5 border-b bg-muted/30">
-              <span className="text-[10px] font-medium text-blue-600">검색 결과 {kakaoResults.length}건 · 지도에 표시됨</span>
-              <button onClick={() => { setKakaoResults([]); setSelectedKakaoId(null); }} className="text-[10px] text-muted-foreground hover:text-foreground">닫기</button>
-            </div>
-            <div className="overflow-y-auto max-h-52">
-              {kakaoResults.map(place => (
-                <div
-                  key={place.id}
-                  className={`border-b last:border-0 transition-colors ${selectedKakaoId === place.id ? "bg-blue-50 dark:bg-blue-950/30" : "hover:bg-muted/40"}`}
-                >
-                  <button onClick={() => focusKakaoPlace(place)} className="w-full text-left px-3 py-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-sm truncate">{place.name}</span>
-                      {place.distance != null && (
-                        <span className="text-[10px] text-blue-500 shrink-0">
-                          {place.distance >= 1000 ? `${(place.distance / 1000).toFixed(1)}km` : `${place.distance}m`}
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-[11px] text-muted-foreground truncate">{place.category} · {place.roadAddress || place.address}</div>
-                  </button>
-                  <div className="flex gap-2 px-3 pb-1.5">
-                    <button onClick={() => registerKakaoPlace(place)} className="text-[11px] text-primary hover:underline font-medium">+ 내 맛집 등록</button>
-                    {place.url && (
-                      <a href={place.url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-0.5">
-                        <ExternalLink className="w-2.5 h-2.5" /> 카카오맵
-                      </a>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* 이 지역 재검색 */}
         {showReSearch && kakaoQuery && (
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20">
@@ -454,6 +416,44 @@ export default function RestaurantPage() {
             ))}
           </div>
         </div>
+
+        {/* 카카오 검색 결과 */}
+        {kakaoResults.length > 0 && (
+          <div className="shrink-0 border-b">
+            <div className="flex items-center justify-between px-3 py-1.5 bg-blue-50 dark:bg-blue-950/20">
+              <span className="text-[10px] font-medium text-blue-600">검색 결과 {kakaoResults.length}건 · 지도에 표시됨</span>
+              <button onClick={() => { setKakaoResults([]); setSelectedKakaoId(null); }} className="text-[10px] text-muted-foreground hover:text-foreground">닫기</button>
+            </div>
+            <div className="overflow-y-auto max-h-48 divide-y">
+              {kakaoResults.map(place => (
+                <div
+                  key={place.id}
+                  className={`transition-colors ${selectedKakaoId === place.id ? "bg-blue-50 dark:bg-blue-950/30" : "hover:bg-muted/40"}`}
+                >
+                  <button onClick={() => focusKakaoPlace(place)} className="w-full text-left px-3 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-sm truncate">{place.name}</span>
+                      {place.distance != null && (
+                        <span className="text-[10px] text-blue-500 shrink-0">
+                          {place.distance >= 1000 ? `${(place.distance / 1000).toFixed(1)}km` : `${place.distance}m`}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground truncate">{place.category} · {place.roadAddress || place.address}</div>
+                  </button>
+                  <div className="flex gap-2 px-3 pb-1.5">
+                    <button onClick={() => registerKakaoPlace(place)} className="text-[11px] text-primary hover:underline font-medium">+ 내 맛집 등록</button>
+                    {place.url && (
+                      <a href={place.url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-0.5">
+                        <ExternalLink className="w-2.5 h-2.5" /> 카카오맵
+                      </a>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* 리스트 */}
         <div ref={listRef} className="flex-1 overflow-y-auto">
