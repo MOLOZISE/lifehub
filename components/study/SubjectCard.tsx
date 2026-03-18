@@ -1,10 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { MoreVertical, Pencil, Trash2, BookOpen, HelpCircle, Layers } from "lucide-react";
+import { MoreVertical, Pencil, Trash2, Clock, CalendarClock } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -12,20 +11,28 @@ import { cn } from "@/lib/utils";
 import { COLOR_MAP, formatDate } from "@/lib/utils-app";
 import type { Subject } from "@/lib/types";
 
-// Need to add dropdown to shadcn
 interface Props {
   subject: Subject;
   noteCount: number;
   questionCount: number;
   flashcardCount: number;
   knownCount: number;
+  totalMinutes?: number;   // 총 공부 시간 (분)
+  sessionCount?: number;   // 공부 횟수
   onEdit: () => void;
   onDelete: () => void;
 }
 
-export function SubjectCard({ subject, noteCount, questionCount, flashcardCount, knownCount, onEdit, onDelete }: Props) {
+export function SubjectCard({ subject, totalMinutes = 0, sessionCount = 0, onEdit, onDelete }: Props) {
   const colors = COLOR_MAP[subject.color];
-  const flashProgress = flashcardCount > 0 ? Math.round((knownCount / flashcardCount) * 100) : 0;
+
+  const dDay = subject.examDate
+    ? Math.ceil((new Date(subject.examDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    : null;
+
+  const hoursStr = totalMinutes >= 60
+    ? `${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60 > 0 ? `${totalMinutes % 60}m` : ""}`
+    : totalMinutes > 0 ? `${totalMinutes}m` : "0h";
 
   return (
     <Card className={cn("relative overflow-hidden border-l-4 hover:shadow-md transition-shadow", colors.border)}>
@@ -55,30 +62,23 @@ export function SubjectCard({ subject, noteCount, questionCount, flashcardCount,
           </DropdownMenu>
         </div>
 
-        {/* Stats */}
-        <div className="flex gap-3 text-xs text-muted-foreground mb-3">
-          <span className="flex items-center gap-1"><BookOpen className="w-3 h-3" />{noteCount}개 노트</span>
-          <span className="flex items-center gap-1"><HelpCircle className="w-3 h-3" />{questionCount}문제</span>
-          <span className="flex items-center gap-1"><Layers className="w-3 h-3" />{flashcardCount}카드</span>
+        {/* 공부 통계 */}
+        <div className="flex gap-3 text-xs text-muted-foreground mb-2">
+          <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{hoursStr}</span>
+          <span className="text-muted-foreground">{sessionCount}회 공부</span>
         </div>
 
-        {/* Flashcard progress */}
-        {flashcardCount > 0 && (
-          <div className="space-y-1">
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>플래시카드 암기</span>
-              <span>{knownCount}/{flashcardCount}</span>
-            </div>
-            <Progress value={flashProgress} className="h-1.5" />
-          </div>
-        )}
-
-        {/* Exam date */}
+        {/* 시험일 / D-Day */}
         {subject.examDate && (
-          <div className="mt-2">
-            <Badge variant="secondary" className="text-xs">
-              시험: {formatDate(subject.examDate)}
+          <div className="flex items-center gap-2 mt-2">
+            <Badge variant="secondary" className="text-xs flex items-center gap-1">
+              <CalendarClock className="w-3 h-3" />{formatDate(subject.examDate)}
             </Badge>
+            {dDay !== null && (
+              <Badge variant={dDay <= 7 ? "destructive" : dDay <= 30 ? "secondary" : "outline"} className="text-xs">
+                {dDay > 0 ? `D-${dDay}` : dDay === 0 ? "D-Day" : "종료"}
+              </Badge>
+            )}
           </div>
         )}
       </CardContent>

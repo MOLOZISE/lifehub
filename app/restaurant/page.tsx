@@ -158,7 +158,11 @@ export default function RestaurantPage() {
     if (res.ok) {
       const data = await res.json();
       setKakaoResults(data.places ?? []);
-      if (!data.places?.length) toast.info("검색 결과가 없습니다.");
+      if (data.error) {
+        toast.error(`검색 오류: ${data.error} ${JSON.stringify(data.kakaoError ?? "")}`);
+      } else if (!data.places?.length) {
+        toast.info("검색 결과가 없습니다.");
+      }
     }
     setKakaoLoading(false);
   }

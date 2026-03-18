@@ -30,13 +30,10 @@ const navItems = [
     label: "자산 관리",
     icon: TrendingUp,
     children: [
-      { label: "포트폴리오", href: "/portfolio" },
-      { label: "📋 거래 이력", href: "/portfolio/trades" },
+      { label: "📊 포트폴리오", href: "/portfolio" },
       { label: "⭐ 관심 종목", href: "/portfolio/watchlist" },
-      { label: "차트 분석", href: "/portfolio/chart" },
-      { label: "AI 뉴스 분석", href: "/portfolio/news" },
-      { label: "AI 전략 어드바이저", href: "/portfolio/strategy" },
-      { label: "주식 공부방", href: "/portfolio/learn" },
+      { label: "📈 차트 분석", href: "/portfolio/chart" },
+      { label: "📰 AI 뉴스·전략", href: "/portfolio/news" },
     ],
   },
   {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Plus, Pencil, Trash2, TrendingUp, TrendingDown, AlertTriangle, ShieldCheck, RefreshCw } from "lucide-react";
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
@@ -66,6 +66,8 @@ const emptyHolding = {
   quantity: 0, avgPrice: 0, currentPrice: 0, currency: "KRW", memo: "",
 };
 
+interface StockMeta { ticker: string; name: string; market: "KR" | "US"; sector: string; }
+
 export default function PortfolioPage() {
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,6 +75,12 @@ export default function PortfolioPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Holding | null>(null);
   const [form, setForm] = useState(emptyHolding);
+  // 자동완성
+  const [searchQ, setSearchQ] = useState("");
+  const [suggestions, setSuggestions] = useState<StockMeta[]>([]);
+  const [showSugg, setShowSugg] = useState(false);
+  const [fetchingPrice, setFetchingPrice] = useState(false);
+  const suggRef = useRef<HTMLDivElement>(null);
 
   async function loadHoldings() {
     const res = await fetch("/api/portfolio/holdings");
@@ -106,9 +114,37 @@ export default function PortfolioPage() {
   });
   Object.entries(sectorMap).forEach(([name, value]) => sectorData.push({ name, value }));
 
+  // 자동완성 검색
+  useEffect(() => {
+    if (!dialogOpen || editing) return;
+    const t = setTimeout(() => {
+      fetch(`/api/portfolio/search?q=${encodeURIComponent(searchQ)}`)
+        .then(r => r.json()).then(d => { setSuggestions(d); setShowSugg(true); });
+    }, 150);
+    return () => clearTimeout(t);
+  }, [searchQ, dialogOpen, editing]);
+
+  async function selectStock(s: StockMeta) {
+    setShowSugg(false);
+    setSearchQ(s.name);
+    setForm(f => ({ ...f, ticker: s.ticker, name: s.name, market: s.market, sector: s.sector as PortfolioSector, currency: s.market === "KR" ? "KRW" : "USD" }));
+    setFetchingPrice(true);
+    try {
+      const res = await fetch(`/api/portfolio/price?ticker=${s.ticker}&market=${s.market}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.price) setForm(f => ({ ...f, currentPrice: data.price, avgPrice: f.avgPrice || data.price }));
+      }
+    } finally { setFetchingPrice(false); }
+  }
+
   function openAdd() {
     setEditing(null);
     setForm(emptyHolding);
+    setSearchQ("");
+    setSuggestions([]);
+    // 인기 종목 로드
+    fetch("/api/portfolio/search?q=").then(r => r.json()).then(d => { setSuggestions(d); setShowSugg(true); });
     setDialogOpen(true);
   }
 
@@ -380,18 +416,48 @@ export default function PortfolioPage() {
             <DialogTitle>{editing ? "종목 수정" : "종목 추가"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-2">
-              <div><p className="text-xs mb-1">티커</p><Input value={form.ticker} onChange={e => setForm(f => ({ ...f, ticker: e.target.value }))} placeholder="예: 005930" /></div>
-              <div><p className="text-xs mb-1">종목명</p><Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="예: 삼성전자" /></div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <p className="text-xs mb-1">시장</p>
-                <Select value={form.market} onValueChange={v => setForm(f => ({ ...f, market: v as "KR"|"US", currency: v === "KR" ? "KRW" : "USD" }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="KR">KR (원)</SelectItem><SelectItem value="US">US (달러)</SelectItem></SelectContent>
-                </Select>
+            {/* 자동완성 검색 (추가 시에만) */}
+            {!editing && (
+              <div ref={suggRef} className="relative">
+                <p className="text-xs mb-1 font-medium">종목 검색 *</p>
+                <Input
+                  value={searchQ}
+                  onChange={e => { setSearchQ(e.target.value); setShowSugg(true); }}
+                  onFocus={() => setShowSugg(true)}
+                  onBlur={() => setTimeout(() => setShowSugg(false), 150)}
+                  placeholder="종목명 또는 티커 (예: 삼성, AAPL)"
+                  autoFocus
+                />
+                {showSugg && suggestions.length > 0 && (
+                  <div className="absolute z-50 w-full mt-1 bg-white dark:bg-zinc-900 border rounded-lg shadow-lg max-h-52 overflow-y-auto">
+                    {!searchQ && <p className="px-3 py-1.5 text-xs text-muted-foreground border-b">인기 종목 TOP 50</p>}
+                    {suggestions.map(s => (
+                      <button key={s.ticker} className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted text-left"
+                        onMouseDown={() => selectStock(s)}>
+                        <span className="text-xs">{s.market === "KR" ? "🇰🇷" : "🇺🇸"}</span>
+                        <span className="font-medium text-sm flex-1">{s.name}</span>
+                        <span className="text-xs text-muted-foreground font-mono">{s.ticker}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
+            )}
+            {/* 선택된 종목 */}
+            {form.ticker && (
+              <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-lg text-sm">
+                <span>{form.market === "KR" ? "🇰🇷" : "🇺🇸"}</span>
+                <span className="font-medium">{form.name}</span>
+                <span className="text-muted-foreground font-mono text-xs">{form.ticker}</span>
+                {fetchingPrice && <span className="ml-auto text-xs text-muted-foreground">가격 조회 중...</span>}
+                {form.currentPrice > 0 && !fetchingPrice && (
+                  <span className="ml-auto text-xs font-semibold text-green-600">
+                    {form.currency === "KRW" ? `₩${form.currentPrice.toLocaleString()}` : `$${form.currentPrice.toLocaleString()}`}
+                  </span>
+                )}
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-2">
               <div>
                 <p className="text-xs mb-1">섹터</p>
                 <Select value={form.sector ?? "other"} onValueChange={v => setForm(f => ({ ...f, sector: v as PortfolioSector }))}>
@@ -403,19 +469,19 @@ export default function PortfolioPage() {
                   </SelectContent>
                 </Select>
               </div>
+              <div>
+                <p className="text-xs mb-1">수량</p>
+                <Input type="number" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: Number(e.target.value) }))} />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <div><p className="text-xs mb-1">수량</p><Input type="number" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: Number(e.target.value) }))} /></div>
               <div><p className="text-xs mb-1">평균단가</p><Input type="number" value={form.avgPrice} onChange={e => setForm(f => ({ ...f, avgPrice: Number(e.target.value) }))} /></div>
-            </div>
-            <div>
-              <p className="text-xs mb-1">현재가</p>
-              <Input type="number" value={form.currentPrice} onChange={e => setForm(f => ({ ...f, currentPrice: Number(e.target.value) }))} />
+              <div><p className="text-xs mb-1">현재가</p><Input type="number" value={form.currentPrice} onChange={e => setForm(f => ({ ...f, currentPrice: Number(e.target.value) }))} /></div>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>취소</Button>
-            <Button onClick={handleSave}>저장</Button>
+            <Button onClick={handleSave} disabled={!form.ticker || !form.name}>저장</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

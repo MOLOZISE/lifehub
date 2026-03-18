@@ -23,14 +23,20 @@ export async function POST(req: NextRequest) {
         const today = new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" });
         const result = await client.search(userMessage, {
           searchDepth: "advanced",
-          maxResults: 6,
+          maxResults: 8,
           includeAnswer: false,
+          days: 7,
         });
         if (result.results?.length) {
           const articles = result.results
-            .map((r, i) => `[${i + 1}] ${r.title}\n출처: ${r.url}\n${r.content?.slice(0, 500)}`)
+            .map((r, i) => {
+              const pub = (r as { published_date?: string }).published_date;
+              return `[${i + 1}] ${r.title}${pub ? ` (${pub})` : ""}\n출처: ${r.url}\n${r.content?.slice(0, 600)}`;
+            })
             .join("\n\n");
-          contextBlock = `\n\n[실시간 검색 결과 - ${today}]\n${articles}\n\n위 최신 뉴스를 바탕으로 분석하세요.`;
+          contextBlock = `\n\n[실시간 검색 결과 - ${today}]\n${articles}\n\n반드시 위 최신 뉴스 내용만 바탕으로 분석하세요. 오래된 정보는 사용하지 마세요.`;
+        } else {
+          contextBlock = `\n\n[주의: 실시간 검색 결과 없음 - ${today}]\n오늘 날짜 기준으로 최신 정보로 분석하되, 최신이 아닐 수 있음을 명시하세요.`;
         }
       } catch (e) {
         console.warn("Tavily search failed:", e);

@@ -10,14 +10,16 @@ import { SubjectCard } from "@/components/study/SubjectCard";
 import { toast } from "sonner";
 import type { Subject } from "@/lib/types";
 
-type SortKey = "name" | "createdAt";
+type SortKey = "name" | "createdAt" | "studyTime";
 
 interface ApiSubject extends Subject {
   _count?: { notes: number; flashcards: number; quizQuestions: number };
 }
+interface SessionData { subjectId: string; durationMinutes: number; }
 
 export default function SubjectsPage() {
   const [subjects, setSubjects] = useState<ApiSubject[]>([]);
+  const [sessionMap, setSessionMap] = useState<Record<string, { minutes: number; count: number }>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortKey>("createdAt");
@@ -29,8 +31,22 @@ export default function SubjectsPage() {
   const [formData, setFormData] = useState({ name: "", color: "blue", emoji: "📚", examDate: "" });
 
   async function loadSubjects() {
-    const res = await fetch("/api/study/subjects");
-    if (res.ok) setSubjects(await res.json());
+    const [subRes, sessRes] = await Promise.all([
+      fetch("/api/study/subjects"),
+      fetch("/api/study/sessions?limit=1000"),
+    ]);
+    if (subRes.ok) setSubjects(await subRes.json());
+    if (sessRes.ok) {
+      const data = await sessRes.json();
+      const sessions: SessionData[] = data.sessions ?? data ?? [];
+      const map: Record<string, { minutes: number; count: number }> = {};
+      sessions.forEach(s => {
+        if (!map[s.subjectId]) map[s.subjectId] = { minutes: 0, count: 0 };
+        map[s.subjectId].minutes += s.durationMinutes;
+        map[s.subjectId].count += 1;
+      });
+      setSessionMap(map);
+    }
     setLoading(false);
   }
 
@@ -81,6 +97,7 @@ export default function SubjectsPage() {
     .filter(s => s.name.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => {
       if (sort === "name") return a.name.localeCompare(b.name, "ko");
+      if (sort === "studyTime") return (sessionMap[b.id]?.minutes ?? 0) - (sessionMap[a.id]?.minutes ?? 0);
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
 
@@ -96,6 +113,7 @@ export default function SubjectsPage() {
           <SelectContent>
             <SelectItem value="createdAt">생성일순</SelectItem>
             <SelectItem value="name">이름순</SelectItem>
+            <SelectItem value="studyTime">공부 시간순</SelectItem>
           </SelectContent>
         </Select>
         <Button onClick={openAdd}><Plus className="w-4 h-4 mr-2" />과목 추가</Button>
@@ -119,6 +137,8 @@ export default function SubjectsPage() {
               questionCount={subject._count?.quizQuestions ?? 0}
               flashcardCount={subject._count?.flashcards ?? 0}
               knownCount={0}
+              totalMinutes={sessionMap[subject.id]?.minutes ?? 0}
+              sessionCount={sessionMap[subject.id]?.count ?? 0}
               onEdit={() => openEdit(subject)}
               onDelete={() => setDeleteTarget(subject)}
             />

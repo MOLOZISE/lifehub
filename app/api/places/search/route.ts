@@ -43,7 +43,12 @@ export async function GET(req: NextRequest) {
     });
 
     if (!res.ok) {
-      return NextResponse.json({ error: "Kakao API error", places: [] }, { status: 200 });
+      const errBody = await res.json().catch(() => ({}));
+      return NextResponse.json({
+        error: `Kakao API ${res.status}`,
+        kakaoError: errBody,
+        places: [],
+      }, { status: 200 });
     }
 
     const data = await res.json();

@@ -2,74 +2,154 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
-import { ArrowLeft, BookOpen, HelpCircle, Layers, CalendarClock, Clock, XCircle, CheckCircle } from "lucide-react";
+import { ArrowLeft, CalendarClock, Clock, Plus, Link2, BookOpen, Trophy, Play, CheckCircle } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { LinkButton } from "@/components/ui/link-button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { COLOR_MAP, formatDate } from "@/lib/utils-app";
+import { toast } from "sonner";
 
 interface SubjectDetail {
   id: string; name: string; emoji: string; color: string;
   description: string | null; examDate: string | null;
   _count: { notes: number; flashcards: number; quizQuestions: number };
 }
-interface NotePreview { id: string; title: string; content: string; }
-interface QuizSession { id: string; score: number; total: number; completedAt: string; durationSeconds: number | null; }
-interface FlashcardSummary { id: string; known: boolean; }
-interface WrongAnswer { id: string; question: string; wrongReason: string | null; isResolved: boolean; nextReviewAt: string | null; }
+interface StudySession {
+  id: string; date: string; durationMinutes: number;
+  activityType: string; materialName: string | null;
+  memo: string | null; satisfactionScore: number;
+}
+interface StudySource {
+  id: string; title: string; content: string; type: string; createdAt: string;
+}
+interface Exam {
+  id: string; name: string; examDate: string; status: string;
+  actualScore: number | null; targetScore: number | null; passScore: number | null; memo: string | null;
+}
+
+const ACTIVITY_LABELS: Record<string, string> = {
+  reading: "📖 읽기", lecture: "🎓 강의", problem: "✏️ 문제풀기",
+  review: "🔁 복습", writing: "📝 필기", other: "📌 기타",
+};
 
 export default function SubjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [subject, setSubject] = useState<SubjectDetail | null>(null);
-  const [notes, setNotes] = useState<NotePreview[]>([]);
-  const [sessions, setSessions] = useState<QuizSession[]>([]);
-  const [knownCount, setKnownCount] = useState(0);
-  const [wrongAnswers, setWrongAnswers] = useState<WrongAnswer[]>([]);
+  const [sessions, setSessions] = useState<StudySession[]>([]);
+  const [sources, setSources] = useState<StudySource[]>([]);
+  const [exams, setExams] = useState<Exam[]>([]);
 
-  useEffect(() => {
-    async function load() {
-      const [subRes, notesRes, sessRes, cardsRes, wrongRes] = await Promise.all([
-        fetch(`/api/study/subjects/${id}`),
-        fetch(`/api/study/subjects/${id}/notes`),
-        fetch(`/api/study/subjects/${id}/sessions`),
-        fetch(`/api/study/subjects/${id}/flashcards`),
-        fetch(`/api/study/wrong-answers?subjectId=${id}`),
-      ]);
-      if (!subRes.ok) { router.push("/study/subjects"); return; }
-      setSubject(await subRes.json());
-      if (notesRes.ok) setNotes(await notesRes.json());
-      if (sessRes.ok) setSessions(await sessRes.json());
-      if (cardsRes.ok) {
-        const cards: FlashcardSummary[] = await cardsRes.json();
-        setKnownCount(cards.filter(c => c.known).length);
-      }
-      if (wrongRes.ok) {
-        const data = await wrongRes.json();
-        setWrongAnswers(Array.isArray(data) ? data : data.notes ?? []);
-      }
+  // 세션 추가 다이얼로그
+  const [sessionDialog, setSessionDialog] = useState(false);
+  const [sessionForm, setSessionForm] = useState({
+    date: new Date().toISOString().slice(0, 10),
+    durationMinutes: 60, activityType: "lecture",
+    materialName: "", memo: "", satisfactionScore: 3,
+  });
+
+  // 자료 추가 다이얼로그
+  const [sourceDialog, setSourceDialog] = useState(false);
+  const [sourceTitle, setSourceTitle] = useState("");
+  const [sourceContent, setSourceContent] = useState("");
+  const [sourceType, setSourceType] = useState("link");
+
+  // 시험 결과 입력 다이얼로그
+  const [examDialog, setExamDialog] = useState(false);
+  const [examForm, setExamForm] = useState({ name: "", examDate: "", actualScore: "", targetScore: "", memo: "" });
+
+  useEffect(() => { load(); }, [id]);
+
+  async function load() {
+    const [subRes, sessRes, srcRes, examRes] = await Promise.all([
+      fetch(`/api/study/subjects/${id}`),
+      fetch(`/api/study/sessions?subjectId=${id}&limit=100`),
+      fetch(`/api/study/sources?subjectId=${id}`),
+      fetch(`/api/study/exams`),
+    ]);
+    if (!subRes.ok) { router.push("/study/subjects"); return; }
+    setSubject(await subRes.json());
+    if (sessRes.ok) {
+      const data = await sessRes.json();
+      const arr: StudySession[] = data.sessions ?? data ?? [];
+      setSessions(arr.filter((s: StudySession & { subjectId?: string }) => !s.subjectId || s.subjectId === id));
     }
+    if (srcRes.ok) setSources(await srcRes.json());
+    if (examRes.ok) {
+      const all: Exam[] = await examRes.json();
+      setExams(all.filter(e => e.name.includes(subject?.name ?? "") || true).slice(0, 10));
+    }
+  }
+
+  async function addSession() {
+    const res = await fetch("/api/study/sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...sessionForm, subjectId: id, focusScore: 3, fatigueScore: 3 }),
+    });
+    if (!res.ok) { toast.error("저장 실패"); return; }
+    toast.success("공부 기록이 추가되었습니다.");
+    setSessionDialog(false);
     load();
-  }, [id, router]);
+  }
+
+  async function addSource() {
+    if (!sourceTitle.trim()) return;
+    const res = await fetch("/api/study/sources", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subjectId: id, title: sourceTitle, content: sourceContent, type: sourceType }),
+    });
+    if (!res.ok) { toast.error("저장 실패"); return; }
+    toast.success("자료가 추가되었습니다.");
+    setSourceDialog(false);
+    setSourceTitle(""); setSourceContent(""); setSourceType("link");
+    load();
+  }
+
+  async function addExam() {
+    if (!examForm.name || !examForm.examDate) return;
+    const res = await fetch("/api/study/exams", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: examForm.name, examDate: examForm.examDate, category: subject?.name ?? "",
+        actualScore: examForm.actualScore ? Number(examForm.actualScore) : null,
+        targetScore: examForm.targetScore ? Number(examForm.targetScore) : null,
+        memo: examForm.memo, status: examForm.actualScore ? "completed" : "preparing",
+      }),
+    });
+    if (!res.ok) { toast.error("저장 실패"); return; }
+    toast.success("시험 기록이 추가되었습니다.");
+    setExamDialog(false);
+    load();
+  }
 
   if (!subject) return null;
 
   const colors = COLOR_MAP[subject.color as import("@/lib/types").SubjectColor] ?? COLOR_MAP["blue"];
-  const { notes: noteCount, flashcards: flashcardCount, quizQuestions: questionCount } = subject._count;
-  const lastSession = sessions[sessions.length - 1];
-  const unresolvedWrong = wrongAnswers.filter(w => !w.isResolved).length;
 
-  // D-Day 계산
+  // 통계 계산
+  const totalMinutes = sessions.reduce((s, sess) => s + sess.durationMinutes, 0);
+  const totalHours = Math.floor(totalMinutes / 60);
+  const totalMins = totalMinutes % 60;
+  const thisMonthMinutes = sessions
+    .filter(s => s.date.slice(0, 7) === new Date().toISOString().slice(0, 7))
+    .reduce((s, sess) => s + sess.durationMinutes, 0);
+
   const dDay = subject.examDate
     ? Math.ceil((new Date(subject.examDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
     : null;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      {/* Back + header */}
+      {/* Header */}
       <div className="flex items-start gap-4">
         <LinkButton variant="ghost" size="icon" href="/study/subjects"><ArrowLeft className="w-4 h-4" /></LinkButton>
         <div className="flex-1">
@@ -93,155 +173,270 @@ export default function SubjectDetailPage() {
         </div>
       </div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-4 gap-3">
+      {/* 요약 카드 */}
+      <div className="grid grid-cols-3 gap-3">
         <Card>
           <CardContent className="p-4 text-center">
-            <BookOpen className="w-5 h-5 mx-auto mb-1 text-muted-foreground" />
-            <p className="text-2xl font-bold">{noteCount}</p>
-            <p className="text-xs text-muted-foreground">노트</p>
+            <Clock className="w-5 h-5 mx-auto mb-1 text-blue-500" />
+            <p className="text-2xl font-bold">{totalHours}h {totalMins}m</p>
+            <p className="text-xs text-muted-foreground">총 공부 시간</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <HelpCircle className="w-5 h-5 mx-auto mb-1 text-muted-foreground" />
-            <p className="text-2xl font-bold">{questionCount}</p>
-            <p className="text-xs text-muted-foreground">문제</p>
-            {lastSession && <p className="text-xs text-green-500 mt-0.5">{lastSession.score}/{lastSession.total}</p>}
+            <Play className="w-5 h-5 mx-auto mb-1 text-green-500" />
+            <p className="text-2xl font-bold">{Math.floor(thisMonthMinutes / 60)}h</p>
+            <p className="text-xs text-muted-foreground">이번 달</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <Layers className="w-5 h-5 mx-auto mb-1 text-muted-foreground" />
-            <p className="text-2xl font-bold">{flashcardCount}</p>
-            <p className="text-xs text-muted-foreground">플래시카드</p>
-            {flashcardCount > 0 && <Progress value={(knownCount / flashcardCount) * 100} className="h-1 mt-1.5" />}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <XCircle className="w-5 h-5 mx-auto mb-1 text-red-400" />
-            <p className="text-2xl font-bold">{unresolvedWrong}</p>
-            <p className="text-xs text-muted-foreground">미해결 오답</p>
+            <Trophy className="w-5 h-5 mx-auto mb-1 text-amber-500" />
+            <p className="text-2xl font-bold">{sessions.length}</p>
+            <p className="text-xs text-muted-foreground">공부 횟수</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="notes">
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="notes">📝 노트</TabsTrigger>
-          <TabsTrigger value="quiz">🧩 문제풀이</TabsTrigger>
-          <TabsTrigger value="flashcard">🃏 플래시카드</TabsTrigger>
-          <TabsTrigger value="sessions">📋 세션</TabsTrigger>
-          <TabsTrigger value="wrong">❌ 오답</TabsTrigger>
+      <Tabs defaultValue="sessions">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="sessions">📋 공부 기록</TabsTrigger>
+          <TabsTrigger value="exams">🎯 시험 결과</TabsTrigger>
+          <TabsTrigger value="sources">📎 자료 링크</TabsTrigger>
         </TabsList>
 
-        {/* 노트 */}
-        <TabsContent value="notes" className="mt-4">
-          <div className="flex justify-between items-center mb-3">
-            <p className="text-sm text-muted-foreground">총 {noteCount}개</p>
-            <LinkButton size="sm" href={`/study/subjects/${id}/notes`}>노트 관리</LinkButton>
+        {/* 공부 기록 탭 */}
+        <TabsContent value="sessions" className="mt-4 space-y-3">
+          <div className="flex justify-between items-center">
+            <p className="text-sm text-muted-foreground">총 {sessions.length}회</p>
+            <Button size="sm" onClick={() => setSessionDialog(true)}>
+              <Plus className="w-3.5 h-3.5 mr-1" /> 기록 추가
+            </Button>
           </div>
-          {notes.slice(0, 5).map((note) => (
-            <Link key={note.id} href={`/study/subjects/${id}/notes`}>
-              <div className="p-3 rounded-lg border hover:bg-accent transition-colors mb-2">
-                <p className="font-medium text-sm">{note.title}</p>
-                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{note.content}</p>
-              </div>
-            </Link>
-          ))}
-          {noteCount === 0 && <p className="text-center text-muted-foreground py-8 text-sm">노트가 없습니다.</p>}
-        </TabsContent>
-
-        {/* 문제풀이 */}
-        <TabsContent value="quiz" className="mt-4">
-          <div className="flex justify-between items-center mb-3">
-            <p className="text-sm text-muted-foreground">총 {questionCount}문제</p>
-            <LinkButton size="sm" href={`/study/subjects/${id}/quiz`}>문제 풀기</LinkButton>
-          </div>
-          {questionCount === 0 && <p className="text-center text-muted-foreground py-8 text-sm">문제가 없습니다.</p>}
-        </TabsContent>
-
-        {/* 플래시카드 */}
-        <TabsContent value="flashcard" className="mt-4">
-          <div className="flex justify-between items-center mb-3">
-            <p className="text-sm text-muted-foreground">총 {flashcardCount}장 / {knownCount}장 암기완료</p>
-            <LinkButton size="sm" href={`/study/subjects/${id}/flashcard`}>암기 시작</LinkButton>
-          </div>
-          {flashcardCount > 0 && <Progress value={(knownCount / flashcardCount) * 100} className="h-2 mb-3" />}
-          {flashcardCount === 0 && <p className="text-center text-muted-foreground py-8 text-sm">플래시카드가 없습니다.</p>}
-        </TabsContent>
-
-        {/* 세션 기록 */}
-        <TabsContent value="sessions" className="mt-4">
-          <p className="text-sm text-muted-foreground mb-3">총 {sessions.length}회 풀이</p>
           {sessions.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8 text-sm">아직 풀이 기록이 없습니다.</p>
-          ) : (
-            <div className="space-y-2">
-              {[...sessions].reverse().map((s, i) => {
-                const pct = s.total > 0 ? Math.round((s.score / s.total) * 100) : 0;
-                return (
-                  <div key={s.id} className="flex items-center gap-3 p-3 border rounded-lg">
-                    <span className="text-xs text-muted-foreground w-6 text-right">{sessions.length - i}</span>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-sm">{s.score}/{s.total}점</span>
-                        <Badge variant={pct >= 80 ? "default" : pct >= 60 ? "secondary" : "destructive"} className="text-xs">
-                          {pct}%
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {s.completedAt ? new Date(s.completedAt).toLocaleDateString("ko-KR") : "-"}
-                        {s.durationSeconds && ` · ${Math.floor(s.durationSeconds / 60)}분`}
-                      </p>
-                    </div>
-                    <Progress value={pct} className="w-20 h-1.5" />
-                  </div>
-                );
-              })}
+            <div className="text-center py-12 text-muted-foreground">
+              <Clock className="w-8 h-8 mx-auto mb-2 opacity-30" />
+              <p>아직 공부 기록이 없습니다.</p>
+              <p className="text-xs mt-1">오늘 공부한 내용을 기록해보세요!</p>
             </div>
+          ) : (
+            [...sessions].reverse().map(s => (
+              <div key={s.id} className="flex items-start gap-3 p-3 border rounded-lg">
+                <div className="shrink-0 text-center min-w-[52px]">
+                  <p className="text-xs text-muted-foreground">{s.date.slice(5)}</p>
+                  <p className="font-bold text-sm">{Math.floor(s.durationMinutes / 60) > 0 ? `${Math.floor(s.durationMinutes / 60)}h` : ""}{s.durationMinutes % 60 > 0 ? `${s.durationMinutes % 60}m` : ""}</p>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs">{ACTIVITY_LABELS[s.activityType] ?? s.activityType}</span>
+                    {s.materialName && <span className="text-xs text-muted-foreground truncate">{s.materialName}</span>}
+                  </div>
+                  {s.memo && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{s.memo}</p>}
+                </div>
+                <div className="shrink-0 text-amber-500 text-sm">{"⭐".repeat(s.satisfactionScore)}</div>
+              </div>
+            ))
           )}
         </TabsContent>
 
-        {/* 오답 노트 */}
-        <TabsContent value="wrong" className="mt-4">
-          <div className="flex justify-between items-center mb-3">
-            <p className="text-sm text-muted-foreground">
-              미해결 {unresolvedWrong}개 / 전체 {wrongAnswers.length}개
-            </p>
+        {/* 시험 결과 탭 */}
+        <TabsContent value="exams" className="mt-4 space-y-3">
+          <div className="flex justify-between items-center">
+            <p className="text-sm text-muted-foreground">시험 일정 및 결과</p>
+            <Button size="sm" onClick={() => { setExamForm({ name: subject.name, examDate: subject.examDate?.slice(0,10) ?? "", actualScore: "", targetScore: "", memo: "" }); setExamDialog(true); }}>
+              <Plus className="w-3.5 h-3.5 mr-1" /> 시험 추가
+            </Button>
           </div>
-          {wrongAnswers.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8 text-sm">오답 노트가 없습니다.</p>
-          ) : (
-            <div className="space-y-2">
-              {wrongAnswers.map((w) => (
-                <div key={w.id} className="p-3 border rounded-lg">
-                  <div className="flex items-start gap-2">
-                    {w.isResolved
-                      ? <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 shrink-0" />
-                      : <XCircle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium line-clamp-2">{w.question}</p>
-                      {w.wrongReason && (
-                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
-                          <Clock className="inline w-3 h-3 mr-0.5" />{w.wrongReason}
-                        </p>
-                      )}
-                    </div>
-                    {!w.isResolved && w.nextReviewAt && (
-                      <span className="text-xs text-orange-500 shrink-0">
-                        {new Date(w.nextReviewAt).toLocaleDateString("ko-KR")} 복습
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
+          {exams.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <Trophy className="w-8 h-8 mx-auto mb-2 opacity-30" />
+              <p>시험 기록이 없습니다.</p>
             </div>
+          ) : (
+            exams.map(e => (
+              <div key={e.id} className="p-3 border rounded-lg">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{e.name}</span>
+                  <Badge variant={e.status === "completed" ? "default" : "secondary"} className="text-xs">
+                    {e.status === "completed" ? "완료" : e.status === "passed" ? "합격" : "준비중"}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">{e.examDate}</p>
+                {e.actualScore != null && (
+                  <div className="flex gap-3 mt-2 text-sm">
+                    <span>실제: <strong>{e.actualScore}점</strong></span>
+                    {e.targetScore && <span className="text-muted-foreground">목표: {e.targetScore}점</span>}
+                    {e.passScore && <span className={e.actualScore >= e.passScore ? "text-green-500" : "text-red-500"}>
+                      합격선: {e.passScore}점 {e.actualScore >= e.passScore ? <CheckCircle className="inline w-3.5 h-3.5" /> : "✗"}
+                    </span>}
+                  </div>
+                )}
+                {e.memo && <p className="text-xs text-muted-foreground mt-1">{e.memo}</p>}
+              </div>
+            ))
+          )}
+        </TabsContent>
+
+        {/* 자료 링크 탭 */}
+        <TabsContent value="sources" className="mt-4 space-y-3">
+          <div className="flex justify-between items-center">
+            <p className="text-sm text-muted-foreground">강의, 링크, 메모 자료</p>
+            <Button size="sm" onClick={() => setSourceDialog(true)}>
+              <Plus className="w-3.5 h-3.5 mr-1" /> 자료 추가
+            </Button>
+          </div>
+          {sources.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <Link2 className="w-8 h-8 mx-auto mb-2 opacity-30" />
+              <p>등록된 자료가 없습니다.</p>
+              <p className="text-xs mt-1">강의 링크나 참고 자료를 추가해보세요.</p>
+            </div>
+          ) : (
+            sources.map(s => (
+              <div key={s.id} className="p-3 border rounded-lg">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs bg-muted px-1.5 py-0.5 rounded">{s.type}</span>
+                  <span className="font-medium text-sm">{s.title}</span>
+                </div>
+                {s.content && (
+                  s.content.startsWith("http") ? (
+                    <a href={s.content} target="_blank" rel="noopener noreferrer"
+                      className="text-xs text-blue-500 hover:underline mt-1 block truncate">
+                      <Link2 className="inline w-3 h-3 mr-1" />{s.content}
+                    </a>
+                  ) : (
+                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{s.content}</p>
+                  )
+                )}
+              </div>
+            ))
           )}
         </TabsContent>
       </Tabs>
+
+      {/* 공부 기록 추가 다이얼로그 */}
+      <Dialog open={sessionDialog} onOpenChange={setSessionDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>공부 기록 추가</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <p className="text-xs mb-1 font-medium">날짜</p>
+                <Input type="date" value={sessionForm.date} onChange={e => setSessionForm(f => ({ ...f, date: e.target.value }))} />
+              </div>
+              <div>
+                <p className="text-xs mb-1 font-medium">공부 시간 (분)</p>
+                <Input type="number" value={sessionForm.durationMinutes} min={1}
+                  onChange={e => setSessionForm(f => ({ ...f, durationMinutes: Number(e.target.value) }))} />
+              </div>
+            </div>
+            <div>
+              <p className="text-xs mb-1 font-medium">활동 유형</p>
+              <Select value={sessionForm.activityType} onValueChange={v => setSessionForm(f => ({ ...f, activityType: v as string }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(ACTIVITY_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <p className="text-xs mb-1 font-medium">자료명 (선택)</p>
+              <Input value={sessionForm.materialName} placeholder="예: 1강 - 운영체제 기초"
+                onChange={e => setSessionForm(f => ({ ...f, materialName: e.target.value }))} />
+            </div>
+            <div>
+              <p className="text-xs mb-1 font-medium">메모 (선택)</p>
+              <Textarea value={sessionForm.memo} placeholder="오늘 공부한 내용..."
+                onChange={e => setSessionForm(f => ({ ...f, memo: e.target.value }))} className="h-16 resize-none text-sm" />
+            </div>
+            <div>
+              <p className="text-xs mb-1 font-medium">만족도</p>
+              <div className="flex gap-1">
+                {[1,2,3,4,5].map(n => (
+                  <button key={n} onClick={() => setSessionForm(f => ({ ...f, satisfactionScore: n }))}
+                    className={`text-xl ${n <= sessionForm.satisfactionScore ? "text-amber-400" : "text-muted"}`}>⭐</button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSessionDialog(false)}>취소</Button>
+            <Button onClick={addSession}>저장</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 자료 추가 다이얼로그 */}
+      <Dialog open={sourceDialog} onOpenChange={setSourceDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>자료 추가</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <p className="text-xs mb-1 font-medium">유형</p>
+              <Select value={sourceType} onValueChange={v => v && setSourceType(v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="link">🔗 링크</SelectItem>
+                  <SelectItem value="youtube">▶️ 유튜브</SelectItem>
+                  <SelectItem value="book">📗 교재</SelectItem>
+                  <SelectItem value="note">📝 메모</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <p className="text-xs mb-1 font-medium">제목 *</p>
+              <Input value={sourceTitle} onChange={e => setSourceTitle(e.target.value)} placeholder="예: 정처기 합격 강의 (유데미)" />
+            </div>
+            <div>
+              <p className="text-xs mb-1 font-medium">URL 또는 내용</p>
+              <Input value={sourceContent} onChange={e => setSourceContent(e.target.value)} placeholder="https://..." />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSourceDialog(false)}>취소</Button>
+            <Button onClick={addSource} disabled={!sourceTitle.trim()}>저장</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 시험 추가 다이얼로그 */}
+      <Dialog open={examDialog} onOpenChange={setExamDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>시험 기록 추가</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <p className="text-xs mb-1 font-medium">시험명 *</p>
+              <Input value={examForm.name} onChange={e => setExamForm(f => ({ ...f, name: e.target.value }))} placeholder="예: 정보처리기사 필기" />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <p className="text-xs mb-1 font-medium">시험일 *</p>
+                <Input type="date" value={examForm.examDate} onChange={e => setExamForm(f => ({ ...f, examDate: e.target.value }))} />
+              </div>
+              <div>
+                <p className="text-xs mb-1 font-medium">실제 점수</p>
+                <Input type="number" value={examForm.actualScore} placeholder="미응시 시 빈칸"
+                  onChange={e => setExamForm(f => ({ ...f, actualScore: e.target.value }))} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <p className="text-xs mb-1 font-medium">목표 점수</p>
+                <Input type="number" value={examForm.targetScore} onChange={e => setExamForm(f => ({ ...f, targetScore: e.target.value }))} />
+              </div>
+              <div>
+                <p className="text-xs mb-1 font-medium">메모</p>
+                <Input value={examForm.memo} onChange={e => setExamForm(f => ({ ...f, memo: e.target.value }))} />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExamDialog(false)}>취소</Button>
+            <Button onClick={addExam} disabled={!examForm.name || !examForm.examDate}>저장</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
