@@ -18,19 +18,21 @@ export async function PUT(
   const body = await req.json();
   const { ticker, name, market, sector, quantity, avgPrice, currentPrice, currency, memo } = body;
 
+  // 제공된 필드만 업데이트 (partial update)
+  const data: Record<string, unknown> = {};
+  if (ticker !== undefined) data.ticker = ticker;
+  if (name !== undefined) data.name = name;
+  if (market !== undefined) data.market = market;
+  if (sector !== undefined) data.sector = sector || null;
+  if (quantity !== undefined) data.quantity = Number(quantity);
+  if (avgPrice !== undefined) data.avgPrice = Number(avgPrice);
+  if (currentPrice !== undefined) data.currentPrice = Number(currentPrice);
+  if (currency !== undefined) data.currency = currency;
+  if (memo !== undefined) data.memo = memo || null;
+
   const updated = await prisma.holding.update({
     where: { id },
-    data: {
-      ticker,
-      name,
-      market,
-      sector: sector || null,
-      quantity: Number(quantity),
-      avgPrice: Number(avgPrice),
-      currentPrice: Number(currentPrice),
-      currency,
-      memo: memo || null,
-    },
+    data,
   });
 
   return NextResponse.json(updated);
