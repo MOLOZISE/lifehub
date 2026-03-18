@@ -398,7 +398,7 @@ export default function PortfolioPage() {
                           )}
                         </div>
                       </td>
-                      <td className="px-3 py-2.5 text-right">{h.quantity.toLocaleString()}</td>
+                      <td className="px-3 py-2.5 text-right">{(h.quantity ?? 0).toLocaleString()}</td>
                       <td className="px-3 py-2.5 text-right text-muted-foreground">{formatCurrency(h.avgPrice, h.currency)}</td>
                       <td className="px-3 py-2.5 text-right">{formatCurrency(h.currentPrice, h.currency)}</td>
                       <td className={`px-3 py-2.5 text-right font-medium ${color}`}>
@@ -489,7 +489,7 @@ export default function PortfolioPage() {
                 {fetchingPrice && <span className="ml-auto text-xs text-muted-foreground">가격 조회 중...</span>}
                 {form.currentPrice > 0 && !fetchingPrice && (
                   <span className="ml-auto text-xs font-semibold text-green-600">
-                    {form.currency === "KRW" ? `₩${form.currentPrice.toLocaleString()}` : `$${form.currentPrice.toLocaleString()}`}
+                    {form.currency === "KRW" ? `₩${(form.currentPrice ?? 0).toLocaleString()}` : `$${(form.currentPrice ?? 0).toLocaleString()}`}
                   </span>
                 )}
               </div>
