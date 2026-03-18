@@ -113,7 +113,7 @@ export default function RestaurantPage() {
   const [flyToOnce, setFlyToOnce] = useState<[number, number] | null>(null);
 
   // Resizable map/list split
-  const [mapHeightPct, setMapHeightPct] = useState(50);
+  const [mapHeightPct, setMapHeightPct] = useState(40);
   const dragState = useRef<{ startY: number; startH: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -364,7 +364,7 @@ export default function RestaurantPage() {
   }, [selectedKakaoId, selectedId, flyToOnce]);
 
   return (
-    <div ref={containerRef} className="flex flex-col -mx-4 md:-mx-6 -mt-4 md:-mt-6 -mb-20 md:-mb-6" style={{ height: "calc(100vh - 3.5rem)" }}>
+    <div ref={containerRef} className="flex flex-col -mx-4 md:-mx-6 -mt-4 md:-mt-6 -mb-20 md:-mb-6" style={{ height: "calc(100dvh - 3.5rem)" }}>
 
       {/* ── 지도 영역 ── */}
       <div className="relative min-h-0" style={{ height: `${mapHeightPct}%` }}>
@@ -492,7 +492,7 @@ export default function RestaurantPage() {
             </div>
 
             {/* 검색 결과 리스트 */}
-            <div className="flex-1 overflow-y-auto divide-y">
+            <div className="flex-1 overflow-y-auto divide-y pb-16 md:pb-0">
               {kakaoResults.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground text-xs gap-2 pb-4">
                   <p className="text-3xl">🔍</p>
@@ -573,7 +573,7 @@ export default function RestaurantPage() {
             </div>
 
             {/* 내 맛집 리스트 (카카오 결과와 동일한 스타일) */}
-            <div ref={listRef} className="flex-1 overflow-y-auto divide-y">
+            <div ref={listRef} className="flex-1 overflow-y-auto divide-y pb-16 md:pb-0">
               {loading ? (
                 <div className="flex items-center justify-center h-full text-muted-foreground text-xs gap-2">
                   <Loader2 className="w-4 h-4 animate-spin" /> 불러오는 중...

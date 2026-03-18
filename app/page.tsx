@@ -15,7 +15,7 @@ interface StudySession {
   date: string;
   durationMinutes: number;
   activityType: string;
-  subject?: { name: string; emoji: string } | null;
+  subject?: { id: string; name: string; emoji: string } | null;
 }
 
 interface Subject {
@@ -97,13 +97,30 @@ function calculateStreak(sessions: { date: string }[]): number {
   return streak;
 }
 
-function getLast14Days(): string[] {
-  const days: string[] = [];
-  for (let i = 13; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    days.push(d.toISOString().slice(0, 10));
+const DOW_KO = ["월", "화", "수", "목", "금", "토", "일"];
+
+function getThisWeekDays(): string[] {
+  const monday = getThisWeekMonday();
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday);
+    d.setDate(d.getDate() + i);
+    return d.toISOString().slice(0, 10);
+  });
+}
+
+function buildMonthCalendar(yearMonth: string): (string | null)[] {
+  const [y, m] = yearMonth.split("-").map(Number);
+  const firstDay = new Date(y, m - 1, 1);
+  const lastDay = new Date(y, m, 0);
+  // 월요일 시작
+  let startDow = firstDay.getDay(); // 0=일
+  startDow = startDow === 0 ? 6 : startDow - 1; // 월=0
+  const days: (string | null)[] = [];
+  for (let i = 0; i < startDow; i++) days.push(null);
+  for (let d = 1; d <= lastDay.getDate(); d++) {
+    days.push(`${yearMonth}-${String(d).padStart(2, "0")}`);
   }
+  while (days.length % 7 !== 0) days.push(null);
   return days;
 }
 
@@ -139,6 +156,11 @@ export default function DashboardPage() {
   const [editingGoal, setEditingGoal] = useState(false);
   const [goalInput, setGoalInput] = useState("");
   const goalInputRef = useRef<HTMLInputElement>(null);
+  const [calTab, setCalTab] = useState<"week" | "month">("week");
+  const [calMonth, setCalMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  });
   const today = todayString();
 
   useEffect(() => {
@@ -148,7 +170,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     Promise.allSettled([
-      fetch("/api/study/sessions?limit=60").then(r => r.ok ? r.json() : null),
+      fetch("/api/study/sessions?limit=120").then(r => r.ok ? r.json() : null),
       fetch("/api/study/subjects").then(r => r.ok ? r.json() : null),
       fetch("/api/portfolio/holdings").then(r => r.ok ? r.json() : null),
       fetch("/api/study/exams").then(r => r.ok ? r.json() : null),
@@ -179,12 +201,34 @@ export default function DashboardPage() {
     .filter(s => s.date && new Date(s.date) >= weekMonday)
     .reduce((sum, s) => sum + s.durationMinutes, 0);
   const weeklyGoalPct = Math.min(100, Math.round((weeklyMinutes / weeklyGoal) * 100));
-  const last14 = getLast14Days();
+
   const sessionDateMap = sessions.reduce<Record<string, number>>((acc, s) => {
     const d = s.date?.slice(0, 10);
     if (d) acc[d] = (acc[d] ?? 0) + s.durationMinutes;
     return acc;
   }, {});
+
+  // subjects fallback: sessions에 포함된 subject 정보로 보완
+  const effectiveSubjects: Subject[] = subjects.length > 0 ? subjects : Array.from(
+    sessions.reduce<Map<string, Subject>>((map, s) => {
+      if (s.subject && !map.has(s.subject.id)) {
+        map.set(s.subject.id, { id: s.subject.id, name: s.subject.name, emoji: s.subject.emoji ?? "", color: "blue" });
+      }
+      return map;
+    }, new Map()).values()
+  );
+
+  // 과목별 이번 주 누적 시간
+  const weekStart = weekMonday.toISOString().slice(0, 10);
+  const subjectWeekMinutes: Record<string, number> = {};
+  for (const s of sessions) {
+    if (s.subject && s.date >= weekStart) {
+      subjectWeekMinutes[s.subject.id] = (subjectWeekMinutes[s.subject.id] ?? 0) + s.durationMinutes;
+    }
+  }
+
+  const thisWeekDays = getThisWeekDays();
+  const monthCalDays = buildMonthCalendar(calMonth);
 
   const totalUSD = holdings.reduce((s, h) => s + toUSD(h), 0);
   const totalCost = holdings.reduce((s, h) => s + costUSD(h), 0);
@@ -265,94 +309,137 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Study heatmap + streak */}
+      {/* 학습 캘린더 */}
       <Card>
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
               <Target className="w-4 h-4 text-primary" />
-              최근 14일 학습 현황
+              학습 현황
               {streak > 0 && (
                 <Badge variant="secondary" className="gap-1 text-orange-600 bg-orange-100 dark:bg-orange-950">
                   <Flame className="w-3 h-3" />{streak}일 연속
                 </Badge>
               )}
             </CardTitle>
-            <Link href="/study/subjects" className="text-xs flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
-              기록 추가<ArrowRight className="w-3 h-3" />
-            </Link>
+            <div className="flex items-center gap-2">
+              {/* 탭 */}
+              <div className="flex rounded-md border overflow-hidden text-xs">
+                <button onClick={() => setCalTab("week")} className={`px-2.5 py-1 transition-colors ${calTab === "week" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"}`}>주간</button>
+                <button onClick={() => setCalTab("month")} className={`px-2.5 py-1 transition-colors ${calTab === "month" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"}`}>월간</button>
+              </div>
+              <Link href="/study/sessions" className="text-xs flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
+                기록 추가<ArrowRight className="w-3 h-3" />
+              </Link>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-1.5 flex-wrap">
-            {last14.map(day => {
-              const mins = sessionDateMap[day] ?? 0;
-              const isToday = day === today;
-              return (
-                <div key={day} className="flex flex-col items-center gap-1">
-                  <div
-                    className={`w-8 h-8 rounded-md ${getHeatmapColor(mins)} ${isToday ? "ring-2 ring-primary" : ""} transition-colors`}
-                    title={`${day}: ${mins}분`}
-                  />
-                  <span className="text-[9px] text-muted-foreground">{day.slice(8)}</span>
-                </div>
-              );
-            })}
-          </div>
-          <div className="flex items-center gap-3 mt-3 text-[10px] text-muted-foreground">
-            <span>적음</span>
-            <div className="flex gap-1">
-              {["bg-muted", "bg-green-200 dark:bg-green-900", "bg-green-400 dark:bg-green-700", "bg-green-600 dark:bg-green-500", "bg-green-800 dark:bg-green-300"].map((cls, i) => (
-                <div key={i} className={`w-3 h-3 rounded-sm ${cls}`} />
-              ))}
+          {calTab === "week" ? (
+            /* ── 주간 뷰 ── */
+            <div>
+              <div className="grid grid-cols-7 gap-1">
+                {DOW_KO.map(d => (
+                  <div key={d} className="text-center text-[10px] text-muted-foreground font-medium pb-1">{d}</div>
+                ))}
+                {thisWeekDays.map((day, i) => {
+                  const mins = sessionDateMap[day] ?? 0;
+                  const isToday = day === today;
+                  const h = mins > 0 ? Math.min(100, Math.round((mins / 180) * 100)) : 0;
+                  return (
+                    <div key={day} className={`flex flex-col items-center gap-1 p-1 rounded-lg ${isToday ? "bg-primary/10 ring-1 ring-primary" : ""}`}>
+                      <span className={`text-[10px] font-medium ${isToday ? "text-primary" : "text-muted-foreground"}`}>{day.slice(8)}</span>
+                      <div className={`w-8 h-8 rounded-md flex items-end justify-center overflow-hidden ${mins === 0 ? "bg-muted" : ""}`}
+                        title={`${mins}분`}>
+                        {mins > 0 && (
+                          <div className="w-full bg-green-500 rounded-sm transition-all" style={{ height: `${Math.max(20, h)}%` }} />
+                        )}
+                      </div>
+                      <span className={`text-[9px] ${mins > 0 ? "text-green-600 dark:text-green-400 font-medium" : "text-muted-foreground"}`}>
+                        {mins > 0 ? (mins >= 60 ? `${Math.floor(mins/60)}h${mins%60>0?`${mins%60}m`:""}` : `${mins}m`) : "-"}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-            <span>많음</span>
-          </div>
+          ) : (
+            /* ── 월간 뷰 ── */
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <button onClick={() => {
+                  const [y, m] = calMonth.split("-").map(Number);
+                  const d = new Date(y, m - 2, 1);
+                  setCalMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+                }} className="text-muted-foreground hover:text-foreground p-1">‹</button>
+                <span className="text-sm font-medium">{calMonth.replace("-", "년 ")}월</span>
+                <button onClick={() => {
+                  const [y, m] = calMonth.split("-").map(Number);
+                  const d = new Date(y, m, 1);
+                  setCalMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+                }} className="text-muted-foreground hover:text-foreground p-1">›</button>
+              </div>
+              <div className="grid grid-cols-7 gap-0.5">
+                {DOW_KO.map(d => (
+                  <div key={d} className="text-center text-[9px] text-muted-foreground font-medium pb-1">{d}</div>
+                ))}
+                {monthCalDays.map((day, i) => {
+                  if (!day) return <div key={`empty-${i}`} />;
+                  const mins = sessionDateMap[day] ?? 0;
+                  const isToday = day === today;
+                  return (
+                    <div key={day} title={mins > 0 ? `${mins}분` : undefined}
+                      className={`aspect-square flex flex-col items-center justify-center rounded-md text-[10px] transition-colors
+                        ${isToday ? "ring-1 ring-primary" : ""}
+                        ${getHeatmapColor(mins)}`}>
+                      <span className={`font-medium ${isToday ? "text-primary" : mins > 0 ? "text-foreground" : "text-muted-foreground"}`}>
+                        {day.slice(8).replace(/^0/, "")}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground">
+                <span>적음</span>
+                <div className="flex gap-0.5">
+                  {["bg-muted","bg-green-200 dark:bg-green-900","bg-green-400 dark:bg-green-700","bg-green-600 dark:bg-green-500","bg-green-800 dark:bg-green-300"].map((cls, i) => (
+                    <div key={i} className={`w-3 h-3 rounded-sm ${cls}`} />
+                  ))}
+                </div>
+                <span>많음</span>
+              </div>
+            </div>
+          )}
 
-          {/* 이번 주 통계 */}
+          {/* 목표 진행바 */}
           <div className="mt-4 pt-3 border-t flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span>이번 주 <span className="font-semibold text-foreground">{Math.floor(weeklyMinutes / 60)}h {weeklyMinutes % 60}m</span></span>
               <span>오늘 <span className="font-semibold text-foreground">{todayMinutes}분</span></span>
             </div>
             <div className="flex items-center gap-2">
               {editingGoal ? (
                 <div className="flex items-center gap-1">
-                  <input
-                    ref={goalInputRef}
-                    type="number"
-                    value={goalInput}
+                  <input ref={goalInputRef} type="number" value={goalInput}
                     onChange={e => setGoalInput(e.target.value)}
                     className="w-16 text-xs border rounded px-1.5 py-0.5 bg-background text-center"
                     onKeyDown={e => {
-                      if (e.key === "Enter") {
-                        const v = Math.max(1, Number(goalInput));
-                        setWeeklyGoal(v);
-                        localStorage.setItem("weeklyGoalMinutes", String(v));
-                        setEditingGoal(false);
-                      }
+                      if (e.key === "Enter") { const v = Math.max(1, Number(goalInput)); setWeeklyGoal(v); localStorage.setItem("weeklyGoalMinutes", String(v)); setEditingGoal(false); }
                       if (e.key === "Escape") setEditingGoal(false);
                     }}
                   />
                   <span className="text-[10px] text-muted-foreground">분</span>
-                  <button onClick={() => {
-                    const v = Math.max(1, Number(goalInput));
-                    setWeeklyGoal(v);
-                    localStorage.setItem("weeklyGoalMinutes", String(v));
-                    setEditingGoal(false);
-                  }} className="text-green-500 hover:text-green-600">
+                  <button onClick={() => { const v = Math.max(1, Number(goalInput)); setWeeklyGoal(v); localStorage.setItem("weeklyGoalMinutes", String(v)); setEditingGoal(false); }} className="text-green-500 hover:text-green-600">
                     <Check className="w-3.5 h-3.5" />
                   </button>
                 </div>
               ) : (
-                <button
-                  onClick={() => { setGoalInput(String(weeklyGoal)); setEditingGoal(true); setTimeout(() => goalInputRef.current?.select(), 50); }}
-                  className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
-                >
+                <button onClick={() => { setGoalInput(String(weeklyGoal)); setEditingGoal(true); setTimeout(() => goalInputRef.current?.select(), 50); }}
+                  className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors">
                   목표 {Math.floor(weeklyGoal / 60)}h<Pencil className="w-2.5 h-2.5" />
                 </button>
               )}
-              <div className="flex items-center gap-1.5 w-28">
+              <div className="flex items-center gap-1.5 w-24">
                 <div className="flex-1 bg-muted rounded-full h-1.5 overflow-hidden">
                   <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${weeklyGoalPct}%` }} />
                 </div>
@@ -379,25 +466,32 @@ export default function DashboardPage() {
           <CardContent className="space-y-2">
             {loading ? (
               <p className="text-sm text-muted-foreground text-center py-4">로딩 중...</p>
-            ) : subjects.length === 0 ? (
+            ) : effectiveSubjects.length === 0 ? (
               <div className="text-center py-6 text-muted-foreground">
                 <p className="text-2xl mb-1">📚</p>
                 <p className="text-sm">과목을 추가해보세요</p>
                 <Link href="/study/subjects" className="text-xs text-primary mt-1 inline-block">과목 추가 →</Link>
               </div>
             ) : (
-              subjects.slice(0, 4).map(s => (
-                <Link key={s.id} href="/study/subjects" className="block">
-                  <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent transition-colors">
-                    <span className="text-xl">{s.emoji}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{s.name}</p>
+              effectiveSubjects.slice(0, 5).map(s => {
+                const wMin = subjectWeekMinutes[s.id] ?? 0;
+                return (
+                  <Link key={s.id} href="/study/subjects" className="block">
+                    <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent transition-colors">
+                      <span className="text-lg">{s.emoji}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{s.name}</p>
+                      </div>
+                      {wMin > 0 && (
+                        <span className="text-xs text-muted-foreground shrink-0">
+                          이번 주 {wMin >= 60 ? `${Math.floor(wMin/60)}h${wMin%60>0?` ${wMin%60}m`:""}` : `${wMin}m`}
+                        </span>
+                      )}
                     </div>
-                  </div>
-                </Link>
-              ))
+                  </Link>
+                );
+              })
             )}
-
             {todaySessions.length > 0 && (
               <div className="rounded-lg bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900 p-3">
                 <p className="text-xs font-medium text-indigo-700 dark:text-indigo-400 mb-1.5">오늘 기록</p>
