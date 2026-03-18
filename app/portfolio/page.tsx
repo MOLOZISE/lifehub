@@ -49,16 +49,19 @@ const RISK_COLORS = {
 const KRW_TO_USD = 1350;
 
 function toUSD(h: Holding): number {
-  const val = h.quantity * h.currentPrice;
+  const val = (h.quantity ?? 0) * (h.currentPrice ?? 0);
   return h.currency === "KRW" ? val / KRW_TO_USD : val;
 }
 
 function profitRate(h: Holding): number {
-  return ((h.currentPrice - h.avgPrice) / h.avgPrice) * 100;
+  const cur = h.currentPrice ?? 0;
+  const avg = h.avgPrice ?? 0;
+  if (avg === 0) return 0;
+  return ((cur - avg) / avg) * 100;
 }
 
 function profitAmount(h: Holding): number {
-  return (h.currentPrice - h.avgPrice) * h.quantity;
+  return ((h.currentPrice ?? 0) - (h.avgPrice ?? 0)) * (h.quantity ?? 0);
 }
 
 const emptyHolding = {

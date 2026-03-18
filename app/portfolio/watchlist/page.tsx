@@ -322,8 +322,9 @@ function TickerCard({ item, onEdit, onDelete }: {
   onDelete: () => void;
 }) {
   const hasTarget = item.targetPrice != null && item.targetPrice > 0;
-  const upside = hasTarget && item.currentPrice > 0
-    ? ((item.targetPrice! - item.currentPrice) / item.currentPrice) * 100
+  const curPrice = item.currentPrice ?? 0;
+  const upside = hasTarget && curPrice > 0
+    ? ((item.targetPrice! - curPrice) / curPrice) * 100
     : null;
 
   return (
@@ -338,12 +339,12 @@ function TickerCard({ item, onEdit, onDelete }: {
           )}
         </div>
         <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
-          {item.currentPrice > 0 && (
-            <span>{item.currentPrice.toLocaleString()} {item.currency === "KRW" ? "원" : "USD"}</span>
+          {(item.currentPrice ?? 0) > 0 && (
+            <span>{(item.currentPrice ?? 0).toLocaleString()} {item.currency === "KRW" ? "원" : "USD"}</span>
           )}
           {hasTarget && upside !== null && (
             <span className={upside >= 0 ? "text-green-600 font-medium" : "text-red-500 font-medium"}>
-              목표 {item.targetPrice!.toLocaleString()} ({upside >= 0 ? "+" : ""}{upside.toFixed(1)}%)
+              목표 {(item.targetPrice ?? 0).toLocaleString()} ({upside >= 0 ? "+" : ""}{upside.toFixed(1)}%)
             </span>
           )}
           {item.memo && <span className="truncate max-w-40">{item.memo}</span>}

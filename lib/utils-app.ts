@@ -31,11 +31,12 @@ export function getProfitColor(value: number): string {
   return "text-muted-foreground";
 }
 
-export function formatCurrency(value: number, currency: "KRW" | "USD"): string {
+export function formatCurrency(value: number | null | undefined, currency: "KRW" | "USD"): string {
+  const v = value ?? 0;
   if (currency === "KRW") {
-    return value.toLocaleString("ko-KR") + "원";
+    return v.toLocaleString("ko-KR") + "원";
   }
-  return "$" + value.toLocaleString("en-US", { minimumFractionDigits: 2 });
+  return "$" + v.toLocaleString("en-US", { minimumFractionDigits: 2 });
 }
 
 export function formatDistanceToNow(isoOrDate: string | Date): string {
