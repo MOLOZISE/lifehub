@@ -49,8 +49,15 @@ interface Holding {
 interface ChartMeta { bars: OHLCVBar[]; currency: string; regularMarketPrice?: number; }
 interface NewsResult { analysis: string; sources: string[]; }
 
-type Period = "1W" | "1M" | "3M" | "1Y";
-const PERIOD_RANGE: Record<Period, string> = { "1W": "5d", "1M": "1mo", "3M": "3mo", "1Y": "1y" };
+type Period = "5D" | "1M" | "3M" | "6M" | "1Y" | "2Y";
+const PERIOD_CONFIG: Record<Period, { range: string; interval: string }> = {
+  "5D":  { range: "5d",  interval: "30m" },
+  "1M":  { range: "1mo", interval: "1d" },
+  "3M":  { range: "3mo", interval: "1d" },
+  "6M":  { range: "6mo", interval: "1d" },
+  "1Y":  { range: "1y",  interval: "1wk" },
+  "2Y":  { range: "2y",  interval: "1wk" },
+};
 
 // ── 캔들 차트 ────────────────────────────────────────────
 function calcMA(data: OHLCVBar[], period: number): (number | null)[] {
@@ -145,6 +152,7 @@ export default function StockDetailPage() {
   const [chartMeta, setChartMeta] = useState<ChartMeta | null>(null);
   const [chartLoading, setChartLoading] = useState(false);
   const [period, setPeriod] = useState<Period>("3M");
+  const [maVisible, setMaVisible] = useState({ ma5: true, ma20: true, ma60: false });
   const [news, setNews] = useState<NewsResult | null>(null);
   const [newsLoading, setNewsLoading] = useState(false);
   const [holding, setHolding] = useState<Holding | null>(null);
@@ -175,7 +183,8 @@ export default function StockDetailPage() {
   async function loadChart(p: Period) {
     setChartLoading(true);
     try {
-      const res = await fetch(`/api/chart?ticker=${encodeURIComponent(yahooTicker)}&range=${PERIOD_RANGE[p]}&interval=1d`);
+      const cfg = PERIOD_CONFIG[p];
+      const res = await fetch(`/api/chart?ticker=${encodeURIComponent(yahooTicker)}&range=${cfg.range}&interval=${cfg.interval}`);
       if (res.ok) setChartMeta(await res.json());
     } catch { /* ignore */ }
     setChartLoading(false);
@@ -236,11 +245,13 @@ export default function StockDetailPage() {
     const bars = chartMeta.bars;
     const ma5 = calcMA(bars, 5);
     const ma20 = calcMA(bars, 20);
+    const ma60 = calcMA(bars, 60);
     return bars.map((b, i) => ({
       ...b,
       isUp: b.close >= b.open,
       ma5: ma5[i],
       ma20: ma20[i],
+      ma60: ma60[i],
     }));
   }, [chartMeta]);
 
@@ -368,10 +379,9 @@ export default function StockDetailPage() {
         <TabsContent value="chart" className="mt-4">
           <Card>
             <CardHeader className="pb-2 pt-4 px-4">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm">주가 차트</CardTitle>
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <div className="flex gap-1">
-                  {(["1W", "1M", "3M", "1Y"] as Period[]).map(p => (
+                  {(["5D", "1M", "3M", "6M", "1Y", "2Y"] as Period[]).map(p => (
                     <button
                       key={p}
                       onClick={() => onPeriodChange(p)}
@@ -380,6 +390,22 @@ export default function StockDetailPage() {
                       }`}
                     >
                       {p}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-1.5 items-center">
+                  <span className="text-[10px] text-muted-foreground">이평선:</span>
+                  {([
+                    { key: "ma5", label: "5", color: "text-purple-500 border-purple-300" },
+                    { key: "ma20", label: "20", color: "text-yellow-500 border-yellow-300" },
+                    { key: "ma60", label: "60", color: "text-green-500 border-green-300" },
+                  ] as { key: keyof typeof maVisible; label: string; color: string }[]).map(({ key, label, color }) => (
+                    <button
+                      key={key}
+                      onClick={() => setMaVisible(v => ({ ...v, [key]: !v[key] }))}
+                      className={`text-[10px] px-1.5 py-0.5 rounded border font-mono transition-opacity ${color} ${maVisible[key] ? "opacity-100" : "opacity-30"}`}
+                    >
+                      MA{label}
                     </button>
                   ))}
                 </div>
@@ -414,8 +440,9 @@ export default function StockDetailPage() {
                     <Bar dataKey="high" shape={<CandleShape />} isAnimationActive={false}>
                       {chartData.map((d, i) => <Cell key={i} fill={d.isUp ? "#ef4444" : "#3b82f6"} />)}
                     </Bar>
-                    <Line type="monotone" dataKey="ma5" stroke="#a855f7" strokeWidth={1.5} dot={false} connectNulls />
-                    <Line type="monotone" dataKey="ma20" stroke="#eab308" strokeWidth={1.5} dot={false} connectNulls />
+                    {maVisible.ma5 && <Line type="monotone" dataKey="ma5" stroke="#a855f7" strokeWidth={1.5} dot={false} connectNulls />}
+                    {maVisible.ma20 && <Line type="monotone" dataKey="ma20" stroke="#eab308" strokeWidth={1.5} dot={false} connectNulls />}
+                    {maVisible.ma60 && <Line type="monotone" dataKey="ma60" stroke="#22c55e" strokeWidth={1.5} dot={false} connectNulls />}
                   </ComposedChart>
                 </ResponsiveContainer>
               )}
