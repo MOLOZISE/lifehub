@@ -219,6 +219,7 @@ export default function PortfolioPage() {
       });
       if (!res.ok) { toast.error("저장 실패"); return; }
     }
+    toast.success(editing ? "종목이 수정되었습니다" : "종목이 추가되었습니다");
     setDialogOpen(false);
     loadHoldings();
   }
@@ -595,7 +596,7 @@ export default function PortfolioPage() {
                 />
                 {showSugg && suggestions.length > 0 && (
                   <div className="absolute z-50 w-full mt-1 bg-white dark:bg-zinc-900 border rounded-lg shadow-lg max-h-52 overflow-y-auto">
-                    {!searchQ && <p className="px-3 py-1.5 text-xs text-muted-foreground border-b">인기 종목 TOP 50</p>}
+                    {!searchQ && <p className="px-3 py-1.5 text-xs text-muted-foreground border-b">인기 종목</p>}
                     {suggestions.map(s => (
                       <button key={s.ticker} className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted text-left"
                         onMouseDown={() => selectStock(s)}>
