@@ -1,20 +1,17 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft, RefreshCw, Loader2,
   BarChart3, Newspaper, Info, Briefcase, ExternalLink, ChevronUp, ChevronDown,
 } from "lucide-react";
-import {
-  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Cell,
-} from "recharts";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { TradingViewChart } from "@/components/chart/TradingViewChart";
 import type { OHLCVBar } from "@/lib/types";
 
 // ── 타입 ────────────────────────────────────────────────
@@ -152,59 +149,6 @@ const PERIOD_LABELS: Record<Period, string> = {
   "1D": "1일", "1W": "1주", "1M": "1달", "3M": "3달", "6M": "6달", "1Y": "1년",
 };
 
-// ── 캔들 차트 ────────────────────────────────────────────
-function calcMA(data: OHLCVBar[], period: number): (number | null)[] {
-  return data.map((_, i) => {
-    if (i < period - 1) return null;
-    const sum = data.slice(i - period + 1, i + 1).reduce((s, d) => s + d.close, 0);
-    return Math.round((sum / period) * 100) / 100;
-  });
-}
-
-const CandleShape = (props: {
-  x?: number; y?: number; width?: number; height?: number;
-  payload?: OHLCVBar & { isUp: boolean };
-}) => {
-  const { x = 0, y = 0, width = 0, height = 0, payload } = props;
-  if (!payload || height <= 0) return null;
-  const { open, close, high, low, isUp } = payload;
-  const range = high - low;
-  if (!range) return null;
-  const color = isUp ? "#ef4444" : "#3b82f6";
-  const cx = x + width / 2;
-  const bodyTopRatio = (high - Math.max(open, close)) / range;
-  const bodyHeightRatio = Math.abs(close - open) / range;
-  const bodyTopPx = y + height * bodyTopRatio;
-  const bodyHeightPx = Math.max(1, height * bodyHeightRatio);
-  return (
-    <g>
-      <line x1={cx} y1={y} x2={cx} y2={y + height} stroke={color} strokeWidth={1} />
-      <rect x={x + 1} y={bodyTopPx} width={Math.max(1, width - 2)} height={bodyHeightPx} fill={color} />
-    </g>
-  );
-};
-
-const CandleTooltip = ({ active, payload }: { active?: boolean; payload?: { payload: OHLCVBar & { ma5?: number; ma20?: number } }[] }) => {
-  if (!active || !payload?.length) return null;
-  const d = payload[0].payload;
-  const change = d.close - d.open;
-  const isUp = change >= 0;
-  const fmt = (n: number) => n > 1000 ? n.toLocaleString() : n.toFixed(2);
-  return (
-    <div className="bg-background/95 backdrop-blur border rounded-xl p-3 text-xs shadow-xl space-y-1.5 min-w-[140px]">
-      <p className="font-semibold text-[11px] text-muted-foreground">{d.date}</p>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-        <span className="text-muted-foreground">시가</span><span className="font-medium text-right">{fmt(d.open)}</span>
-        <span className="text-muted-foreground">고가</span><span className="font-medium text-right text-red-500">{fmt(d.high)}</span>
-        <span className="text-muted-foreground">저가</span><span className="font-medium text-right text-blue-500">{fmt(d.low)}</span>
-        <span className="text-muted-foreground">종가</span><span className={`font-bold text-right ${isUp ? "text-red-500" : "text-blue-500"}`}>{fmt(d.close)}</span>
-      </div>
-      {d.volume != null && <p className="text-muted-foreground pt-1 border-t">거래량 {d.volume.toLocaleString()}</p>}
-      {d.ma5 != null && <p className="text-purple-400">MA5: {fmt(d.ma5)}</p>}
-      {d.ma20 != null && <p className="text-yellow-400">MA20: {fmt(d.ma20)}</p>}
-    </div>
-  );
-};
 
 function toYahooTicker(ticker: string, market: string) {
   return market === "KR" || /^\d{6}$/.test(ticker) ? `${ticker}.KS` : ticker.toUpperCase();
@@ -255,7 +199,6 @@ export default function StockDetailPage() {
   const [chartMeta, setChartMeta] = useState<ChartMeta | null>(null);
   const [chartLoading, setChartLoading] = useState(false);
   const [period, setPeriod] = useState<Period>("3M");
-  const [maVisible, setMaVisible] = useState({ ma5: true, ma20: true, ma60: false });
   const [news, setNews] = useState<NewsResult | null>(null);
   const [newsLoading, setNewsLoading] = useState(false);
   const [holding, setHolding] = useState<Holding | null>(null);
@@ -350,24 +293,6 @@ export default function StockDetailPage() {
     loadChart(p);
   }
 
-  // 차트 데이터 가공
-  const chartData = useMemo(() => {
-    if (!chartMeta?.bars) return [];
-    const bars = chartMeta.bars;
-    const ma5 = calcMA(bars, 5);
-    const ma20 = calcMA(bars, 20);
-    const ma60 = calcMA(bars, 60);
-    return bars.map((b, i) => ({
-      ...b,
-      isUp: b.close >= b.open,
-      ma5: ma5[i],
-      ma20: ma20[i],
-      ma60: ma60[i],
-    }));
-  }, [chartMeta]);
-
-  // 거래량 최대값 (정규화용)
-  const maxVolume = useMemo(() => Math.max(...chartData.map(d => d.volume ?? 0)), [chartData]);
 
   const displayPrice = livePrice ?? info?.regularMarketPrice;
   const change = info?.regularMarketChange;
@@ -502,34 +427,12 @@ export default function StockDetailPage() {
           {/* 기간 선택 */}
           <div className="flex gap-1 bg-muted/50 rounded-xl p-1">
             {(Object.keys(PERIOD_CONFIG) as Period[]).map(p => (
-              <button
-                key={p}
-                onClick={() => onPeriodChange(p)}
+              <button key={p} onClick={() => onPeriodChange(p)}
                 className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                  period === p
-                    ? "bg-background shadow-sm text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
+                  period === p ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 {PERIOD_LABELS[p]}
-              </button>
-            ))}
-          </div>
-
-          {/* 이평선 토글 */}
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-muted-foreground">이평선</span>
-            {([
-              { key: "ma5", label: "5일", color: "text-purple-500", activeBg: "bg-purple-500/15" },
-              { key: "ma20", label: "20일", color: "text-amber-500", activeBg: "bg-amber-500/15" },
-              { key: "ma60", label: "60일", color: "text-emerald-500", activeBg: "bg-emerald-500/15" },
-            ] as { key: keyof typeof maVisible; label: string; color: string; activeBg: string }[]).map(({ key, label, color, activeBg }) => (
-              <button
-                key={key}
-                onClick={() => setMaVisible(v => ({ ...v, [key]: !v[key] }))}
-                className={`text-[10px] px-2 py-0.5 rounded-full font-medium transition-all ${color} ${maVisible[key] ? activeBg : "opacity-30"}`}
-              >
-                {label}
               </button>
             ))}
           </div>
@@ -538,57 +441,16 @@ export default function StockDetailPage() {
             <div className="flex items-center justify-center h-64 text-muted-foreground gap-2">
               <Loader2 className="w-4 h-4 animate-spin" /> 차트 로딩 중...
             </div>
-          ) : chartData.length === 0 ? (
+          ) : !chartMeta?.bars?.length ? (
             <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">
               차트 데이터가 없습니다.
             </div>
           ) : (
-            <div>
-              {/* 캔들 차트 */}
-              <ResponsiveContainer width="100%" height={260}>
-                <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="0" stroke="transparent" />
-                  <XAxis
-                    dataKey="date"
-                    tick={{ fontSize: 9, fill: "var(--muted-foreground)" }}
-                    tickFormatter={d => d.slice(5)}
-                    interval={Math.floor(chartData.length / 5)}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    domain={["auto", "auto"]}
-                    tick={{ fontSize: 9, fill: "var(--muted-foreground)" }}
-                    tickFormatter={n => n > 10000 ? (n / 1000).toFixed(0) + "K" : n > 1000 ? n.toLocaleString() : String(n)}
-                    width={52}
-                    axisLine={false}
-                    tickLine={false}
-                    orientation="right"
-                  />
-                  <Tooltip content={<CandleTooltip />} cursor={{ stroke: "var(--border)", strokeWidth: 1 }} />
-                  <Bar dataKey="high" shape={<CandleShape />} isAnimationActive={false}>
-                    {chartData.map((d, i) => <Cell key={i} fill={d.isUp ? "#ef4444" : "#3b82f6"} />)}
-                  </Bar>
-                  {maVisible.ma5 && <Line type="monotone" dataKey="ma5" stroke="#a855f7" strokeWidth={1.5} dot={false} connectNulls />}
-                  {maVisible.ma20 && <Line type="monotone" dataKey="ma20" stroke="#f59e0b" strokeWidth={1.5} dot={false} connectNulls />}
-                  {maVisible.ma60 && <Line type="monotone" dataKey="ma60" stroke="#10b981" strokeWidth={1.5} dot={false} connectNulls />}
-                </ComposedChart>
-              </ResponsiveContainer>
-
-              {/* 거래량 차트 */}
-              <ResponsiveContainer width="100%" height={60}>
-                <ComposedChart data={chartData} margin={{ top: 0, right: 4, left: -20, bottom: 0 }}>
-                  <XAxis dataKey="date" hide />
-                  <YAxis domain={[0, maxVolume]} hide width={52} />
-                  <Bar dataKey="volume" isAnimationActive={false} radius={[1,1,0,0]}>
-                    {chartData.map((d, i) => (
-                      <Cell key={i} fill={d.isUp ? "rgb(239 68 68 / 0.4)" : "rgb(59 130 246 / 0.4)"} />
-                    ))}
-                  </Bar>
-                </ComposedChart>
-              </ResponsiveContainer>
-              <p className="text-[10px] text-muted-foreground text-center -mt-1">거래량</p>
-            </div>
+            <TradingViewChart
+              bars={chartMeta.bars}
+              height={360}
+              isKRW={currency === "KRW"}
+            />
           )}
         </TabsContent>
 

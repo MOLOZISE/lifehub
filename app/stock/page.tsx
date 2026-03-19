@@ -1,10 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
-import {
-  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Cell,
-} from "recharts";
+import { TradingViewChart } from "@/components/chart/TradingViewChart";
 import {
   Search, Loader2, RefreshCw, Star, StarOff,
   TrendingUp, TrendingDown, Minus, Target, Calendar, ChevronDown, ChevronUp, Clock,
@@ -37,6 +34,14 @@ interface WatchlistItem {
   market: "KR" | "US";
   currency: string;
   currentPrice: number;
+}
+
+interface WatchlistGroup {
+  id: string;
+  name: string;
+  emoji: string;
+  color: string;
+  items: WatchlistItem[];
 }
 
 // ─── Popular stocks ─────────────────────────────────────────────────────────────
@@ -74,66 +79,7 @@ function toYahooTicker(ticker: string, market?: "KR" | "US"): string {
   return ticker.toUpperCase();
 }
 
-function calcMA(data: OHLCVBar[], period: number): (number | null)[] {
-  return data.map((_, i) => {
-    if (i < period - 1) return null;
-    const sum = data.slice(i - period + 1, i + 1).reduce((s, d) => s + d.close, 0);
-    return Math.round((sum / period) * 100) / 100;
-  });
-}
-
 const PERIOD_RANGE: Record<Period, string> = { "1W": "5d", "1M": "1mo", "3M": "3mo", "1Y": "1y" };
-
-// ─── Chart helpers ──────────────────────────────────────────────────────────────
-
-const CandleShape = (props: {
-  x?: number; y?: number; width?: number; height?: number;
-  payload?: OHLCVBar & { isUp: boolean };
-}) => {
-  const { x = 0, y = 0, width = 0, height = 0, payload } = props;
-  if (!payload || height <= 0) return null;
-  const { open, close, high, low, isUp } = payload;
-  const range = high - low;
-  if (!range) return null;
-  const color = isUp ? "#ef4444" : "#3b82f6";
-  const cx = x + width / 2;
-  const bodyTopRatio = (high - Math.max(open, close)) / range;
-  const bodyHeightRatio = Math.abs(close - open) / range;
-  const bodyTopPx = y + height * bodyTopRatio;
-  const bodyHeightPx = Math.max(1, height * bodyHeightRatio);
-  return (
-    <g>
-      <line x1={cx} y1={y} x2={cx} y2={y + height} stroke={color} strokeWidth={1} />
-      <rect x={x + 1} y={bodyTopPx} width={Math.max(1, width - 2)} height={bodyHeightPx} fill={color} />
-    </g>
-  );
-};
-
-const CandleTooltip = ({ active, payload }: {
-  active?: boolean;
-  payload?: { payload: OHLCVBar & { ma5?: number; ma20?: number; ma60?: number } }[];
-}) => {
-  if (!active || !payload?.length) return null;
-  const d = payload[0].payload;
-  const change = d.close - d.open;
-  const color = change >= 0 ? "text-red-500" : "text-blue-500";
-  const fmt = (n: number) => n > 1000 ? n.toLocaleString() : n.toFixed(2);
-  return (
-    <div className="bg-background border rounded-lg p-3 text-xs shadow-lg space-y-1">
-      <p className="font-semibold">{d.date}</p>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
-        <span className="text-muted-foreground">시가</span><span>{fmt(d.open)}</span>
-        <span className="text-muted-foreground">고가</span><span className="text-red-500">{fmt(d.high)}</span>
-        <span className="text-muted-foreground">저가</span><span className="text-blue-500">{fmt(d.low)}</span>
-        <span className="text-muted-foreground">종가</span><span className={color}>{fmt(d.close)}</span>
-        <span className="text-muted-foreground">거래량</span><span>{d.volume?.toLocaleString()}</span>
-      </div>
-      {d.ma5 != null && <p className="text-purple-400">MA5: {fmt(d.ma5)}</p>}
-      {d.ma20 != null && <p className="text-yellow-400">MA20: {fmt(d.ma20)}</p>}
-      {d.ma60 != null && <p className="text-green-400">MA60: {fmt(d.ma60)}</p>}
-    </div>
-  );
-};
 
 // ─── AI News helpers ────────────────────────────────────────────────────────────
 
@@ -344,6 +290,60 @@ function StockCard({
   );
 }
 
+// ─── Watchlist Item Card (관심 종목 탭 전용, 삭제 버튼) ────────────────────────
+
+function WatchlistItemCard({
+  item, price, onChart, onAnalyze, onDelete,
+}: {
+  item: WatchlistItem;
+  price: StockPrice | null;
+  onChart: () => void;
+  onAnalyze: () => void;
+  onDelete: () => void;
+}) {
+  const up = price ? price.change >= 0 : null;
+  const fmtPrice = (p: StockPrice) =>
+    p.currency === "KRW"
+      ? "₩" + Math.round(p.price).toLocaleString("ko-KR")
+      : "$" + p.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtChange = (p: StockPrice) =>
+    p.currency === "KRW"
+      ? (p.change >= 0 ? "+" : "") + Math.round(p.change).toLocaleString("ko-KR")
+      : (p.change >= 0 ? "+" : "") + p.change.toFixed(2);
+
+  return (
+    <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-muted/30 hover:bg-muted/60 transition-colors group">
+      <button className="flex-1 min-w-0 text-left" onClick={onChart}>
+        <div className="flex items-center gap-1.5 mb-0.5">
+          <span className="text-[11px] text-muted-foreground">{item.market === "KR" ? "🇰🇷" : "🇺🇸"}</span>
+          <span className="font-semibold text-sm truncate">{item.name}</span>
+          <span className="text-[10px] text-muted-foreground font-mono shrink-0 hidden sm:inline">{item.ticker}</span>
+        </div>
+        {price ? (
+          <div className="flex items-baseline gap-2">
+            <span className="text-base font-bold tabular-nums">{fmtPrice(price)}</span>
+            <span className={`text-xs font-medium tabular-nums ${up ? "text-red-500" : "text-blue-500"}`}>
+              {fmtChange(price)} ({up ? "+" : ""}{price.changePercent.toFixed(2)}%)
+            </span>
+          </div>
+        ) : (
+          <span className="text-xs text-muted-foreground">조회 중...</span>
+        )}
+      </button>
+      <div className="flex items-center gap-0.5 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
+        <button onClick={onAnalyze}
+          className="px-2 py-1 rounded-lg hover:bg-background text-muted-foreground hover:text-foreground transition-colors text-[10px] font-semibold">
+          AI
+        </button>
+        <button onClick={onDelete}
+          className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive transition-colors">
+          <StarOff className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ──────────────────────────────────────────────────────────────────
 
 export default function StockPage() {
@@ -355,7 +355,13 @@ export default function StockPage() {
   const [priceLoading, setPriceLoading] = useState(false);
 
   // Watchlist
-  const [watchlistItems, setWatchlistItems] = useState<WatchlistItem[]>([]);
+  const [watchlistGroups, setWatchlistGroups] = useState<WatchlistGroup[]>([]);
+  const [watchlistUngrouped, setWatchlistUngrouped] = useState<WatchlistItem[]>([]);
+  // flat list for isInWatchlist checks
+  const watchlistItems = useMemo<WatchlistItem[]>(() =>
+    [...watchlistGroups.flatMap(g => g.items), ...watchlistUngrouped],
+    [watchlistGroups, watchlistUngrouped]
+  );
 
   // Chart state
   const [chartInputTicker, setChartInputTicker] = useState("");
@@ -383,6 +389,11 @@ export default function StockPage() {
   const [watchlistSearchQ, setWatchlistSearchQ] = useState("");
   const [watchlistSuggestions, setWatchlistSuggestions] = useState<{ ticker: string; name: string; market: "KR" | "US" }[]>([]);
   const [showWatchlistSugg, setShowWatchlistSugg] = useState(false);
+  const [addGroupName, setAddGroupName] = useState("");
+  const [showAddGroup, setShowAddGroup] = useState(false);
+  const [addGroupLoading, setAddGroupLoading] = useState(false);
+  // which group to add next stock into (null = ungrouped)
+  const [targetGroupId, setTargetGroupId] = useState<string | null>(null);
 
   // Holdings for chart/AI shortcuts
   const [holdings, setHoldings] = useState<{ id: string; name: string; ticker: string; market: "KR" | "US"; currency: string }[]>([]);
@@ -400,11 +411,8 @@ export default function StockPage() {
     const res = await fetch("/api/portfolio/watchlist");
     if (!res.ok) return;
     const data = await res.json();
-    const items: WatchlistItem[] = [
-      ...(data.groups ?? []).flatMap((g: { items?: WatchlistItem[] }) => g.items ?? []),
-      ...(data.ungroupedItems ?? []),
-    ];
-    setWatchlistItems(items);
+    setWatchlistGroups(data.groups ?? []);
+    setWatchlistUngrouped(data.ungroupedItems ?? []);
   }
 
   async function loadPopularPrices() {
@@ -433,18 +441,21 @@ export default function StockPage() {
     return watchlistItems.some(w => w.ticker === ticker);
   }
 
-  async function toggleWatchlist(ticker: string, name: string, market: "KR" | "US") {
+  async function toggleWatchlist(ticker: string, name: string, market: "KR" | "US", groupId?: string | null) {
     const existing = watchlistItems.find(w => w.ticker === ticker);
     if (existing) {
       await fetch(`/api/portfolio/watchlist/items/${existing.id}`, { method: "DELETE" });
-      setWatchlistItems(prev => prev.filter(w => w.id !== existing.id));
+      await loadWatchlist();
       toast.success(`${name} 관심 종목 제거됨`);
     } else {
       const res = await fetch("/api/portfolio/watchlist/items", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ticker, name, market, currency: market === "KR" ? "KRW" : "USD", currentPrice: 0,
+          ticker, name, market,
+          currency: market === "KR" ? "KRW" : "USD",
+          currentPrice: 0,
+          groupId: groupId ?? null,
         }),
       });
       if (res.ok) {
@@ -452,6 +463,36 @@ export default function StockPage() {
         toast.success(`${name} 관심 종목 추가됨`);
       }
     }
+  }
+
+  async function createGroup() {
+    if (!addGroupName.trim()) return;
+    setAddGroupLoading(true);
+    const res = await fetch("/api/portfolio/watchlist/groups", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: addGroupName.trim(), emoji: "📌" }),
+    });
+    if (res.ok) {
+      await loadWatchlist();
+      setAddGroupName("");
+      setShowAddGroup(false);
+      toast.success("그룹 생성됨");
+    }
+    setAddGroupLoading(false);
+  }
+
+  async function deleteGroup(groupId: string, groupName: string) {
+    if (!confirm(`"${groupName}" 그룹과 하위 종목을 모두 삭제할까요?`)) return;
+    await fetch(`/api/portfolio/watchlist/groups/${groupId}`, { method: "DELETE" });
+    await loadWatchlist();
+    toast.success("그룹 삭제됨");
+  }
+
+  async function deleteWatchlistItem(itemId: string, name: string) {
+    await fetch(`/api/portfolio/watchlist/items/${itemId}`, { method: "DELETE" });
+    await loadWatchlist();
+    toast.success(`${name} 제거됨`);
   }
 
   // ── Chart ──────────────────────────────────────────────────────────────────────
@@ -490,16 +531,6 @@ export default function StockPage() {
   }
 
   const bars = chartMeta?.bars ?? [];
-  const ma5 = useMemo(() => calcMA(bars, 5), [bars]);
-  const ma20 = useMemo(() => calcMA(bars, 20), [bars]);
-  const ma60 = useMemo(() => calcMA(bars, 60), [bars]);
-  const chartData = useMemo(() => bars.map((bar, i) => ({
-    ...bar, ma5: ma5[i], ma20: ma20[i], ma60: ma60[i],
-    isUp: bar.close >= bar.open, candleRange: [bar.low, bar.high] as [number, number],
-  })), [bars, ma5, ma20, ma60]);
-  const prices = bars.flatMap(b => [b.low, b.high]);
-  const minPrice = prices.length ? Math.min(...prices) * 0.998 : 0;
-  const maxPrice = prices.length ? Math.max(...prices) * 1.002 : 100;
   const lastBar = bars[bars.length - 1];
   const prevBar = bars[bars.length - 2];
   const priceChange = lastBar && prevBar ? lastBar.close - prevBar.close : 0;
@@ -839,48 +870,12 @@ export default function StockPage() {
             </Card>
           )}
 
-          {chartMeta && chartData.length > 0 && (
-            <div className="space-y-1">
-              {/* 캔들 차트 */}
-              <ResponsiveContainer width="100%" height={280}>
-                <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="0" stroke="transparent" />
-                  <XAxis dataKey="date" tick={{ fontSize: 9, fill: "var(--muted-foreground)" }}
-                    interval={Math.max(0, Math.floor(chartData.length / 5))}
-                    tickFormatter={d => d.slice(5)} axisLine={false} tickLine={false} />
-                  <YAxis domain={[minPrice, maxPrice]} tick={{ fontSize: 9, fill: "var(--muted-foreground)" }}
-                    tickFormatter={v => isKRW ? (v / 1000).toFixed(0) + "K" : v.toFixed(0)}
-                    width={52} axisLine={false} tickLine={false} orientation="right" />
-                  <Tooltip content={<CandleTooltip />} cursor={{ stroke: "var(--border)", strokeWidth: 1 }} />
-                  <Bar dataKey="candleRange" shape={CandleShape as never} isAnimationActive={false}>
-                    {chartData.map((e, i) => <Cell key={i} fill={e.isUp ? "#ef4444" : "#3b82f6"} />)}
-                  </Bar>
-                  <Line type="monotone" dataKey="ma5" stroke="#a855f7" dot={false} strokeWidth={1.5} connectNulls />
-                  <Line type="monotone" dataKey="ma20" stroke="#f59e0b" dot={false} strokeWidth={1.5} connectNulls />
-                  <Line type="monotone" dataKey="ma60" stroke="#10b981" dot={false} strokeWidth={1.5} connectNulls />
-                </ComposedChart>
-              </ResponsiveContainer>
-
-              {/* 이평선 범례 */}
-              <div className="flex gap-3 text-[10px] text-muted-foreground px-1 pb-1">
-                <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-purple-400 inline-block rounded" />MA5</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-amber-400 inline-block rounded" />MA20</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-emerald-400 inline-block rounded" />MA60</span>
-                <span className="ml-auto">{chartData.length}봉</span>
-              </div>
-
-              {/* 거래량 */}
-              <ResponsiveContainer width="100%" height={60}>
-                <ComposedChart data={chartData} margin={{ top: 0, right: 4, left: -20, bottom: 0 }}>
-                  <XAxis dataKey="date" hide />
-                  <YAxis hide orientation="right" width={52} />
-                  <Bar dataKey="volume" isAnimationActive={false} radius={[1,1,0,0]}>
-                    {chartData.map((e, i) => <Cell key={i} fill={e.isUp ? "rgb(239 68 68 / 0.4)" : "rgb(59 130 246 / 0.4)"} />)}
-                  </Bar>
-                </ComposedChart>
-              </ResponsiveContainer>
-              <p className="text-[10px] text-muted-foreground text-center">거래량</p>
-            </div>
+          {chartMeta && chartMeta.bars.length > 0 && (
+            <TradingViewChart
+              bars={chartMeta.bars}
+              height={380}
+              isKRW={isKRW}
+            />
           )}
         </div>
       )}
@@ -1009,25 +1004,25 @@ export default function StockPage() {
       {/* ── 관심 종목 Tab ─────────────────────────────────────────────────────────── */}
       {tab === "관심 종목" && (
         <div className="space-y-4">
-          {/* Search to add */}
-          <div className="relative">
+          {/* 검색 + 그룹 선택 + 새로고침 */}
+          <div className="space-y-2">
             <div className="flex gap-2">
               <div className="flex-1 relative">
                 <Input
-                  placeholder="종목 검색 후 관심 종목 추가 (삼성전자, AAPL...)"
+                  placeholder="종목 검색 후 추가 (삼성전자, AAPL...)"
                   value={watchlistSearchQ}
                   onChange={e => { setWatchlistSearchQ(e.target.value); setShowWatchlistSugg(true); }}
                   onBlur={() => setTimeout(() => setShowWatchlistSugg(false), 150)}
                 />
                 {showWatchlistSugg && watchlistSuggestions.length > 0 && (
-                  <div className="absolute z-50 w-full mt-1 bg-white dark:bg-zinc-900 border rounded-lg shadow-lg max-h-52 overflow-y-auto">
+                  <div className="absolute z-50 w-full mt-1 bg-popover border rounded-xl shadow-lg max-h-52 overflow-y-auto">
                     {watchlistSuggestions.map(s => (
                       <button key={s.ticker}
-                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted text-left"
+                        className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-muted text-left"
                         onMouseDown={() => {
                           setShowWatchlistSugg(false);
                           setWatchlistSearchQ("");
-                          toggleWatchlist(s.ticker, s.name, s.market);
+                          toggleWatchlist(s.ticker, s.name, s.market, targetGroupId);
                         }}>
                         <span className="text-xs">{s.market === "KR" ? "🇰🇷" : "🇺🇸"}</span>
                         <span className="font-medium text-sm flex-1">{s.name}</span>
@@ -1045,9 +1040,61 @@ export default function StockPage() {
                 <RefreshCw className={`w-4 h-4 ${watchlistPriceLoading ? "animate-spin" : ""}`} />
               </Button>
             </div>
+
+            {/* 추가할 그룹 선택 */}
+            {watchlistGroups.length > 0 && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-muted-foreground shrink-0">추가할 그룹:</span>
+                <button
+                  onClick={() => setTargetGroupId(null)}
+                  className={`text-xs px-2.5 py-1 rounded-full border transition-all ${targetGroupId === null ? "bg-foreground text-background border-foreground" : "hover:bg-muted border-border text-muted-foreground"}`}
+                >
+                  기타 (그룹 없음)
+                </button>
+                {watchlistGroups.map(g => (
+                  <button
+                    key={g.id}
+                    onClick={() => setTargetGroupId(g.id)}
+                    className={`text-xs px-2.5 py-1 rounded-full border transition-all ${targetGroupId === g.id ? "bg-foreground text-background border-foreground" : "hover:bg-muted border-border text-muted-foreground"}`}
+                  >
+                    {g.emoji} {g.name}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
-          {watchlistItems.length === 0 ? (
+          {/* 그룹 관리 */}
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">
+              총 {watchlistItems.length}개 종목 · {watchlistGroups.length}개 그룹
+            </p>
+            <button
+              onClick={() => setShowAddGroup(v => !v)}
+              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+            >
+              {showAddGroup ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              그룹 추가
+            </button>
+          </div>
+
+          {/* 그룹 생성 인풋 */}
+          {showAddGroup && (
+            <div className="flex gap-2">
+              <Input
+                placeholder="그룹 이름 (예: 반도체, 성장주...)"
+                value={addGroupName}
+                onChange={e => setAddGroupName(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && createGroup()}
+                className="flex-1"
+              />
+              <Button size="sm" onClick={createGroup} disabled={addGroupLoading || !addGroupName.trim()}>
+                {addGroupLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "추가"}
+              </Button>
+            </div>
+          )}
+
+          {watchlistItems.length === 0 && watchlistGroups.length === 0 ? (
             <Card className="border-dashed">
               <CardContent className="p-10 text-center">
                 <Star className="w-8 h-8 mx-auto mb-3 text-muted-foreground/40" />
@@ -1056,29 +1103,74 @@ export default function StockPage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">총 {watchlistItems.length}개 종목</p>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {watchlistItems.map(w => {
-                  const yahooTicker = toYahooTicker(w.ticker, w.market);
-                  const price = watchlistPrices[yahooTicker] ?? null;
-                  return (
-                    <StockCard
-                      key={w.id}
-                      ticker={w.ticker}
-                      name={w.name}
-                      market={w.market}
-                      price={price}
-                      inWatchlist={true}
-                      onAddWatchlist={() => toggleWatchlist(w.ticker, w.name, w.market)}
-                      onChart={() => fetchChart(yahooTicker, w.name, w.market === "KR" ? "KRW" : "USD")}
-                      onAnalyze={() => openAiAnalysis(w.name)}
-                    />
-                  );
-                })}
-              </div>
+            <div className="space-y-5">
+              {/* 그룹별 섹션 */}
+              {watchlistGroups.map(group => (
+                <div key={group.id}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm">{group.emoji}</span>
+                      <span className="text-sm font-semibold">{group.name}</span>
+                      <span className="text-xs text-muted-foreground">({group.items.length})</span>
+                    </div>
+                    <button
+                      onClick={() => deleteGroup(group.id, group.name)}
+                      className="text-[10px] text-muted-foreground hover:text-destructive transition-colors px-1.5 py-0.5 rounded"
+                    >
+                      삭제
+                    </button>
+                  </div>
+                  {group.items.length === 0 ? (
+                    <p className="text-xs text-muted-foreground pl-1">종목 없음 — 위에서 그룹을 선택 후 검색하여 추가</p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {group.items.map(w => {
+                        const yt = toYahooTicker(w.ticker, w.market);
+                        const price = watchlistPrices[yt] ?? null;
+                        return (
+                          <WatchlistItemCard
+                            key={w.id}
+                            item={w}
+                            price={price}
+                            onChart={() => fetchChart(yt, w.name, w.market === "KR" ? "KRW" : "USD")}
+                            onAnalyze={() => openAiAnalysis(w.name)}
+                            onDelete={() => deleteWatchlistItem(w.id, w.name)}
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {/* 그룹 없는 항목 */}
+              {watchlistUngrouped.length > 0 && (
+                <div>
+                  {watchlistGroups.length > 0 && (
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <span className="text-sm">📋</span>
+                      <span className="text-sm font-semibold">기타</span>
+                      <span className="text-xs text-muted-foreground">({watchlistUngrouped.length})</span>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {watchlistUngrouped.map(w => {
+                      const yt = toYahooTicker(w.ticker, w.market);
+                      const price = watchlistPrices[yt] ?? null;
+                      return (
+                        <WatchlistItemCard
+                          key={w.id}
+                          item={w}
+                          price={price}
+                          onChart={() => fetchChart(yt, w.name, w.market === "KR" ? "KRW" : "USD")}
+                          onAnalyze={() => openAiAnalysis(w.name)}
+                          onDelete={() => deleteWatchlistItem(w.id, w.name)}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
