@@ -29,7 +29,7 @@ interface StudySource {
   id: string; title: string; content: string; type: string; createdAt: string;
 }
 interface Exam {
-  id: string; name: string; examDate: string; status: string;
+  id: string; name: string; examDate: string; status: string; subjectId: string | null;
   actualScore: number | null; targetScore: number | null; passScore: number | null; memo: string | null;
 }
 
@@ -83,7 +83,7 @@ export default function SubjectDetailPage() {
     if (srcRes.ok) setSources(await srcRes.json());
     if (examRes.ok) {
       const all: Exam[] = await examRes.json();
-      setExams(all.filter(e => e.name.includes(subject?.name ?? "") || true).slice(0, 10));
+      setExams(all.filter(e => e.subjectId === id));
     }
   }
 
@@ -120,6 +120,7 @@ export default function SubjectDetailPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name: examForm.name, examDate: examForm.examDate, category: subject?.name ?? "",
+        subjectId: id,
         actualScore: examForm.actualScore ? Number(examForm.actualScore) : null,
         targetScore: examForm.targetScore ? Number(examForm.targetScore) : null,
         memo: examForm.memo, status: examForm.actualScore ? "completed" : "preparing",

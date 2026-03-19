@@ -113,6 +113,13 @@ export default function RestaurantDetailPage() {
     }
   }, [loading, restaurant, searchParams]);
 
+  // ?edit=1 쿼리로 진입 시 편집 다이얼로그 자동 오픈
+  useEffect(() => {
+    if (!loading && restaurant && searchParams.get("edit") === "1") {
+      openEdit();
+    }
+  }, [loading, restaurant]); // eslint-disable-line react-hooks/exhaustive-deps
+
   async function openListSheet() {
     const res = await fetch("/api/restaurant/lists");
     if (res.ok) {

@@ -13,16 +13,18 @@ const MEM_CACHE_TTL = 5 * 60 * 1000; // 5분
 async function fetchYahooQuotes(symbols: string[]): Promise<Record<string, MarketItem>> {
   if (symbols.length === 0) return {};
   const joined = symbols.join(",");
-  const url = `https://query1.finance.yahoo.com/v8/finance/quote?symbols=${joined}&fields=regularMarketPrice,regularMarketChange,regularMarketChangePercent,shortName`;
+  // query2 도메인이 더 안정적, fields 파라미터 제거하면 모든 필드 반환
+  const url = `https://query2.finance.yahoo.com/v8/finance/quote?symbols=${joined}&lang=en-US&region=US&corsDomain=finance.yahoo.com`;
 
   const res = await fetch(url, {
     headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      "Accept": "application/json",
+      "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "Accept": "*/*",
       "Accept-Language": "en-US,en;q=0.9",
+      "Referer": "https://finance.yahoo.com/",
     },
     next: { revalidate: 0 },
-    signal: AbortSignal.timeout(8000),
+    signal: AbortSignal.timeout(10000),
   });
 
   if (!res.ok) throw new Error(`Yahoo Finance 응답 오류: ${res.status}`);

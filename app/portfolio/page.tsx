@@ -83,6 +83,7 @@ export default function PortfolioPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [priceUpdatedAt, setPriceUpdatedAt] = useState<number | null>(null);
   const [holdingView, setHoldingView] = useState<"price" | "return">("price");
+  const [dailyMap, setDailyMap] = useState<Record<string, { change: number; changeRate: number }>>({});
   const snapshotSaved = useRef(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Holding | null>(null);
@@ -250,7 +251,7 @@ export default function PortfolioPage() {
         if (!silent) toast.error("가격 조회 실패 (KIS API 확인 필요)");
         return;
       }
-      const prices = await res.json() as Record<string, { price: number; error?: string }>;
+      const prices = await res.json() as Record<string, { price: number; change?: number; changeRate?: number; error?: string }>;
 
       let updated = 0;
       await Promise.all(currentHoldings.map(async h => {
@@ -276,6 +277,15 @@ export default function PortfolioPage() {
           updated++;
         } catch { /* individual update failure is ok */ }
       }));
+
+      // 전일대비 데이터 저장
+      const newDailyMap: Record<string, { change: number; changeRate: number }> = {};
+      Object.entries(prices).forEach(([ticker, data]) => {
+        if (!data.error && data.change !== undefined && data.changeRate !== undefined) {
+          newDailyMap[ticker] = { change: data.change, changeRate: data.changeRate };
+        }
+      });
+      if (Object.keys(newDailyMap).length > 0) setDailyMap(prev => ({ ...prev, ...newDailyMap }));
 
       await loadHoldings();
       if (!silent) {
@@ -429,7 +439,7 @@ export default function PortfolioPage() {
                   onClick={() => setHoldingView("price")}
                   className={`flex items-center gap-1 px-2.5 py-1.5 transition-colors ${holdingView === "price" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
                 >
-                  <DollarSign className="w-3 h-3" />현재가
+                  <DollarSign className="w-3 h-3" />전일대비
                 </button>
                 <button
                   onClick={() => setHoldingView("return")}
@@ -452,8 +462,8 @@ export default function PortfolioPage() {
                   <th className="px-3 py-2 text-right">수량</th>
                   {holdingView === "price" ? (
                     <>
-                      <th className="px-3 py-2 text-right">평균단가</th>
                       <th className="px-3 py-2 text-right">현재가</th>
+                      <th className="px-3 py-2 text-right">전일대비</th>
                     </>
                   ) : (
                     <>
@@ -493,8 +503,16 @@ export default function PortfolioPage() {
                       <td className="px-3 py-2.5 text-right">{(h.quantity ?? 0).toLocaleString()}</td>
                       {holdingView === "price" ? (
                         <>
-                          <td className="px-3 py-2.5 text-right text-muted-foreground">{formatCurrency(h.avgPrice, h.currency)}</td>
                           <td className="px-3 py-2.5 text-right font-medium">{formatCurrency(h.currentPrice, h.currency)}</td>
+                          <td className="px-3 py-2.5 text-right">
+                            {dailyMap[h.ticker] ? (
+                              <span className={dailyMap[h.ticker].changeRate >= 0 ? "text-red-500" : "text-blue-500"}>
+                                {dailyMap[h.ticker].changeRate >= 0 ? "▲" : "▼"}{Math.abs(dailyMap[h.ticker].changeRate).toFixed(2)}%
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">갱신 필요</span>
+                            )}
+                          </td>
                         </>
                       ) : (
                         <>

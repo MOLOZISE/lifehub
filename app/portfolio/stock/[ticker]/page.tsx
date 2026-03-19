@@ -15,7 +15,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 import type { OHLCVBar } from "@/lib/types";
 
@@ -47,7 +46,99 @@ interface Holding {
   sector: string | null;
 }
 interface ChartMeta { bars: OHLCVBar[]; currency: string; regularMarketPrice?: number; }
-interface NewsResult { analysis: string; sources: string[]; }
+type SectionType = "positive" | "negative" | "neutral" | "short" | "long" | "summary";
+interface NewsSection { type: SectionType; title: string; items: string[]; text?: string; }
+interface NewsResult { sections: NewsSection[]; sources: string[]; }
+
+const STOCK_ANALYSIS_PROMPT = `당신은 CFA 자격증을 보유한 주식 전문 애널리스트입니다. 최신 뉴스와 시장 데이터를 조사하고 분석하세요.
+
+반드시 다음 형식으로 응답하세요:
+
+## 호재 요인
+- 항목 (출처/날짜)
+
+## 악재 요인
+- 항목 (출처/날짜)
+
+## 중립/주목 요인
+- 항목
+
+## 단기 전망 (1~4주)
+내용.
+
+## 중장기 전망 (3~12개월)
+내용.
+
+## 종합 투자의견
+- 투자의견: [강력매수 / 매수 / 중립 / 매도 / 강력매도]
+- 목표주가: [가격 또는 "정보 없음"]
+- 리스크: [상/중/하]
+- 한 줄 요약: [핵심 판단]`;
+
+function parseNewsResponse(text: string): NewsSection[] {
+  const sectionMap: Record<string, SectionType> = {
+    "호재": "positive", "악재": "negative", "중립": "neutral",
+    "단기 전망": "short", "중장기 전망": "long", "종합 투자의견": "summary",
+  };
+  const parts = text.split(/^## /m).filter(Boolean);
+  return parts.map(part => {
+    const lines = part.trim().split("\n");
+    const title = lines[0].trim();
+    const body = lines.slice(1).join("\n").trim();
+    const items = lines.slice(1).filter(l => l.trim().startsWith("-")).map(l => l.replace(/^-\s*/, "").trim());
+    const typeKey = Object.keys(sectionMap).find(k => title.includes(k));
+    return { type: typeKey ? sectionMap[typeKey] : "neutral", title, items, text: body };
+  }).filter(s => s.title);
+}
+
+const SECTION_STYLES: Record<SectionType, { icon: string; border: string; bg: string }> = {
+  positive: { icon: "▲", border: "border-red-200 dark:border-red-900", bg: "bg-red-50 dark:bg-red-950/30" },
+  negative: { icon: "▼", border: "border-blue-200 dark:border-blue-900", bg: "bg-blue-50 dark:bg-blue-950/30" },
+  neutral:  { icon: "◆", border: "border-yellow-200 dark:border-yellow-900", bg: "bg-yellow-50 dark:bg-yellow-950/30" },
+  short:    { icon: "📅", border: "border-purple-200 dark:border-purple-900", bg: "bg-purple-50 dark:bg-purple-950/30" },
+  long:     { icon: "📈", border: "border-indigo-200 dark:border-indigo-900", bg: "bg-indigo-50 dark:bg-indigo-950/30" },
+  summary:  { icon: "🎯", border: "border-green-200 dark:border-green-900", bg: "bg-green-50 dark:bg-green-950/30" },
+};
+
+const OPINION_COLORS: Record<string, string> = {
+  "강력매수": "bg-red-500 text-white", "매수": "bg-red-200 text-red-800",
+  "중립": "bg-gray-200 text-gray-700", "매도": "bg-blue-200 text-blue-800", "강력매도": "bg-blue-500 text-white",
+};
+
+function NewsSectionCard({ section }: { section: NewsSection }) {
+  const s = SECTION_STYLES[section.type] ?? SECTION_STYLES.neutral;
+  const isSummary = section.type === "summary";
+  const opinion = isSummary ? (section.items.find(i => i.startsWith("투자의견"))?.replace(/^투자의견:\s*/, "") ?? "") : "";
+  const target = isSummary ? (section.items.find(i => i.startsWith("목표주가"))?.replace(/^목표주가:\s*/, "") ?? "") : "";
+  const summary = isSummary ? (section.items.find(i => i.startsWith("한 줄"))?.replace(/^한 줄 요약:\s*/, "") ?? "") : "";
+  return (
+    <div className={`rounded-lg border ${s.border}`}>
+      <div className={`flex items-center gap-2 px-3 py-2 ${s.bg} rounded-t-lg`}>
+        <span className="text-xs">{s.icon}</span>
+        <span className="text-xs font-semibold flex-1">{section.title}</span>
+        {isSummary && opinion && <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${OPINION_COLORS[opinion] ?? "bg-gray-200"}`}>{opinion}</span>}
+        {isSummary && target && target !== "정보 없음" && <span className="text-xs font-medium">🎯 {target}</span>}
+      </div>
+      <div className="px-3 py-2">
+        {isSummary && summary ? (
+          <p className="text-sm font-medium">{summary}</p>
+        ) : (
+          <ul className="space-y-1">
+            {section.items.slice(0, 4).map((item, j) => (
+              <li key={j} className="text-xs flex gap-1.5 leading-relaxed">
+                <span className="text-muted-foreground shrink-0 mt-0.5">•</span>
+                <span>{item}</span>
+              </li>
+            ))}
+            {section.items.length === 0 && section.text && (
+              <p className="text-xs text-muted-foreground whitespace-pre-line">{section.text.split("\n").slice(0,3).join("\n")}</p>
+            )}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
 
 type Period = "5D" | "1M" | "3M" | "6M" | "1Y" | "2Y";
 const PERIOD_CONFIG: Record<Period, { range: string; interval: string }> = {
@@ -228,8 +319,17 @@ export default function StockDetailPage() {
     if (news) return; // already loaded
     setNewsLoading(true);
     try {
-      const res = await fetch(`/api/ai?ticker=${encodeURIComponent(ticker)}&market=${market}&query=${encodeURIComponent(info?.name ?? ticker)}`);
-      if (res.ok) setNews(await res.json());
+      const stockName = info?.name ?? ticker;
+      const userMessage = `${stockName}(${ticker}) 종목의 최신 뉴스와 투자 전망을 분석해주세요.`;
+      const res = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ systemPrompt: STOCK_ANALYSIS_PROMPT, userMessage, useSearch: true }),
+      });
+      if (res.ok) {
+        const data = await res.json() as { text: string; sources: string[] };
+        setNews({ sections: parseNewsResponse(data.text), sources: data.sources });
+      }
     } catch { /* ignore */ }
     setNewsLoading(false);
   }
@@ -529,16 +629,16 @@ export default function StockDetailPage() {
               ) : news ? (
                 <div className="space-y-3">
                   {news.sources.length > 0 && (
-                    <div className="flex gap-1 flex-wrap">
+                    <div className="flex gap-1 flex-wrap mb-1">
                       {news.sources.map(s => (
                         <Badge key={s} variant="outline" className="text-xs">{s}</Badge>
                       ))}
                     </div>
                   )}
-                  <div className="prose prose-sm dark:prose-invert max-w-none text-sm">
-                    <ReactMarkdown>{news.analysis}</ReactMarkdown>
-                  </div>
-                  <div className="pt-2 border-t">
+                  {news.sections.map((section, i) => (
+                    <NewsSectionCard key={i} section={section} />
+                  ))}
+                  <div className="pt-2 border-t flex gap-2">
                     <Button size="sm" variant="outline" onClick={() => setNews(null)}>
                       <RefreshCw className="w-3.5 h-3.5 mr-1.5" />다시 분석
                     </Button>

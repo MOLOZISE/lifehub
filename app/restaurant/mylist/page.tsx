@@ -345,13 +345,14 @@ export default function MyListPage() {
                         </div>
                       </Link>
                       <div className="flex items-center gap-0.5 shrink-0">
-                        <button
-                          onClick={(e) => { e.preventDefault(); startEditMemo(item); }}
-                          className="p-1.5 rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
-                          title="메모 편집"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
+                        <Link href={`/restaurant/${item.restaurant.id}?edit=1`}>
+                          <button
+                            className="p-1.5 rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+                            title="맛집 정보 수정"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        </Link>
                         <button
                           onClick={() => removeFromList(item)}
                           className="p-1.5 rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-destructive"
@@ -387,8 +388,20 @@ export default function MyListPage() {
                         </button>
                       </div>
                     ) : item.memo ? (
-                      <p className="text-xs text-muted-foreground mt-1.5 italic">"{item.memo}"</p>
-                    ) : null}
+                      <button
+                        onClick={() => startEditMemo(item)}
+                        className="text-xs text-muted-foreground mt-1.5 italic hover:text-foreground transition-colors text-left w-full"
+                      >
+                        "{item.memo}"
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => startEditMemo(item)}
+                        className="mt-1.5 text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors flex items-center gap-1"
+                      >
+                        <Pencil className="w-2.5 h-2.5" />메모 추가...
+                      </button>
+                    )}
                   </CardContent>
                 </Card>
               ))}
