@@ -175,46 +175,42 @@ function CommunityContent() {
           <p className="text-sm mt-1">첫 번째 글을 작성해보세요!</p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="divide-y rounded-xl border overflow-hidden">
           {posts.map((post) => (
-            <Link key={post.id} href={`/community/${post.id}`}>
-              <Card className="hover:bg-accent/30 transition-colors cursor-pointer">
-                <CardContent className="p-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <Badge variant="secondary" className="text-xs shrink-0">
-                          {CATEGORIES.find((c) => c.value === post.category)?.label ?? post.category}
-                        </Badge>
-                        {post.tags.slice(0, 2).map((t) => (
-                          <button
-                            key={t}
-                            onClick={(e) => { e.preventDefault(); router.push(`/community?tag=${encodeURIComponent(t)}`); }}
-                            className={`text-xs hover:underline ${activeTag === t ? "text-primary font-medium" : "text-muted-foreground"}`}
-                          >#{t}</button>
-                        ))}
-                      </div>
-                      <h3 className="font-medium text-sm leading-snug line-clamp-1">{post.title}</h3>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                    {post.isAnonymous || !post.user ? (
-                      <span>{post.isAnonymous ? "익명" : "알 수 없음"}</span>
-                    ) : (
+            <Link key={post.id} href={`/community/${post.id}`} className="block hover:bg-accent/30 transition-colors px-3 py-2.5">
+              <div className="flex items-start gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <Badge variant="secondary" className="text-[10px] shrink-0 h-5">
+                      {CATEGORIES.find((c) => c.value === post.category)?.label ?? post.category}
+                    </Badge>
+                    {post.tags.slice(0, 2).map((t) => (
                       <button
-                        onClick={e => { e.preventDefault(); router.push(`/community/users/${post.user!.id}`); }}
-                        className="hover:text-foreground hover:underline transition-colors"
-                      >
-                        {post.user.name}
-                      </button>
-                    )}
-                    <span>{formatDistanceToNow(post.createdAt)}</span>
-                    <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{post.viewCount}</span>
-                    <span className="flex items-center gap-1"><Heart className="w-3 h-3" />{post._count.likes}</span>
-                    <span className="flex items-center gap-1"><MessageSquare className="w-3 h-3" />{post._count.comments}</span>
+                        key={t}
+                        onClick={(e) => { e.preventDefault(); router.push(`/community?tag=${encodeURIComponent(t)}`); }}
+                        className={`text-xs hover:underline ${activeTag === t ? "text-primary font-medium" : "text-muted-foreground"}`}
+                      >#{t}</button>
+                    ))}
                   </div>
-                </CardContent>
-              </Card>
+                  <h3 className="font-medium text-sm leading-snug line-clamp-1">{post.title}</h3>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                {post.isAnonymous || !post.user ? (
+                  <span>{post.isAnonymous ? "익명" : "알 수 없음"}</span>
+                ) : (
+                  <button
+                    onClick={e => { e.preventDefault(); router.push(`/community/users/${post.user!.id}`); }}
+                    className="hover:text-foreground hover:underline transition-colors"
+                  >
+                    {post.user.name}
+                  </button>
+                )}
+                <span>{formatDistanceToNow(post.createdAt)}</span>
+                <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{post.viewCount}</span>
+                <span className="flex items-center gap-1"><Heart className="w-3 h-3" />{post._count.likes}</span>
+                <span className="flex items-center gap-1"><MessageSquare className="w-3 h-3" />{post._count.comments}</span>
+              </div>
             </Link>
           ))}
         </div>

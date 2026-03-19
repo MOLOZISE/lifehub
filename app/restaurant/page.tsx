@@ -210,6 +210,15 @@ export default function RestaurantPage() {
     else setListItems([]);
   }
 
+  async function deleteList(listId: string, listName: string) {
+    if (!confirm(`"${listName}" 리스트를 삭제할까요?`)) return;
+    const res = await fetch(`/api/restaurant/lists/${listId}`, { method: "DELETE" });
+    if (!res.ok) { toast.error("삭제 실패"); return; }
+    setUserLists(prev => prev.filter(l => l.id !== listId));
+    if (activeListId === listId) { setActiveListId(null); setListItems([]); }
+    toast.success("리스트 삭제됨");
+  }
+
   async function createList() {
     if (!newListName.trim()) return;
     setListCreating(true);
@@ -614,16 +623,35 @@ export default function RestaurantPage() {
                   }`}
                 >전체</button>
                 {userLists.map(list => (
-                  <button
-                    key={list.id}
-                    onClick={() => selectList(list.id)}
-                    className={`shrink-0 text-[10px] px-2.5 py-1 rounded-full border transition-colors whitespace-nowrap ${
-                      activeListId === list.id ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:bg-muted"
-                    }`}
-                  >
-                    {list.emoji} {list.name} {list.itemCount > 0 && `(${list.itemCount})`}
-                  </button>
+                  <div key={list.id} className="flex items-center shrink-0">
+                    <button
+                      onClick={() => selectList(list.id)}
+                      className={`text-[10px] px-2.5 py-1 rounded-l-full border-y border-l transition-colors whitespace-nowrap ${
+                        activeListId === list.id ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:bg-muted"
+                      }`}
+                    >
+                      {list.emoji} {list.name} {list.itemCount > 0 && `(${list.itemCount})`}
+                    </button>
+                    <button
+                      onClick={e => { e.stopPropagation(); deleteList(list.id, list.name); }}
+                      className={`text-[10px] px-1.5 py-1 rounded-r-full border transition-colors ${
+                        activeListId === list.id ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:bg-muted"
+                      }`}
+                      title="리스트 삭제"
+                    >✕</button>
+                  </div>
                 ))}
+                {activeListId && (
+                  <button
+                    onClick={() => {
+                      const url = `${window.location.origin}/restaurant/shared/${activeListId}`;
+                      navigator.clipboard.writeText(url);
+                      toast.success("공유 링크가 복사됐습니다");
+                    }}
+                    className="shrink-0 text-[10px] px-2 py-1 text-muted-foreground hover:text-foreground ml-auto"
+                    title="공유 링크 복사"
+                  >🔗 공유</button>
+                )}
                 {showNewList ? (
                   <div className="flex items-center gap-1 shrink-0">
                     <input

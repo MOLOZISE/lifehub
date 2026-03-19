@@ -314,48 +314,14 @@ export default function PortfolioPage() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-4">
-      {/* 글로벌 시황 */}
+      {/* 1. 글로벌 시황 (compact) */}
       <Card>
-        <CardContent className="p-4">
-          <MarketOverview />
+        <CardContent className="p-2">
+          <MarketOverview compact={true} />
         </CardContent>
       </Card>
 
-      {/* Summary */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground mb-1">총 평가금액 (USD)</p>
-            <p className="text-xl font-bold">${totalUSD.toLocaleString("en-US", { maximumFractionDigits: 0 })}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground mb-1">총 손익</p>
-            <p className={`text-xl font-bold ${getProfitColor(totalProfitUSD)}`}>
-              {totalProfitUSD >= 0 ? "+" : ""}${totalProfitUSD.toLocaleString("en-US", { maximumFractionDigits: 0 })}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-xs text-muted-foreground">총 수익률</p>
-              {priceUpdatedAt && (
-                <span className="text-[10px] text-muted-foreground">
-                  {new Date(priceUpdatedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 기준
-                </span>
-              )}
-            </div>
-            <p className={`text-xl font-bold flex items-center gap-1 ${getProfitColor(totalProfitRate)}`}>
-              {totalProfitRate >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
-              {totalProfitRate >= 0 ? "+" : ""}{totalProfitRate.toFixed(2)}%
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Risk Analysis */}
+      {/* 2. 리스크 분석 */}
       <Card className={`border ${RISK_COLORS[risk.riskLevel]}`}>
         <CardContent className="p-3">
           <div className="flex items-center justify-between mb-2">
@@ -410,144 +376,154 @@ export default function PortfolioPage() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Donut Chart - Holdings */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">종목별 비중</CardTitle>
-          </CardHeader>
-          <CardContent className="h-52">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={chartData} cx="50%" cy="50%" innerRadius={55} outerRadius={90} dataKey="value" paddingAngle={2}>
-                  {chartData.map((_, i) => (
-                    <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(v) => `${v}%`} />
-                <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        {/* Holdings table */}
-        <div className="lg:col-span-2 space-y-2">
-          <div className="flex justify-between items-center">
-            <h2 className="font-semibold text-sm">보유 종목</h2>
-            <div className="flex gap-2">
-              {/* 현재가 / 수익률 토글 */}
-              <div className="flex rounded-md border overflow-hidden text-xs">
-                <button
-                  onClick={() => setHoldingView("price")}
-                  className={`flex items-center gap-1 px-2.5 py-1.5 transition-colors ${holdingView === "price" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
-                >
-                  <DollarSign className="w-3 h-3" />전일대비
-                </button>
-                <button
-                  onClick={() => setHoldingView("return")}
-                  className={`flex items-center gap-1 px-2.5 py-1.5 transition-colors ${holdingView === "return" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
-                >
-                  <BarChart2 className="w-3 h-3" />수익률
-                </button>
-              </div>
-              <Button size="sm" variant="outline" onClick={handleRefreshPrices} disabled={refreshing || holdings.length === 0}>
-                <RefreshCw className={`w-3.5 h-3.5 mr-1 ${refreshing ? "animate-spin" : ""}`} />갱신
-              </Button>
-              <Button size="sm" onClick={openAdd}><Plus className="w-3.5 h-3.5 mr-1" />추가</Button>
+      {/* 3. 요약 한 줄 — 3분할 */}
+      <Card>
+        <CardContent className="p-3">
+          <div className="grid grid-cols-3 divide-x">
+            <div className="px-3 first:pl-0">
+              <p className="text-[11px] text-muted-foreground">총 평가금액</p>
+              <p className="text-base font-bold">
+                ${totalUSD.toLocaleString("en-US", { maximumFractionDigits: 0 })}
+              </p>
+            </div>
+            <div className="px-3">
+              <p className="text-[11px] text-muted-foreground">총 손익</p>
+              <p className={`text-base font-bold ${getProfitColor(totalProfitUSD)}`}>
+                {totalProfitUSD >= 0 ? "+" : ""}${totalProfitUSD.toLocaleString("en-US", { maximumFractionDigits: 0 })}
+              </p>
+            </div>
+            <div className="px-3">
+              <p className="text-[11px] text-muted-foreground">총 수익률</p>
+              <p className={`text-base font-bold flex items-center gap-0.5 ${getProfitColor(totalProfitRate)}`}>
+                {totalProfitRate >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                {totalProfitRate >= 0 ? "+" : ""}{totalProfitRate.toFixed(2)}%
+              </p>
+              {priceUpdatedAt && (
+                <p className="text-[10px] text-muted-foreground">
+                  {new Date(priceUpdatedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 기준
+                </p>
+              )}
             </div>
           </div>
-          <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/50 text-xs text-muted-foreground">
-                  <th className="px-3 py-2 text-left">종목</th>
-                  <th className="px-3 py-2 text-right">수량</th>
-                  {holdingView === "price" ? (
-                    <>
-                      <th className="px-3 py-2 text-right">현재가</th>
-                      <th className="px-3 py-2 text-right">전일대비</th>
-                    </>
-                  ) : (
-                    <>
-                      <th className="px-3 py-2 text-right">평가금액</th>
-                      <th className="px-3 py-2 text-right">수익률</th>
-                    </>
-                  )}
-                  <th className="px-3 py-2 text-right">평가손익</th>
-                  <th className="px-3 py-2"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {holdings.map(h => {
-                  const rate = profitRate(h);
-                  const profit = profitAmount(h);
-                  const color = getProfitColor(rate);
-                  const evalValue = (h.currentPrice ?? 0) * (h.quantity ?? 0);
-                  return (
-                    <tr key={h.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                      <td className="px-3 py-1.5">
-                        <Link
-                          href={`/portfolio/stock/${encodeURIComponent(h.ticker)}?market=${h.market}`}
-                          className="hover:underline"
-                        >
-                          <div>
-                            <span className="font-medium">{h.name}</span>
-                            <span className="text-xs text-muted-foreground ml-1.5">{h.ticker}</span>
-                          </div>
-                        </Link>
-                        <div className="flex gap-1 mt-0.5">
-                          <Badge variant="outline" className="text-[10px] h-4">{h.market}</Badge>
-                          {h.sector && (
-                            <Badge variant="outline" className="text-[10px] h-4">{SECTOR_LABELS[h.sector]}</Badge>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-3 py-1.5 text-right">{(h.quantity ?? 0).toLocaleString()}</td>
-                      {holdingView === "price" ? (
-                        <>
-                          <td className="px-3 py-1.5 text-right font-medium">{formatCurrency(h.currentPrice, h.currency)}</td>
-                          <td className="px-3 py-1.5 text-right">
-                            {dailyMap[h.ticker] ? (
-                              <span className={dailyMap[h.ticker].changeRate >= 0 ? "text-red-500" : "text-blue-500"}>
-                                {dailyMap[h.ticker].changeRate >= 0 ? "▲" : "▼"}{Math.abs(dailyMap[h.ticker].changeRate).toFixed(2)}%
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground text-xs">갱신 필요</span>
-                            )}
-                          </td>
-                        </>
-                      ) : (
-                        <>
-                          <td className="px-3 py-1.5 text-right">{formatCurrency(evalValue, h.currency)}</td>
-                          <td className={`px-3 py-1.5 text-right font-medium ${color}`}>
-                            {rate >= 0 ? "+" : ""}{rate.toFixed(2)}%
-                          </td>
-                        </>
-                      )}
-                      <td className={`px-3 py-1.5 text-right ${color}`}>
-                        {profit >= 0 ? "+" : ""}{formatCurrency(profit, h.currency)}
-                      </td>
-                      <td className="px-3 py-1.5">
-                        <div className="flex gap-1 justify-end">
-                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openEdit(h)}>
-                            <Pencil className="w-3 h-3" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleDelete(h.id)}>
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        </CardContent>
+      </Card>
+
+      {/* 4. 보유 종목 (full width) */}
+      <div className="space-y-2">
+        <div className="flex justify-between items-center">
+          <h2 className="font-semibold text-sm">보유 종목</h2>
+          <div className="flex gap-2">
+            {/* 현재가 / 수익률 토글 */}
+            <div className="flex rounded-md border overflow-hidden text-xs">
+              <button
+                onClick={() => setHoldingView("price")}
+                className={`flex items-center gap-1 px-2.5 py-1.5 transition-colors ${holdingView === "price" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+              >
+                <DollarSign className="w-3 h-3" />전일대비
+              </button>
+              <button
+                onClick={() => setHoldingView("return")}
+                className={`flex items-center gap-1 px-2.5 py-1.5 transition-colors ${holdingView === "return" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+              >
+                <BarChart2 className="w-3 h-3" />수익률
+              </button>
+            </div>
+            <Button size="sm" variant="outline" onClick={handleRefreshPrices} disabled={refreshing || holdings.length === 0}>
+              <RefreshCw className={`w-3.5 h-3.5 mr-1 ${refreshing ? "animate-spin" : ""}`} />갱신
+            </Button>
+            <Button size="sm" onClick={openAdd}><Plus className="w-3.5 h-3.5 mr-1" />추가</Button>
           </div>
+        </div>
+        <div className="overflow-x-auto rounded-lg border">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-muted/50 text-xs text-muted-foreground">
+                <th className="px-3 py-2 text-left">종목</th>
+                <th className="px-3 py-2 text-right">수량</th>
+                {holdingView === "price" ? (
+                  <>
+                    <th className="px-3 py-2 text-right">현재가</th>
+                    <th className="px-3 py-2 text-right">전일대비</th>
+                  </>
+                ) : (
+                  <>
+                    <th className="px-3 py-2 text-right">평가금액</th>
+                    <th className="px-3 py-2 text-right">수익률</th>
+                  </>
+                )}
+                <th className="px-3 py-2 text-right">평가손익</th>
+                <th className="px-3 py-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {holdings.map(h => {
+                const rate = profitRate(h);
+                const profit = profitAmount(h);
+                const color = getProfitColor(rate);
+                const evalValue = (h.currentPrice ?? 0) * (h.quantity ?? 0);
+                return (
+                  <tr key={h.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                    <td className="px-3 py-1.5">
+                      <Link
+                        href={`/portfolio/stock/${encodeURIComponent(h.ticker)}?market=${h.market}`}
+                        className="hover:underline"
+                      >
+                        <div>
+                          <span className="font-medium">{h.name}</span>
+                          <span className="text-xs text-muted-foreground ml-1.5">{h.ticker}</span>
+                        </div>
+                      </Link>
+                      <div className="flex gap-1 mt-0.5">
+                        <Badge variant="outline" className="text-[10px] h-4">{h.market}</Badge>
+                        {h.sector && (
+                          <Badge variant="outline" className="text-[10px] h-4">{SECTOR_LABELS[h.sector]}</Badge>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-3 py-1.5 text-right">{(h.quantity ?? 0).toLocaleString()}</td>
+                    {holdingView === "price" ? (
+                      <>
+                        <td className="px-3 py-1.5 text-right font-medium">{formatCurrency(h.currentPrice, h.currency)}</td>
+                        <td className="px-3 py-1.5 text-right">
+                          {dailyMap[h.ticker] ? (
+                            <span className={dailyMap[h.ticker].changeRate >= 0 ? "text-red-500" : "text-blue-500"}>
+                              {dailyMap[h.ticker].changeRate >= 0 ? "▲" : "▼"}{Math.abs(dailyMap[h.ticker].changeRate).toFixed(2)}%
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">갱신 필요</span>
+                          )}
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="px-3 py-1.5 text-right">{formatCurrency(evalValue, h.currency)}</td>
+                        <td className={`px-3 py-1.5 text-right font-medium ${color}`}>
+                          {rate >= 0 ? "+" : ""}{rate.toFixed(2)}%
+                        </td>
+                      </>
+                    )}
+                    <td className={`px-3 py-1.5 text-right ${color}`}>
+                      {profit >= 0 ? "+" : ""}{formatCurrency(profit, h.currency)}
+                    </td>
+                    <td className="px-3 py-1.5">
+                      <div className="flex gap-1 justify-end">
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openEdit(h)}>
+                          <Pencil className="w-3 h-3" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleDelete(h.id)}>
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
 
-      {/* 자산 변화 추이 */}
+      {/* 5. 자산 변화 추이 */}
       {snapshots.length >= 2 && (
         <Card>
           <CardHeader className="pb-2">
@@ -569,7 +545,7 @@ export default function PortfolioPage() {
         </Card>
       )}
 
-      {/* Treemap */}
+      {/* 6. 수익률 맵 (Treemap) */}
       {treemapData.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
@@ -628,7 +604,7 @@ export default function PortfolioPage() {
         </Card>
       )}
 
-      {/* Sector breakdown */}
+      {/* 7. 섹터별 비중 */}
       {sectorData.length > 1 && (
         <Card>
           <CardHeader className="pb-2">
@@ -644,6 +620,28 @@ export default function PortfolioPage() {
                 </div>
               ))}
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 8. 종목별 비중 (파이차트) */}
+      {chartData.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">종목별 비중</CardTitle>
+          </CardHeader>
+          <CardContent className="h-52">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={chartData} cx="50%" cy="50%" innerRadius={55} outerRadius={90} dataKey="value" paddingAngle={2}>
+                  {chartData.map((_, i) => (
+                    <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(v) => `${v}%`} />
+                <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+              </PieChart>
+            </ResponsiveContainer>
           </CardContent>
         </Card>
       )}

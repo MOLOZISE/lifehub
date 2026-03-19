@@ -23,17 +23,16 @@ const tabs: Tab[] = [
   {
     label: "학습", href: "/study/analytics", icon: BookOpen,
     children: [
-      { label: "📚 과목 · 학습", href: "/study/subjects" },
+      { label: "📚 학습 관리", href: "/study/subjects" },
       { label: "📊 학습 분석", href: "/study/analytics" },
     ],
   },
   {
-    label: "자산", href: "/portfolio", icon: TrendingUp,
+    label: "자산", href: "/stock", icon: TrendingUp,
     children: [
+      { label: "📡 증권 동향", href: "/stock" },
       { label: "📊 포트폴리오", href: "/portfolio" },
       { label: "⭐ 관심 종목", href: "/portfolio/watchlist" },
-      { label: "📡 증권 동향", href: "/stock" },
-      { label: "📋 거래 내역", href: "/portfolio/trades" },
     ],
   },
   {
@@ -49,7 +48,6 @@ const tabs: Tab[] = [
     label: "맛집", href: "/restaurant", icon: Utensils,
     children: [
       { label: "🗺️ 맛집 지도", href: "/restaurant" },
-      { label: "⭐ 내 리스트", href: "/restaurant/mylist" },
     ],
   },
 ];
