@@ -59,6 +59,8 @@ export function MarketOverview({ compact = false }: Props) {
   const [market, setMarket] = useState<Record<string, MarketItem>>({});
   const [lastUpdate, setLastUpdate] = useState<number | null>(null);
   const [fetching, setFetching] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [isStale, setIsStale] = useState(false);
   const [selected, setSelected] = useState<string[]>(DEFAULT_SYMBOLS);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [draftSelected, setDraftSelected] = useState<string[]>([]);
@@ -76,11 +78,24 @@ export function MarketOverview({ compact = false }: Props) {
       if (force) params.set("refresh", "1");
       params.set("symbols", syms.join(","));
       const res = await fetch(`/api/market/overview?${params}`);
-      if (res.ok) {
-        const json = await res.json();
-        setMarket(json.data ?? {});
+      const json = await res.json();
+      if (Object.keys(json.data ?? {}).length > 0) {
+        setMarket(json.data);
         setLastUpdate(json.cachedAt ?? Date.now());
+        setIsStale(!!json.stale);
       }
+      // 에러 메시지: fetchError 또는 errors 배열
+      if (json.fetchError) {
+        setFetchError(json.fetchError);
+      } else if (json.errors?.length) {
+        setFetchError(`일부 데이터 조회 실패: ${json.errors.join(", ")}`);
+      } else if (!res.ok && json.error) {
+        setFetchError(json.error);
+      } else {
+        setFetchError(null);
+      }
+    } catch {
+      setFetchError("네트워크 오류로 시황 데이터를 불러올 수 없습니다");
     } finally {
       setFetching(false);
     }
@@ -135,19 +150,36 @@ export function MarketOverview({ compact = false }: Props) {
   const bonds = sortedItems.filter(i => i.type === "bond");
 
   if (items.length === 0) return (
-    <div className="flex items-center justify-center h-14 text-xs text-muted-foreground gap-2">
-      {fetching
-        ? <><RefreshCw className="w-3 h-3 animate-spin" />시황 로딩 중...</>
-        : <>
-            <span>시황 데이터 없음</span>
-            <button onClick={() => load(true)} className="text-primary hover:underline text-xs">재시도</button>
-          </>
-      }
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-center h-14 text-xs text-muted-foreground gap-2">
+        {fetching
+          ? <><RefreshCw className="w-3 h-3 animate-spin" />시황 로딩 중...</>
+          : <>
+              <span>{fetchError ?? "시황 데이터를 불러올 수 없습니다"}</span>
+              <button onClick={() => load(true)} className="text-primary hover:underline text-xs shrink-0">재시도</button>
+            </>
+        }
+      </div>
     </div>
   );
 
   return (
     <div className="space-y-2">
+      {/* 에러/stale 배너 */}
+      {fetchError && (
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-xs text-amber-700 dark:text-amber-400">
+          <span className="shrink-0">⚠️</span>
+          <span className="flex-1">{fetchError}</span>
+          <button onClick={() => load(true)} className="shrink-0 underline hover:no-underline">재시도</button>
+        </div>
+      )}
+      {!fetchError && isStale && lastUpdate && (
+        <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-muted/60 text-xs text-muted-foreground">
+          <RefreshCw className="w-3 h-3 animate-spin" />
+          <span>최신 데이터 갱신 중... ({new Date(lastUpdate).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 기준 데이터 표시)</span>
+        </div>
+      )}
+
       {!compact && (
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">글로벌 시황</h3>

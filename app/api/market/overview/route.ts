@@ -3,14 +3,31 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import type { MarketItem } from "@/lib/market-symbols";
 import { ALL_SYMBOLS, DEFAULT_SYMBOLS } from "@/lib/market-symbols";
+import { getKrIndex, getUsIndex, getUsPrice, getKrPrice } from "@/lib/kis";
 export type { MarketItem } from "@/lib/market-symbols";
 export { ALL_SYMBOLS, DEFAULT_SYMBOLS };
 
-// In-memory cache (서버 재시작 전까지 유효)
+// In-memory cache
 let memCache: { data: Record<string, MarketItem>; ts: number } | null = null;
 const MEM_CACHE_TTL = 5 * 60 * 1000; // 5분
 
-async function fetchOneSymbol(sym: { symbol: string; label: string; currency: string; type: MarketItem["type"] }): Promise<MarketItem | null> {
+// KIS 커버 심볼 매핑
+const KIS_INDEX_MAP: Record<string, { type: "kr" | "us"; code: string }> = {
+  "^KS11": { type: "kr", code: "0001" },
+  "^KQ11": { type: "kr", code: "1001" },
+  "^IXIC": { type: "us", code: "N0100" },
+  "^GSPC": { type: "us", code: "N0300" },
+  "^DJI":  { type: "us", code: "N0400" },
+};
+
+const KIS_STOCK_MAP: Record<string, { market: "KR" | "US" }> = {
+  "MU":   { market: "US" }, "WDC":  { market: "US" },
+  "NVDA": { market: "US" }, "AAPL": { market: "US" },
+  "TSLA": { market: "US" },
+};
+
+// Yahoo Finance chart API 폴백 (FX, 원자재, 채권용)
+async function fetchYahooOne(sym: typeof ALL_SYMBOLS[number]): Promise<MarketItem | null> {
   try {
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym.symbol)}?range=1d&interval=1d&includePrePost=false`;
     const res = await fetch(url, {
@@ -40,15 +57,79 @@ async function fetchOneSymbol(sym: { symbol: string; label: string; currency: st
   }
 }
 
-async function fetchYahooQuotes(symbols: string[]): Promise<Record<string, MarketItem>> {
-  if (symbols.length === 0) return {};
-  const metas = symbols.map(s => ALL_SYMBOLS.find(a => a.symbol === s)).filter(Boolean) as typeof ALL_SYMBOLS;
-  const results = await Promise.all(metas.map(fetchOneSymbol));
-  const quotes: Record<string, MarketItem> = {};
-  for (const item of results) {
-    if (item) quotes[item.symbol] = item;
-  }
-  return quotes;
+async function fetchAllSymbols(): Promise<{ data: Record<string, MarketItem>; errors: string[] }> {
+  const errors: string[] = [];
+  const data: Record<string, MarketItem> = {};
+
+  const tasks = DEFAULT_SYMBOLS.map(async (symbol) => {
+    const meta = ALL_SYMBOLS.find(s => s.symbol === symbol);
+    if (!meta) return;
+
+    // KIS 지수
+    if (KIS_INDEX_MAP[symbol]) {
+      const { type, code } = KIS_INDEX_MAP[symbol];
+      try {
+        const result = type === "kr" ? await getKrIndex(code) : await getUsIndex(code);
+        data[symbol] = {
+          symbol,
+          label: meta.label,
+          price: result.price,
+          change: result.change,
+          changeRate: result.changeRate,
+          currency: meta.currency,
+          type: meta.type,
+        };
+        return;
+      } catch (e) {
+        const msg = String(e);
+        if (msg.includes("초당 거래건수") || msg.includes("rate") || msg.includes("limit") || msg.includes("429")) {
+          errors.push(`KIS 요청 한도 초과 (${meta.label})`);
+        } else {
+          errors.push(`${meta.label}: ${msg}`);
+        }
+        // 폴백: Yahoo Finance
+      }
+    }
+
+    // KIS 주식
+    if (KIS_STOCK_MAP[symbol]) {
+      const { market } = KIS_STOCK_MAP[symbol];
+      try {
+        const result = market === "KR" ? await getKrPrice(symbol) : await getUsPrice(symbol);
+        data[symbol] = {
+          symbol,
+          label: meta.label,
+          price: result.price,
+          change: result.change,
+          changeRate: result.changeRate,
+          currency: meta.currency,
+          type: meta.type,
+        };
+        return;
+      } catch (e) {
+        const msg = String(e);
+        if (msg.includes("초당 거래건수") || msg.includes("rate") || msg.includes("limit") || msg.includes("429")) {
+          errors.push(`KIS 요청 한도 초과 (${meta.label})`);
+        } else {
+          errors.push(`${meta.label}: ${msg}`);
+        }
+        // 폴백: Yahoo Finance
+      }
+    }
+
+    // Yahoo Finance (FX, 원자재, 채권 + 위 KIS 실패 폴백)
+    if (!(symbol in data)) {
+      const result = await fetchYahooOne(meta);
+      if (result) {
+        data[symbol] = result;
+      } else {
+        errors.push(`${meta.label}: 데이터 조회 실패`);
+      }
+    }
+  });
+
+  await Promise.all(tasks);
+  return { data, errors };
 }
 
 async function loadFromDb(): Promise<{ data: Record<string, MarketItem>; ts: number } | null> {
@@ -68,9 +149,7 @@ async function saveToDb(data: Record<string, MarketItem>) {
       create: { id: "singleton", data: data as never },
       update: { data: data as never },
     });
-  } catch {
-    // DB 저장 실패는 무시 (in-memory로 fallback)
-  }
+  } catch { /* 무시 */ }
 }
 
 export async function GET(req: NextRequest) {
@@ -79,22 +158,21 @@ export async function GET(req: NextRequest) {
 
   const url = new URL(req.url);
   const force = url.searchParams.get("refresh") === "1";
-  // 사용자가 요청한 종목 리스트 (없으면 default)
   const symbolsParam = url.searchParams.get("symbols");
   const requestedSymbols = symbolsParam
     ? symbolsParam.split(",").filter(s => ALL_SYMBOLS.some(a => a.symbol === s))
     : DEFAULT_SYMBOLS;
 
-  // force가 아니면 in-memory 캐시 먼저 확인
-  if (!force && memCache && Date.now() - memCache.ts < MEM_CACHE_TTL) {
-    const filtered = Object.fromEntries(
-      Object.entries(memCache.data).filter(([k]) => requestedSymbols.includes(k))
-    );
-    return NextResponse.json({ data: filtered, cached: true, cachedAt: memCache.ts });
-  }
-
-  // DB 캐시 확인 (서버 재시작 후 복원용)
-  if (!force && !memCache) {
+  // 1. 캐시 확인 (force 아닌 경우) — 캐시 있으면 바로 반환
+  if (!force) {
+    // in-memory 캐시
+    if (memCache && Date.now() - memCache.ts < MEM_CACHE_TTL) {
+      const filtered = Object.fromEntries(
+        Object.entries(memCache.data).filter(([k]) => requestedSymbols.includes(k))
+      );
+      return NextResponse.json({ data: filtered, cached: true, cachedAt: memCache.ts });
+    }
+    // DB 캐시
     const dbCache = await loadFromDb();
     if (dbCache && Date.now() - dbCache.ts < MEM_CACHE_TTL) {
       memCache = dbCache;
@@ -103,28 +181,84 @@ export async function GET(req: NextRequest) {
       );
       return NextResponse.json({ data: filtered, cached: true, cachedAt: dbCache.ts });
     }
+
+    // 캐시가 만료됐어도 DB에 이전 데이터 있으면 반환하면서 백그라운드 갱신
+    if (dbCache && Object.keys(dbCache.data).length > 0) {
+      // 백그라운드에서 갱신 (응답은 stale 데이터로 즉시)
+      fetchAllSymbols().then(({ data }) => {
+        if (Object.keys(data).length > 0) {
+          memCache = { data, ts: Date.now() };
+          saveToDb(data);
+        }
+      }).catch(() => {});
+
+      const filtered = Object.fromEntries(
+        Object.entries(dbCache.data).filter(([k]) => requestedSymbols.includes(k))
+      );
+      return NextResponse.json({
+        data: filtered,
+        cached: true,
+        stale: true,
+        cachedAt: dbCache.ts,
+      });
+    }
   }
 
-  // 전체 default 종목 fetch (캐시는 전체 기준으로 저장)
+  // 2. 신규 fetch
   try {
-    const data = await fetchYahooQuotes(DEFAULT_SYMBOLS);
-    memCache = { data, ts: Date.now() };
-    // DB에 비동기로 저장
-    saveToDb(data);
+    const { data, errors } = await fetchAllSymbols();
+
+    if (Object.keys(data).length > 0) {
+      memCache = { data, ts: Date.now() };
+      saveToDb(data);
+    }
+
+    // 일부 실패해도 DB 과거 데이터와 병합
+    let merged = data;
+    if (errors.length > 0) {
+      const dbCache = await loadFromDb();
+      if (dbCache) {
+        merged = { ...dbCache.data, ...data }; // 신규 성공 데이터 우선
+      }
+    }
 
     const filtered = Object.fromEntries(
-      Object.entries(data).filter(([k]) => requestedSymbols.includes(k))
+      Object.entries(merged).filter(([k]) => requestedSymbols.includes(k))
     );
-    return NextResponse.json({ data: filtered, cached: false, cachedAt: memCache.ts });
+
+    return NextResponse.json({
+      data: filtered,
+      cached: false,
+      cachedAt: memCache?.ts ?? Date.now(),
+      errors: errors.length > 0 ? errors : undefined,
+    });
   } catch (e) {
-    // 캐시 fallback
+    // 완전 실패 — DB/메모리 캐시 반환
     const fallback = memCache ?? (await loadFromDb());
-    if (fallback) {
+    const errorMsg = String(e);
+    const reason = errorMsg.includes("초당 거래건수") || errorMsg.includes("429")
+      ? "API 요청 한도 초과"
+      : errorMsg.includes("timeout") || errorMsg.includes("ETIMEDOUT")
+      ? "API 서버 응답 시간 초과"
+      : "외부 API 오류";
+
+    if (fallback && Object.keys(fallback.data).length > 0) {
       const filtered = Object.fromEntries(
         Object.entries(fallback.data).filter(([k]) => requestedSymbols.includes(k))
       );
-      return NextResponse.json({ data: filtered, cached: true, cachedAt: fallback.ts, stale: true });
+      return NextResponse.json({
+        data: filtered,
+        cached: true,
+        stale: true,
+        cachedAt: fallback.ts,
+        fetchError: `${reason} — 이전 저장 데이터를 표시합니다`,
+      });
     }
-    return NextResponse.json({ error: String(e) }, { status: 502 });
+
+    return NextResponse.json({
+      data: {},
+      error: reason,
+      fetchError: `${reason} — 저장된 데이터도 없습니다. 잠시 후 다시 시도해주세요.`,
+    }, { status: 502 });
   }
 }
