@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { RefreshCw, Settings2, Check } from "lucide-react";
 import type { MarketItem } from "@/lib/market-symbols";
 import { ALL_SYMBOLS, DEFAULT_SYMBOLS } from "@/lib/market-symbols";
@@ -88,6 +88,7 @@ export function MarketOverview({ compact = false }: Props) {
   const [selected, setSelected] = useState<string[]>(DEFAULT_SYMBOLS);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [draftSelected, setDraftSelected] = useState<string[]>([]);
+  const staleTimerRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     setSelected(getSelectedSymbols());
@@ -116,6 +117,11 @@ export function MarketOverview({ compact = false }: Props) {
       } else {
         setFetchError(null);
       }
+
+      // stale 데이터를 받은 경우: 서버 백그라운드 갱신이 끝날 때까지 4초 후 재폴링
+      if (json.stale && !json.fetchError) {
+        staleTimerRef.current = window.setTimeout(() => load(), 4000);
+      }
     } catch {
       setFetchError("네트워크 오류로 시황 데이터를 불러올 수 없습니다");
     } finally {
@@ -123,7 +129,12 @@ export function MarketOverview({ compact = false }: Props) {
     }
   }, [selected]);
 
-  useEffect(() => { load(); }, [selected]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    clearTimeout(staleTimerRef.current);
+    load();
+  }, [selected]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => () => clearTimeout(staleTimerRef.current), []);
 
   useEffect(() => {
     const id = setInterval(() => {
