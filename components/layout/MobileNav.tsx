@@ -71,12 +71,8 @@ export function MobileNav() {
       router.push(tab.href);
       return;
     }
-    // 하위 메뉴가 있는 탭: 이미 활성 탭이면 Sheet 토글, 아니면 바로 이동
-    if (isTabActive(tab, pathname)) {
-      setOpenSheet(prev => (prev === tab.label ? null : tab.label));
-    } else {
-      router.push(tab.href);
-    }
+    // 하위 메뉴가 있는 탭: 항상 Sheet 토글 (이미 열려있으면 닫기, 아니면 열기)
+    setOpenSheet(prev => (prev === tab.label ? null : tab.label));
   }
 
   const activeSheetTab = tabs.find(t => t.label === openSheet);
@@ -95,11 +91,16 @@ export function MobileNav() {
                 active ? "text-primary font-medium" : "text-muted-foreground"
               )}
             >
-              <tab.icon className="w-5 h-5" />
+              <div className="relative">
+                <tab.icon className="w-5 h-5" />
+                {tab.children && (
+                  <span className={cn(
+                    "absolute -top-0.5 -right-1.5 w-1.5 h-1.5 rounded-full",
+                    active ? "bg-primary" : "bg-muted-foreground/40"
+                  )} />
+                )}
+              </div>
               {tab.label}
-              {tab.children && active && (
-                <span className="w-1 h-1 rounded-full bg-primary absolute top-1" />
-              )}
             </button>
           );
         })}

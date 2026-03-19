@@ -51,6 +51,8 @@ model User {
   likes          Like[]
   bookmarks      Bookmark[]
   reports        Report[]
+  followers      Follow[]   @relation("FollowFollowing")
+  following      Follow[]   @relation("FollowFollower")
 
   // Restaurant
   restaurants    Restaurant[]
@@ -130,6 +132,7 @@ model Subject {
   studyLogs     StudyLog[]
   wrongAnswers  WrongAnswerNote[]
   examSubjects  ExamSubject[]
+  exams         Exam[]
 
   @@map("subjects")
 }
@@ -253,6 +256,7 @@ model DailyGoalItem {
 model Exam {
   id          String    @id @default(cuid())
   userId      String
+  subjectId   String?
   name        String
   category    String
   examDate    String    // YYYY-MM-DD
@@ -265,6 +269,7 @@ model Exam {
   updatedAt   DateTime  @updatedAt
 
   user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject      Subject?          @relation(fields: [subjectId], references: [id], onDelete: SetNull)
   examSubjects ExamSubject[]
   studySessions StudySession[]
   wrongAnswers  WrongAnswerNote[]
@@ -499,6 +504,19 @@ model Report {
   @@map("reports")
 }
 
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("FollowFollower", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("FollowFollowing", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@map("follows")
+}
+
 // ─── Restaurant App ──────────────────────────────────────────────────────────
 
 model Restaurant {
@@ -514,6 +532,7 @@ model Restaurant {
   url          String?  // 카카오맵 or 네이버 지도 URL
   description  String?  @db.Text
   images       String[] @default([])
+  menus        String[] @default([])
   avgRating    Float    @default(0)
   reviewCount  Int      @default(0)
   createdAt    DateTime @default(now())

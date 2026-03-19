@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Pencil, Trash2, Trophy, Calendar, Target } from "lucide-react";
+import { Plus, Pencil, Trash2, Trophy, Calendar, Target, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -26,34 +26,45 @@ const STATUS_COLORS: Record<ExamStatus, string> = {
 
 const CATEGORY_OPTIONS = ["자격증", "어학", "TOPCIT", "공무원", "대학시험", "기타"];
 
+interface Subject { id: string; name: string; emoji: string; color: string; }
+
 interface Exam {
   id: string; name: string; category: string | null; examDate: string;
   targetScore: number | null; passScore: number | null; actualScore: number | null;
   status: ExamStatus; memo: string | null; createdAt: string;
+  subjectId: string | null;
+  subject: Subject | null;
 }
 
 const emptyForm = {
   name: "", category: "자격증", examDate: "",
   targetScore: "", passScore: "", memo: "",
   status: "upcoming" as ExamStatus, actualScore: "",
+  subjectId: "",
 };
 
 export default function ExamsPage() {
   const [exams, setExams] = useState<Exam[]>([]);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Exam | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [filterSubjectId, setFilterSubjectId] = useState<string>("all");
 
   const today = todayString();
 
-  async function loadExams() {
-    const res = await fetch("/api/study/exams");
-    if (res.ok) setExams(await res.json());
+  async function loadAll() {
+    const [examRes, subRes] = await Promise.all([
+      fetch("/api/study/exams"),
+      fetch("/api/study/subjects"),
+    ]);
+    if (examRes.ok) setExams(await examRes.json());
+    if (subRes.ok) setSubjects(await subRes.json());
     setLoading(false);
   }
 
-  useEffect(() => { loadExams(); }, []);
+  useEffect(() => { loadAll(); }, []);
 
   function daysUntil(dateStr: string): number {
     const diff = new Date(dateStr).getTime() - new Date(today).getTime();
@@ -71,6 +82,7 @@ export default function ExamsPage() {
       passScore: exam.passScore?.toString() ?? "",
       memo: exam.memo ?? "", status: exam.status,
       actualScore: exam.actualScore?.toString() ?? "",
+      subjectId: exam.subjectId ?? "",
     });
     setDialogOpen(true);
   }
@@ -82,6 +94,7 @@ export default function ExamsPage() {
       targetScore: form.targetScore || null, passScore: form.passScore || null,
       memo: form.memo || null, status: form.status,
       actualScore: form.actualScore || null,
+      subjectId: form.subjectId || null,
     };
     const url = editing ? `/api/study/exams/${editing.id}` : "/api/study/exams";
     const method = editing ? "PUT" : "POST";
@@ -89,7 +102,7 @@ export default function ExamsPage() {
     if (!res.ok) { toast.error("저장 실패"); return; }
     toast.success(editing ? "수정되었습니다." : "시험이 추가되었습니다.");
     setDialogOpen(false);
-    loadExams();
+    loadAll();
   }
 
   async function handleDelete(id: string) {
@@ -99,8 +112,14 @@ export default function ExamsPage() {
     setExams(e => e.filter(x => x.id !== id));
   }
 
-  const active = exams.filter(e => e.status === "upcoming");
-  const past = exams.filter(e => e.status !== "upcoming");
+  const filtered = filterSubjectId === "all"
+    ? exams
+    : filterSubjectId === "none"
+    ? exams.filter(e => !e.subjectId)
+    : exams.filter(e => e.subjectId === filterSubjectId);
+
+  const active = filtered.filter(e => e.status === "upcoming");
+  const past = filtered.filter(e => e.status !== "upcoming");
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -111,6 +130,33 @@ export default function ExamsPage() {
         </div>
         <Button onClick={openAdd}><Plus className="w-4 h-4 mr-1.5" />시험 추가</Button>
       </div>
+
+      {/* 과목 필터 */}
+      {subjects.length > 0 && (
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => setFilterSubjectId("all")}
+            className={`px-3 py-1 rounded-full text-sm transition-colors ${filterSubjectId === "all" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}
+          >
+            전체
+          </button>
+          {subjects.map(s => (
+            <button
+              key={s.id}
+              onClick={() => setFilterSubjectId(filterSubjectId === s.id ? "all" : s.id)}
+              className={`px-3 py-1 rounded-full text-sm transition-colors ${filterSubjectId === s.id ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}
+            >
+              {s.emoji} {s.name}
+            </button>
+          ))}
+          <button
+            onClick={() => setFilterSubjectId("none")}
+            className={`px-3 py-1 rounded-full text-sm transition-colors ${filterSubjectId === "none" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}
+          >
+            미분류
+          </button>
+        </div>
+      )}
 
       {loading ? <p className="text-center py-12 text-muted-foreground">불러오는 중...</p> : (
         <>
@@ -126,6 +172,12 @@ export default function ExamsPage() {
                       <CardContent className="p-4 space-y-3">
                         <div className="flex items-start justify-between gap-2">
                           <div>
+                            {exam.subject && (
+                              <div className="flex items-center gap-1 mb-1">
+                                <BookOpen className="w-3 h-3 text-muted-foreground" />
+                                <span className="text-xs text-muted-foreground">{exam.subject.emoji} {exam.subject.name}</span>
+                              </div>
+                            )}
                             <p className="font-semibold">{exam.name}</p>
                             <p className="text-xs text-muted-foreground">{exam.category}</p>
                           </div>
@@ -174,9 +226,10 @@ export default function ExamsPage() {
                 {past.map(exam => (
                   <div key={exam.id} className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-sm">{exam.name}</span>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[exam.status]}`}>{STATUS_LABELS[exam.status]}</span>
+                        {exam.subject && <Badge variant="outline" className="text-[10px]">{exam.subject.emoji} {exam.subject.name}</Badge>}
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {new Date(exam.examDate).toLocaleDateString("ko-KR")}
@@ -201,6 +254,21 @@ export default function ExamsPage() {
           <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
             <div className="grid grid-cols-2 gap-2">
               <div className="col-span-2"><p className="text-xs mb-1 font-medium">시험명 *</p><Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="예: 정보처리기사 필기" /></div>
+
+              {/* 과목 연결 */}
+              {subjects.length > 0 && (
+                <div className="col-span-2">
+                  <p className="text-xs mb-1 font-medium">연결 과목 (선택)</p>
+                  <Select value={form.subjectId || "none"} onValueChange={v => setForm(f => ({ ...f, subjectId: v === "none" ? "" : (v ?? "") }))}>
+                    <SelectTrigger><SelectValue placeholder="과목 선택 (선택사항)" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">미분류</SelectItem>
+                      {subjects.map(s => <SelectItem key={s.id} value={s.id}>{s.emoji} {s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               <div><p className="text-xs mb-1 font-medium">분류</p>
                 <Select value={form.category} onValueChange={v => v && setForm(f => ({ ...f, category: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>

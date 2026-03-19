@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
-import { Plus, Pencil, Trash2, TrendingUp, TrendingDown, AlertTriangle, ShieldCheck, RefreshCw } from "lucide-react";
+import { Plus, Pencil, Trash2, TrendingUp, TrendingDown, AlertTriangle, ShieldCheck, RefreshCw, BarChart2, DollarSign } from "lucide-react";
 import { MarketOverview } from "@/components/market/MarketOverview";
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend, Treemap,
@@ -82,6 +82,7 @@ export default function PortfolioPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [priceUpdatedAt, setPriceUpdatedAt] = useState<number | null>(null);
+  const [holdingView, setHoldingView] = useState<"price" | "return">("price");
   const snapshotSaved = useRef(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Holding | null>(null);
@@ -422,10 +423,25 @@ export default function PortfolioPage() {
           <div className="flex justify-between items-center">
             <h2 className="font-semibold text-sm">보유 종목</h2>
             <div className="flex gap-2">
+              {/* 현재가 / 수익률 토글 */}
+              <div className="flex rounded-md border overflow-hidden text-xs">
+                <button
+                  onClick={() => setHoldingView("price")}
+                  className={`flex items-center gap-1 px-2.5 py-1.5 transition-colors ${holdingView === "price" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+                >
+                  <DollarSign className="w-3 h-3" />현재가
+                </button>
+                <button
+                  onClick={() => setHoldingView("return")}
+                  className={`flex items-center gap-1 px-2.5 py-1.5 transition-colors ${holdingView === "return" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+                >
+                  <BarChart2 className="w-3 h-3" />수익률
+                </button>
+              </div>
               <Button size="sm" variant="outline" onClick={handleRefreshPrices} disabled={refreshing || holdings.length === 0}>
-                <RefreshCw className={`w-3.5 h-3.5 mr-1 ${refreshing ? "animate-spin" : ""}`} />현재가 갱신
+                <RefreshCw className={`w-3.5 h-3.5 mr-1 ${refreshing ? "animate-spin" : ""}`} />갱신
               </Button>
-              <Button size="sm" onClick={openAdd}><Plus className="w-3.5 h-3.5 mr-1" />종목 추가</Button>
+              <Button size="sm" onClick={openAdd}><Plus className="w-3.5 h-3.5 mr-1" />추가</Button>
             </div>
           </div>
           <div className="overflow-x-auto rounded-lg border">
@@ -434,9 +450,17 @@ export default function PortfolioPage() {
                 <tr className="border-b bg-muted/50 text-xs text-muted-foreground">
                   <th className="px-3 py-2 text-left">종목</th>
                   <th className="px-3 py-2 text-right">수량</th>
-                  <th className="px-3 py-2 text-right">평균단가</th>
-                  <th className="px-3 py-2 text-right">현재가</th>
-                  <th className="px-3 py-2 text-right">수익률</th>
+                  {holdingView === "price" ? (
+                    <>
+                      <th className="px-3 py-2 text-right">평균단가</th>
+                      <th className="px-3 py-2 text-right">현재가</th>
+                    </>
+                  ) : (
+                    <>
+                      <th className="px-3 py-2 text-right">평가금액</th>
+                      <th className="px-3 py-2 text-right">수익률</th>
+                    </>
+                  )}
                   <th className="px-3 py-2 text-right">평가손익</th>
                   <th className="px-3 py-2"></th>
                 </tr>
@@ -446,6 +470,7 @@ export default function PortfolioPage() {
                   const rate = profitRate(h);
                   const profit = profitAmount(h);
                   const color = getProfitColor(rate);
+                  const evalValue = (h.currentPrice ?? 0) * (h.quantity ?? 0);
                   return (
                     <tr key={h.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                       <td className="px-3 py-2.5">
@@ -466,11 +491,19 @@ export default function PortfolioPage() {
                         </div>
                       </td>
                       <td className="px-3 py-2.5 text-right">{(h.quantity ?? 0).toLocaleString()}</td>
-                      <td className="px-3 py-2.5 text-right text-muted-foreground">{formatCurrency(h.avgPrice, h.currency)}</td>
-                      <td className="px-3 py-2.5 text-right">{formatCurrency(h.currentPrice, h.currency)}</td>
-                      <td className={`px-3 py-2.5 text-right font-medium ${color}`}>
-                        {rate >= 0 ? "+" : ""}{rate.toFixed(2)}%
-                      </td>
+                      {holdingView === "price" ? (
+                        <>
+                          <td className="px-3 py-2.5 text-right text-muted-foreground">{formatCurrency(h.avgPrice, h.currency)}</td>
+                          <td className="px-3 py-2.5 text-right font-medium">{formatCurrency(h.currentPrice, h.currency)}</td>
+                        </>
+                      ) : (
+                        <>
+                          <td className="px-3 py-2.5 text-right">{formatCurrency(evalValue, h.currency)}</td>
+                          <td className={`px-3 py-2.5 text-right font-medium ${color}`}>
+                            {rate >= 0 ? "+" : ""}{rate.toFixed(2)}%
+                          </td>
+                        </>
+                      )}
                       <td className={`px-3 py-2.5 text-right ${color}`}>
                         {profit >= 0 ? "+" : ""}{formatCurrency(profit, h.currency)}
                       </td>

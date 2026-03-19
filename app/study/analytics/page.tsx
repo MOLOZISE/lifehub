@@ -335,8 +335,8 @@ ${weeklyData.map(d => `${d.day}: ${d.minutes}분`).join(", ")}`;
         {[
           { href: "/study/exams", label: "시험 관리", icon: "🎯" },
           { href: "/study/sessions", label: "세션 기록", icon: "📝" },
-          { href: "/study/planner", label: "AI 플래너", icon: "🤖" },
           { href: "/study/subjects", label: "과목 관리", icon: "📚" },
+          { href: "/study/wrong-answers", label: "오답 노트", icon: "✏️" },
         ].map(item => (
           <Link key={item.href} href={item.href}>
             <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">

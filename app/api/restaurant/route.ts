@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
       { name: { contains: search, mode: "insensitive" } },
       { address: { contains: search, mode: "insensitive" } },
       { description: { contains: search, mode: "insensitive" } },
+      { menus: { has: search } },
     ];
   }
 
@@ -56,7 +57,7 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { name, category, address, roadAddress, latitude, longitude, phone, url, description } = body;
+  const { name, category, address, roadAddress, latitude, longitude, phone, url, description, menus } = body;
 
   if (!name || !category || !address) {
     return NextResponse.json({ error: "이름, 카테고리, 주소는 필수입니다." }, { status: 400 });
@@ -74,6 +75,7 @@ export async function POST(req: NextRequest) {
       phone: phone || null,
       url: url || null,
       description: description || null,
+      menus: menus ?? [],
       // 등록 즉시 내 맛집으로 자동 저장
       bookmarks: {
         create: { userId: session.user.id, listName: "내 맛집" },

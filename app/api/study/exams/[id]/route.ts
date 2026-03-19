@@ -14,7 +14,7 @@ export async function PUT(
   if (!exam || exam.userId !== session.user.id) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const body = await req.json();
-  const { name, category, examDate, targetScore, passScore, actualScore, status, memo } = body;
+  const { name, category, examDate, targetScore, passScore, actualScore, status, memo, subjectId } = body;
 
   const updated = await prisma.exam.update({
     where: { id },
@@ -27,7 +27,9 @@ export async function PUT(
       actualScore: actualScore !== undefined ? (actualScore ? Number(actualScore) : null) : exam.actualScore,
       status: status ?? exam.status,
       memo: memo !== undefined ? (memo || null) : exam.memo,
+      subjectId: subjectId !== undefined ? (subjectId || null) : exam.subjectId,
     },
+    include: { subject: { select: { id: true, name: true, emoji: true, color: true } } },
   });
 
   return NextResponse.json(updated);

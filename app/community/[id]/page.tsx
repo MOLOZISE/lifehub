@@ -4,7 +4,7 @@ import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { Heart, MessageSquare, Eye, ArrowLeft, Send, Loader2, Trash2, Pencil, X, Check } from "lucide-react";
+import { Heart, MessageSquare, Eye, ArrowLeft, Send, Loader2, Trash2, Pencil, X, Check, UserPlus, UserCheck } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -92,6 +92,15 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
   const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
   const [editSaving, setEditSaving] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followToggling, setFollowToggling] = useState(false);
+
+  useEffect(() => {
+    if (!post || !session?.user || post.isAnonymous || !post.user || post.user.id === session.user.id) return;
+    fetch(`/api/community/follow/${post.user.id}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setIsFollowing(d.following); });
+  }, [post, session]);
 
   useEffect(() => {
     fetch(`/api/community/posts/${id}`)
@@ -190,8 +199,36 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
             <div className="space-y-1.5">
               <Badge variant="secondary">{CATEGORY_LABELS[post.category] ?? post.category}</Badge>
               <h1 className="text-xl font-bold">{post.title}</h1>
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <span>{post.isAnonymous ? "익명" : post.user?.name ?? "알 수 없음"}</span>
+              <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
+                {post.isAnonymous || !post.user ? (
+                  <span>{post.isAnonymous ? "익명" : "알 수 없음"}</span>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Link href={`/community/users/${post.user.id}`} className="hover:text-foreground hover:underline font-medium">
+                      {post.user.name}
+                    </Link>
+                    {session?.user && !isAuthor && (
+                      <button
+                        onClick={async () => {
+                          if (!post.user) return;
+                          setFollowToggling(true);
+                          const res = await fetch(`/api/community/follow/${post.user.id}`, { method: "POST" });
+                          if (res.ok) {
+                            const d = await res.json();
+                            setIsFollowing(d.following);
+                            toast.success(d.following ? "팔로우했습니다" : "팔로우 취소");
+                          }
+                          setFollowToggling(false);
+                        }}
+                        disabled={followToggling}
+                        className={`flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full border transition-colors ${isFollowing ? "border-primary/40 text-primary bg-primary/5" : "border-muted-foreground/30 hover:border-primary/50 hover:text-primary"}`}
+                      >
+                        {isFollowing ? <UserCheck className="w-3 h-3" /> : <UserPlus className="w-3 h-3" />}
+                        {isFollowing ? "팔로잉" : "팔로우"}
+                      </button>
+                    )}
+                  </div>
+                )}
                 <span>{formatDistanceToNow(post.createdAt)}</span>
                 <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{post.viewCount}</span>
               </div>

@@ -47,6 +47,7 @@ function CommunityContent() {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<"latest" | "popular">("latest");
+  const [feed, setFeed] = useState<"" | "following">("");
 
   const fetchPosts = useCallback(async () => {
     setLoading(true);
@@ -56,6 +57,7 @@ function CommunityContent() {
       if (activeTag) params.set("tag", activeTag);
       if (search) params.set("search", search);
       if (myOnly) params.set("my", "1");
+      if (feed) params.set("feed", feed);
       const res = await fetch(`/api/community/posts?${params}`);
       const data = await res.json();
       setPosts(data.posts ?? []);
@@ -63,11 +65,11 @@ function CommunityContent() {
     } finally {
       setLoading(false);
     }
-  }, [category, activeTag, page, search, sort]);
+  }, [category, activeTag, page, search, sort, myOnly, feed]);
 
   useEffect(() => {
     setPage(1);
-  }, [category, activeTag, search, sort, myOnly]);
+  }, [category, activeTag, search, sort, myOnly, feed]);
 
   useEffect(() => {
     fetchPosts();
@@ -126,14 +128,24 @@ function CommunityContent() {
           </Button>
         ))}
         {session?.user && (
-          <Button
-            variant={myOnly ? "default" : "outline"}
-            size="sm"
-            className="gap-1.5"
-            onClick={() => router.push(myOnly ? "/community" : "/community?my=1")}
-          >
-            <User className="w-3.5 h-3.5" />내 글
-          </Button>
+          <>
+            <Button
+              variant={feed === "following" && !myOnly ? "default" : "outline"}
+              size="sm"
+              className="gap-1.5"
+              onClick={() => { setFeed(f => f === "following" ? "" : "following"); router.push("/community"); }}
+            >
+              팔로잉
+            </Button>
+            <Button
+              variant={myOnly ? "default" : "outline"}
+              size="sm"
+              className="gap-1.5"
+              onClick={() => router.push(myOnly ? "/community" : "/community?my=1")}
+            >
+              <User className="w-3.5 h-3.5" />내 글
+            </Button>
+          </>
         )}
       </div>
       {(search || activeTag) && (
@@ -189,7 +201,16 @@ function CommunityContent() {
                     </div>
                   </div>
                   <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
-                    <span>{post.isAnonymous ? "익명" : post.user?.name ?? "알 수 없음"}</span>
+                    {post.isAnonymous || !post.user ? (
+                      <span>{post.isAnonymous ? "익명" : "알 수 없음"}</span>
+                    ) : (
+                      <button
+                        onClick={e => { e.preventDefault(); router.push(`/community/users/${post.user!.id}`); }}
+                        className="hover:text-foreground hover:underline transition-colors"
+                      >
+                        {post.user.name}
+                      </button>
+                    )}
                     <span>{formatDistanceToNow(post.createdAt)}</span>
                     <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{post.viewCount}</span>
                     <span className="flex items-center gap-1"><Heart className="w-3 h-3" />{post._count.likes}</span>

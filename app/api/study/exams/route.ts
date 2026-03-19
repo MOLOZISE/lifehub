@@ -9,6 +9,7 @@ export async function GET() {
   const exams = await prisma.exam.findMany({
     where: { userId: session.user.id },
     orderBy: { examDate: "asc" },
+    include: { subject: { select: { id: true, name: true, emoji: true, color: true } } },
   });
 
   return NextResponse.json(exams);
@@ -19,7 +20,7 @@ export async function POST(req: Request) {
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { name, category, examDate, targetScore, passScore, actualScore, status, memo } = body;
+  const { name, category, examDate, targetScore, passScore, actualScore, status, memo, subjectId } = body;
 
   if (!name || !examDate) return NextResponse.json({ error: "name and examDate are required" }, { status: 400 });
 
@@ -28,13 +29,15 @@ export async function POST(req: Request) {
       userId: session.user.id,
       name,
       category: category || null,
-      examDate: examDate,
+      examDate,
       targetScore: targetScore ? Number(targetScore) : null,
       passScore: passScore ? Number(passScore) : null,
       actualScore: actualScore ? Number(actualScore) : null,
       status: status ?? "upcoming",
       memo: memo || null,
+      subjectId: subjectId || null,
     },
+    include: { subject: { select: { id: true, name: true, emoji: true, color: true } } },
   });
 
   return NextResponse.json(exam, { status: 201 });

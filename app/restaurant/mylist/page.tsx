@@ -60,6 +60,11 @@ export default function MyListPage() {
   const [draftColor, setDraftColor] = useState("#6366f1");
   const [saving, setSaving] = useState(false);
 
+  // 아이템 메모 편집
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editingMemo, setEditingMemo] = useState("");
+  const [savingMemo, setSavingMemo] = useState(false);
+
   // 삭제 확인
   const [deleteTarget, setDeleteTarget] = useState<RestaurantList | null>(null);
 
@@ -158,6 +163,29 @@ export default function MyListPage() {
     const remaining = lists.filter(l => l.id !== list.id);
     setActiveListId(remaining[0]?.id ?? null);
     await fetchLists();
+  }
+
+  function startEditMemo(item: ListItem) {
+    setEditingItemId(item.id);
+    setEditingMemo(item.memo ?? "");
+  }
+
+  async function saveMemo(item: ListItem) {
+    if (!activeListId) return;
+    setSavingMemo(true);
+    try {
+      const res = await fetch(`/api/restaurant/lists/${activeListId}/items/${item.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memo: editingMemo }),
+      });
+      if (!res.ok) { toast.error("메모 저장 실패"); return; }
+      setItems(prev => prev.map(i => i.id === item.id ? { ...i, memo: editingMemo || null } : i));
+      setEditingItemId(null);
+      toast.success("메모가 저장됐습니다");
+    } finally {
+      setSavingMemo(false);
+    }
   }
 
   async function removeFromList(item: ListItem) {
@@ -315,18 +343,52 @@ export default function MyListPage() {
                             <span className="text-muted-foreground/60">({item.restaurant.reviewCount})</span>
                           </span>
                         </div>
-                        {item.memo && (
-                          <p className="text-xs text-muted-foreground mt-1 italic">"{item.memo}"</p>
-                        )}
                       </Link>
-                      <button
-                        onClick={() => removeFromList(item)}
-                        className="p-1.5 rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-destructive shrink-0"
-                        title="리스트에서 제거"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <button
+                          onClick={(e) => { e.preventDefault(); startEditMemo(item); }}
+                          className="p-1.5 rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+                          title="메모 편집"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => removeFromList(item)}
+                          className="p-1.5 rounded-md hover:bg-accent transition-colors text-muted-foreground hover:text-destructive"
+                          title="리스트에서 제거"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
+                    {/* 메모 인라인 편집 */}
+                    {editingItemId === item.id ? (
+                      <div className="mt-2 flex gap-2 items-center">
+                        <Input
+                          value={editingMemo}
+                          onChange={e => setEditingMemo(e.target.value)}
+                          placeholder="메모를 입력하세요..."
+                          className="text-xs h-8 flex-1"
+                          autoFocus
+                          onKeyDown={e => { if (e.key === "Enter") saveMemo(item); if (e.key === "Escape") setEditingItemId(null); }}
+                        />
+                        <button
+                          onClick={() => saveMemo(item)}
+                          disabled={savingMemo}
+                          className="p-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => setEditingItemId(null)}
+                          className="p-1.5 rounded-md hover:bg-accent transition-colors text-muted-foreground"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : item.memo ? (
+                      <p className="text-xs text-muted-foreground mt-1.5 italic">"{item.memo}"</p>
+                    ) : null}
                   </CardContent>
                 </Card>
               ))}

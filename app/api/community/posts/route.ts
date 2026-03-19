@@ -2,27 +2,39 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
-// GET /api/community/posts?category=free&page=1&limit=20&my=1
+// GET /api/community/posts?category=free&page=1&limit=20&my=1&feed=following
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const category = searchParams.get("category");
   const search = searchParams.get("search");
   const tag = searchParams.get("tag");
   const my = searchParams.get("my") === "1";
+  const feed = searchParams.get("feed"); // "following"
   const sort = searchParams.get("sort") ?? "latest"; // latest | popular
   const page = parseInt(searchParams.get("page") ?? "1");
   const limit = parseInt(searchParams.get("limit") ?? "20");
   const skip = (page - 1) * limit;
 
   let myUserId: string | null = null;
-  if (my) {
+  if (my || feed === "following") {
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     myUserId = session.user.id;
   }
 
+  // 팔로잉 피드: 내가 팔로우하는 사람들의 글만
+  let followingIds: string[] = [];
+  if (feed === "following" && myUserId) {
+    const follows = await prisma.follow.findMany({
+      where: { followerId: myUserId },
+      select: { followingId: true },
+    });
+    followingIds = follows.map(f => f.followingId);
+  }
+
   const where = {
-    ...(myUserId ? { userId: myUserId } : {}),
+    ...(my && myUserId ? { userId: myUserId } : {}),
+    ...(feed === "following" ? { userId: { in: followingIds } } : {}),
     ...(category ? { category } : {}),
     ...(tag ? { tags: { has: tag } } : {}),
     ...(search ? {

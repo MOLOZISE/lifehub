@@ -45,6 +45,7 @@ interface RestaurantDetail {
   phone: string | null;
   url: string | null;
   description: string | null;
+  menus: string[];
   avgRating: number;
   reviewCount: number;
   user: { id: string; name: string | null };
@@ -85,7 +86,7 @@ export default function RestaurantDetailPage() {
   const [reviewForm, setReviewForm] = useState({ rating: 5, content: "", visitedAt: "", isAnonymous: false });
   const [submitting, setSubmitting] = useState(false);
   const [editDialog, setEditDialog] = useState(false);
-  const [editForm, setEditForm] = useState({ name: "", category: "", address: "", phone: "", url: "", description: "" });
+  const [editForm, setEditForm] = useState({ name: "", category: "", address: "", phone: "", url: "", description: "", menusInput: "" });
   const [editSaving, setEditSaving] = useState(false);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -156,16 +157,21 @@ export default function RestaurantDetailPage() {
 
   function openEdit() {
     if (!restaurant) return;
-    setEditForm({ name: restaurant.name, category: restaurant.category, address: restaurant.address, phone: restaurant.phone ?? "", url: restaurant.url ?? "", description: restaurant.description ?? "" });
+    setEditForm({
+      name: restaurant.name, category: restaurant.category, address: restaurant.address,
+      phone: restaurant.phone ?? "", url: restaurant.url ?? "", description: restaurant.description ?? "",
+      menusInput: (restaurant.menus ?? []).join(", "),
+    });
     setEditDialog(true);
   }
 
   async function handleEdit() {
     setEditSaving(true);
+    const menus = editForm.menusInput.split(",").map(m => m.trim()).filter(Boolean);
     const res = await fetch(`/api/restaurant/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(editForm),
+      body: JSON.stringify({ ...editForm, menus }),
     });
     setEditSaving(false);
     if (!res.ok) { toast.error("수정 실패"); return; }
@@ -503,6 +509,10 @@ export default function RestaurantDetailPage() {
             <div>
               <p className="text-xs mb-1">한줄 소개</p>
               <Input value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} />
+            </div>
+            <div>
+              <p className="text-xs mb-1">대표 메뉴 <span className="text-muted-foreground">(쉼표로 구분, 예: 삼겹살, 된장찌개)</span></p>
+              <Input value={editForm.menusInput} onChange={e => setEditForm(f => ({ ...f, menusInput: e.target.value }))} placeholder="삼겹살, 된장찌개, 공기밥" />
             </div>
           </div>
           <DialogFooter>
