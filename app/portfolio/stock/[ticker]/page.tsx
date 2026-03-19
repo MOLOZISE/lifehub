@@ -4,8 +4,8 @@ import { useEffect, useState, useMemo } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  ArrowLeft, TrendingUp, TrendingDown, RefreshCw, Loader2,
-  BarChart3, Newspaper, Info, Briefcase, Star, ExternalLink,
+  ArrowLeft, RefreshCw, Loader2,
+  BarChart3, Newspaper, Info, Briefcase, ExternalLink, ChevronUp, ChevronDown,
 } from "lucide-react";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
@@ -13,7 +13,6 @@ import {
 } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import type { OHLCVBar } from "@/lib/types";
@@ -112,8 +111,8 @@ function NewsSectionCard({ section }: { section: NewsSection }) {
   const target = isSummary ? (section.items.find(i => i.startsWith("목표주가"))?.replace(/^목표주가:\s*/, "") ?? "") : "";
   const summary = isSummary ? (section.items.find(i => i.startsWith("한 줄"))?.replace(/^한 줄 요약:\s*/, "") ?? "") : "";
   return (
-    <div className={`rounded-lg border ${s.border}`}>
-      <div className={`flex items-center gap-2 px-3 py-2 ${s.bg} rounded-t-lg`}>
+    <div className={`rounded-xl border ${s.border}`}>
+      <div className={`flex items-center gap-2 px-3 py-2 ${s.bg} rounded-t-xl`}>
         <span className="text-xs">{s.icon}</span>
         <span className="text-xs font-semibold flex-1">{section.title}</span>
         {isSummary && opinion && <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${OPINION_COLORS[opinion] ?? "bg-gray-200"}`}>{opinion}</span>}
@@ -140,14 +139,17 @@ function NewsSectionCard({ section }: { section: NewsSection }) {
   );
 }
 
-type Period = "5D" | "1M" | "3M" | "6M" | "1Y" | "2Y";
+type Period = "1D" | "1W" | "1M" | "3M" | "6M" | "1Y";
 const PERIOD_CONFIG: Record<Period, { range: string; interval: string }> = {
-  "5D":  { range: "5d",  interval: "30m" },
+  "1D":  { range: "1d",  interval: "5m" },
+  "1W":  { range: "5d",  interval: "30m" },
   "1M":  { range: "1mo", interval: "1d" },
   "3M":  { range: "3mo", interval: "1d" },
   "6M":  { range: "6mo", interval: "1d" },
   "1Y":  { range: "1y",  interval: "1wk" },
-  "2Y":  { range: "2y",  interval: "1wk" },
+};
+const PERIOD_LABELS: Record<Period, string> = {
+  "1D": "1일", "1W": "1주", "1M": "1달", "3M": "3달", "6M": "6달", "1Y": "1년",
 };
 
 // ── 캔들 차트 ────────────────────────────────────────────
@@ -186,18 +188,18 @@ const CandleTooltip = ({ active, payload }: { active?: boolean; payload?: { payl
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
   const change = d.close - d.open;
-  const color = change >= 0 ? "text-red-500" : "text-blue-500";
+  const isUp = change >= 0;
   const fmt = (n: number) => n > 1000 ? n.toLocaleString() : n.toFixed(2);
   return (
-    <div className="bg-background border rounded-lg p-3 text-xs shadow-lg space-y-1">
-      <p className="font-semibold">{d.date}</p>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
-        <span className="text-muted-foreground">시가</span><span>{fmt(d.open)}</span>
-        <span className="text-muted-foreground">고가</span><span className="text-red-500">{fmt(d.high)}</span>
-        <span className="text-muted-foreground">저가</span><span className="text-blue-500">{fmt(d.low)}</span>
-        <span className="text-muted-foreground">종가</span><span className={color}>{fmt(d.close)}</span>
-        <span className="text-muted-foreground">거래량</span><span>{d.volume?.toLocaleString()}</span>
+    <div className="bg-background/95 backdrop-blur border rounded-xl p-3 text-xs shadow-xl space-y-1.5 min-w-[140px]">
+      <p className="font-semibold text-[11px] text-muted-foreground">{d.date}</p>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+        <span className="text-muted-foreground">시가</span><span className="font-medium text-right">{fmt(d.open)}</span>
+        <span className="text-muted-foreground">고가</span><span className="font-medium text-right text-red-500">{fmt(d.high)}</span>
+        <span className="text-muted-foreground">저가</span><span className="font-medium text-right text-blue-500">{fmt(d.low)}</span>
+        <span className="text-muted-foreground">종가</span><span className={`font-bold text-right ${isUp ? "text-red-500" : "text-blue-500"}`}>{fmt(d.close)}</span>
       </div>
+      {d.volume != null && <p className="text-muted-foreground pt-1 border-t">거래량 {d.volume.toLocaleString()}</p>}
       {d.ma5 != null && <p className="text-purple-400">MA5: {fmt(d.ma5)}</p>}
       {d.ma20 != null && <p className="text-yellow-400">MA20: {fmt(d.ma20)}</p>}
     </div>
@@ -222,12 +224,22 @@ function pct(n: number | null | undefined): string {
 }
 
 const RECOMMEND_LABEL: Record<string, { label: string; color: string }> = {
-  strongBuy: { label: "강력매수", color: "bg-green-600" },
-  buy: { label: "매수", color: "bg-green-400" },
+  strongBuy: { label: "강력매수", color: "bg-red-500" },
+  buy: { label: "매수", color: "bg-red-400" },
   hold: { label: "보유", color: "bg-yellow-500" },
-  underperform: { label: "매도검토", color: "bg-orange-500" },
-  sell: { label: "매도", color: "bg-red-500" },
+  underperform: { label: "매도검토", color: "bg-blue-400" },
+  sell: { label: "매도", color: "bg-blue-600" },
 };
+
+// 토스 스타일 지표 행
+function MetricRow({ label, value, valueClass }: { label: string; value: string; valueClass?: string }) {
+  return (
+    <div className="flex items-center justify-between py-3 border-b last:border-0">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className={`text-sm font-semibold ${valueClass ?? ""}`}>{value}</span>
+    </div>
+  );
+}
 
 // ── 메인 페이지 ─────────────────────────────────────────
 export default function StockDetailPage() {
@@ -253,7 +265,6 @@ export default function StockDetailPage() {
 
   const yahooTicker = toYahooTicker(ticker, market);
 
-  // 초기 데이터 로드
   useEffect(() => {
     if (!ticker) return;
     loadInfo();
@@ -316,7 +327,7 @@ export default function StockDetailPage() {
   }
 
   async function loadNews() {
-    if (news) return; // already loaded
+    if (news) return;
     setNewsLoading(true);
     try {
       const stockName = info?.name ?? ticker;
@@ -355,16 +366,22 @@ export default function StockDetailPage() {
     }));
   }, [chartMeta]);
 
+  // 거래량 최대값 (정규화용)
+  const maxVolume = useMemo(() => Math.max(...chartData.map(d => d.volume ?? 0)), [chartData]);
+
   const displayPrice = livePrice ?? info?.regularMarketPrice;
   const change = info?.regularMarketChange;
   const changePct = info?.regularMarketChangePercent;
   const isUp = (change ?? 0) >= 0;
   const currency = info?.currency ?? (market === "KR" ? "KRW" : "USD");
 
-  const priceLabel = (n: number | null | undefined) => {
+  const priceLabel = (n: number | null | undefined, short = false) => {
     if (n == null) return "-";
-    if (currency === "KRW") return `₩${n.toLocaleString("ko-KR")}`;
-    return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+    if (currency === "KRW") {
+      if (short && Math.abs(n) >= 1000) return `₩${(n / 1000).toFixed(1)}K`;
+      return `₩${Math.round(n).toLocaleString("ko-KR")}`;
+    }
+    return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   // 보유 손익 계산
@@ -373,6 +390,11 @@ export default function StockDetailPage() {
     : null;
   const holdingProfitAmt = holding
     ? ((displayPrice ?? holding.currentPrice) - holding.avgPrice) * holding.quantity
+    : null;
+
+  // 52주 현재 위치 %
+  const fiftyTwoPct = (displayPrice != null && info?.fiftyTwoWeekHigh != null && info?.fiftyTwoWeekLow != null)
+    ? Math.min(100, Math.max(0, ((displayPrice - info.fiftyTwoWeekLow) / (info.fiftyTwoWeekHigh - info.fiftyTwoWeekLow)) * 100))
     : null;
 
   if (infoLoading) {
@@ -385,407 +407,376 @@ export default function StockDetailPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-5">
+    <div className="max-w-2xl mx-auto space-y-0">
 
       {/* ── 헤더 ── */}
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => router.back()}>
+      <div className="flex items-center gap-2 py-3">
+        <Button variant="ghost" size="icon" className="shrink-0" onClick={() => router.back()}>
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-xl font-bold truncate">{info?.name ?? ticker}</h1>
-            <Badge variant="outline" className="font-mono text-xs shrink-0">{ticker}</Badge>
-            <Badge variant={market === "KR" ? "default" : "secondary"} className="text-xs shrink-0">
-              {market === "KR" ? "🇰🇷 국내" : "🇺🇸 해외"}
-            </Badge>
-            {inWatchlist && <Badge className="text-xs bg-amber-500 border-0 shrink-0">⭐ 관심종목</Badge>}
+          <h1 className="font-bold truncate">{info?.name ?? ticker}</h1>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className="text-xs text-muted-foreground font-mono">{ticker}</span>
+            <span className="text-xs text-muted-foreground">·</span>
+            <span className="text-xs text-muted-foreground">{market === "KR" ? "국내주식" : "해외주식"}</span>
+            {inWatchlist && (
+              <Badge className="text-[10px] h-4 px-1.5 bg-amber-500/20 text-amber-600 border-0 ml-1">관심</Badge>
+            )}
           </div>
         </div>
-        <Link href={`/portfolio/chart?ticker=${encodeURIComponent(yahooTicker)}`} passHref>
-          <Button variant="outline" size="sm">
-            <BarChart3 className="w-3.5 h-3.5 mr-1.5" />차트 분석
-          </Button>
-        </Link>
-        <Link href={`/portfolio/news?ticker=${encodeURIComponent(ticker)}&market=${market}`} passHref>
-          <Button variant="outline" size="sm">
-            <Newspaper className="w-3.5 h-3.5 mr-1.5" />AI 뉴스
-          </Button>
-        </Link>
       </div>
 
-      {/* ── 현재가 카드 ── */}
-      <Card>
-        <CardContent className="p-5">
-          <div className="flex items-end gap-4 flex-wrap">
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">현재가</p>
-              <div className="flex items-baseline gap-3">
-                <span className="text-4xl font-bold tracking-tight">
-                  {displayPrice != null ? priceLabel(displayPrice) : "-"}
+      {/* ── 현재가 블록 (토스 스타일) ── */}
+      <div className="px-1 pb-6 pt-2">
+        <div className="flex items-end justify-between">
+          <div>
+            <p className="text-4xl font-bold tracking-tight tabular-nums">
+              {displayPrice != null ? priceLabel(displayPrice) : "—"}
+            </p>
+            {change != null && (
+              <div className={`flex items-center gap-1.5 mt-1.5 ${isUp ? "text-red-500" : "text-blue-500"}`}>
+                {isUp ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                <span className="text-sm font-semibold">
+                  {isUp ? "+" : ""}{priceLabel(change)}
                 </span>
-                {change != null && (
-                  <div className={`flex items-center gap-1 text-lg font-semibold ${isUp ? "text-red-500" : "text-blue-500"}`}>
-                    {isUp ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
-                    <span>{isUp ? "+" : ""}{priceLabel(change)}</span>
-                    <span className="text-base">({isUp ? "+" : ""}{((changePct ?? 0) * 100).toFixed(2)}%)</span>
-                  </div>
-                )}
+                <span className="text-sm font-medium opacity-80">
+                  ({isUp ? "+" : ""}{((changePct ?? 0) * 100).toFixed(2)}%)
+                </span>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                전일 종가 {priceLabel(info?.regularMarketPreviousClose)}
-              </p>
-            </div>
-            <div className="ml-auto">
-              <Button variant="outline" size="sm" onClick={refreshLivePrice} disabled={livePriceLoading}>
-                <RefreshCw className={`w-3.5 h-3.5 mr-1 ${livePriceLoading ? "animate-spin" : ""}`} />
-                실시간 갱신
-              </Button>
-              <p className="text-[10px] text-muted-foreground mt-1 text-right">KIS API 필요</p>
-            </div>
+            )}
+            <p className="text-xs text-muted-foreground mt-1">
+              전일 종가 {priceLabel(info?.regularMarketPreviousClose)}
+            </p>
           </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs text-muted-foreground gap-1 h-8"
+            onClick={refreshLivePrice}
+            disabled={livePriceLoading}
+          >
+            <RefreshCw className={`w-3 h-3 ${livePriceLoading ? "animate-spin" : ""}`} />
+            실시간
+          </Button>
+        </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t">
-            <div>
-              <p className="text-xs text-muted-foreground">시가</p>
-              <p className="font-medium text-sm">{priceLabel(info?.regularMarketOpen)}</p>
+        {/* 일일 오버뷰 */}
+        <div className="grid grid-cols-4 gap-0 mt-5 bg-muted/50 rounded-2xl overflow-hidden">
+          {[
+            { label: "시가", value: priceLabel(info?.regularMarketOpen, true) },
+            { label: "고가", value: priceLabel(info?.regularMarketDayHigh, true), cls: "text-red-500" },
+            { label: "저가", value: priceLabel(info?.regularMarketDayLow, true), cls: "text-blue-500" },
+            { label: "거래량", value: fmt(info?.regularMarketVolume, 0) },
+          ].map(({ label, value, cls }) => (
+            <div key={label} className="flex flex-col items-center py-3 px-1">
+              <span className="text-[10px] text-muted-foreground mb-1">{label}</span>
+              <span className={`text-xs font-semibold tabular-nums ${cls ?? ""}`}>{value}</span>
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground">고가</p>
-              <p className="font-medium text-sm text-red-500">{priceLabel(info?.regularMarketDayHigh)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">저가</p>
-              <p className="font-medium text-sm text-blue-500">{priceLabel(info?.regularMarketDayLow)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">거래량</p>
-              <p className="font-medium text-sm">{fmt(info?.regularMarketVolume, 0)}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          ))}
+        </div>
+      </div>
 
-      {/* ── 탭 콘텐츠 ── */}
+      {/* ── 탭 ── */}
       <Tabs defaultValue="chart">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="chart"><BarChart3 className="w-3.5 h-3.5 mr-1.5" />차트</TabsTrigger>
-          <TabsTrigger value="holding"><Briefcase className="w-3.5 h-3.5 mr-1.5" />보유현황</TabsTrigger>
-          <TabsTrigger value="news" onClick={loadNews}><Newspaper className="w-3.5 h-3.5 mr-1.5" />AI 뉴스</TabsTrigger>
-          <TabsTrigger value="info"><Info className="w-3.5 h-3.5 mr-1.5" />기본정보</TabsTrigger>
+        <TabsList className="w-full rounded-none border-b bg-transparent h-auto p-0">
+          {[
+            { value: "chart", icon: <BarChart3 className="w-3.5 h-3.5" />, label: "차트" },
+            { value: "holding", icon: <Briefcase className="w-3.5 h-3.5" />, label: "보유" },
+            { value: "news", icon: <Newspaper className="w-3.5 h-3.5" />, label: "AI 뉴스" },
+            { value: "info", icon: <Info className="w-3.5 h-3.5" />, label: "종목정보" },
+          ].map(({ value, icon, label }) => (
+            <TabsTrigger
+              key={value}
+              value={value}
+              onClick={value === "news" ? loadNews : undefined}
+              className="flex-1 flex items-center gap-1 rounded-none border-b-2 border-transparent data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:shadow-none pb-2 pt-1 text-xs font-medium text-muted-foreground data-[state=active]:text-foreground"
+            >
+              {icon}{label}
+            </TabsTrigger>
+          ))}
         </TabsList>
 
         {/* ── 차트 탭 ── */}
-        <TabsContent value="chart" className="mt-4">
-          <Card>
-            <CardHeader className="pb-2 pt-4 px-4">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <div className="flex gap-1">
-                  {(["5D", "1M", "3M", "6M", "1Y", "2Y"] as Period[]).map(p => (
-                    <button
-                      key={p}
-                      onClick={() => onPeriodChange(p)}
-                      className={`px-2.5 py-1 text-xs rounded-md font-medium transition-colors ${
-                        period === p ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"
-                      }`}
-                    >
-                      {p}
-                    </button>
-                  ))}
-                </div>
-                <div className="flex gap-1.5 items-center">
-                  <span className="text-[10px] text-muted-foreground">이평선:</span>
-                  {([
-                    { key: "ma5", label: "5", color: "text-purple-500 border-purple-300" },
-                    { key: "ma20", label: "20", color: "text-yellow-500 border-yellow-300" },
-                    { key: "ma60", label: "60", color: "text-green-500 border-green-300" },
-                  ] as { key: keyof typeof maVisible; label: string; color: string }[]).map(({ key, label, color }) => (
-                    <button
-                      key={key}
-                      onClick={() => setMaVisible(v => ({ ...v, [key]: !v[key] }))}
-                      className={`text-[10px] px-1.5 py-0.5 rounded border font-mono transition-opacity ${color} ${maVisible[key] ? "opacity-100" : "opacity-30"}`}
-                    >
-                      MA{label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="px-1 pb-4">
-              {chartLoading ? (
-                <div className="flex items-center justify-center h-64 text-muted-foreground gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin" /> 차트 로딩 중...
-                </div>
-              ) : chartData.length === 0 ? (
-                <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">
-                  차트 데이터가 없습니다.
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height={300}>
-                  <ComposedChart data={chartData} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted/40" />
-                    <XAxis
-                      dataKey="date"
-                      tick={{ fontSize: 10 }}
-                      tickFormatter={d => d.slice(5)}
-                      interval={Math.floor(chartData.length / 6)}
-                    />
-                    <YAxis
-                      domain={["auto", "auto"]}
-                      tick={{ fontSize: 10 }}
-                      tickFormatter={n => n > 1000 ? (n / 1000).toFixed(0) + "k" : String(n)}
-                      width={55}
-                    />
-                    <Tooltip content={<CandleTooltip />} />
-                    <Bar dataKey="high" shape={<CandleShape />} isAnimationActive={false}>
-                      {chartData.map((d, i) => <Cell key={i} fill={d.isUp ? "#ef4444" : "#3b82f6"} />)}
-                    </Bar>
-                    {maVisible.ma5 && <Line type="monotone" dataKey="ma5" stroke="#a855f7" strokeWidth={1.5} dot={false} connectNulls />}
-                    {maVisible.ma20 && <Line type="monotone" dataKey="ma20" stroke="#eab308" strokeWidth={1.5} dot={false} connectNulls />}
-                    {maVisible.ma60 && <Line type="monotone" dataKey="ma60" stroke="#22c55e" strokeWidth={1.5} dot={false} connectNulls />}
-                  </ComposedChart>
-                </ResponsiveContainer>
-              )}
-              <div className="flex justify-center gap-4 mt-2 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-red-500 inline-block" />상승</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-blue-500 inline-block" />하락</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-purple-500 inline-block" />MA5</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-yellow-500 inline-block" />MA20</span>
-              </div>
-            </CardContent>
-          </Card>
+        <TabsContent value="chart" className="mt-4 space-y-3">
+          {/* 기간 선택 */}
+          <div className="flex gap-1 bg-muted/50 rounded-xl p-1">
+            {(Object.keys(PERIOD_CONFIG) as Period[]).map(p => (
+              <button
+                key={p}
+                onClick={() => onPeriodChange(p)}
+                className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
+                  period === p
+                    ? "bg-background shadow-sm text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {PERIOD_LABELS[p]}
+              </button>
+            ))}
+          </div>
+
+          {/* 이평선 토글 */}
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-muted-foreground">이평선</span>
+            {([
+              { key: "ma5", label: "5일", color: "text-purple-500", activeBg: "bg-purple-500/15" },
+              { key: "ma20", label: "20일", color: "text-amber-500", activeBg: "bg-amber-500/15" },
+              { key: "ma60", label: "60일", color: "text-emerald-500", activeBg: "bg-emerald-500/15" },
+            ] as { key: keyof typeof maVisible; label: string; color: string; activeBg: string }[]).map(({ key, label, color, activeBg }) => (
+              <button
+                key={key}
+                onClick={() => setMaVisible(v => ({ ...v, [key]: !v[key] }))}
+                className={`text-[10px] px-2 py-0.5 rounded-full font-medium transition-all ${color} ${maVisible[key] ? activeBg : "opacity-30"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {chartLoading ? (
+            <div className="flex items-center justify-center h-64 text-muted-foreground gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" /> 차트 로딩 중...
+            </div>
+          ) : chartData.length === 0 ? (
+            <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">
+              차트 데이터가 없습니다.
+            </div>
+          ) : (
+            <div>
+              {/* 캔들 차트 */}
+              <ResponsiveContainer width="100%" height={260}>
+                <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="0" stroke="transparent" />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 9, fill: "var(--muted-foreground)" }}
+                    tickFormatter={d => d.slice(5)}
+                    interval={Math.floor(chartData.length / 5)}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    domain={["auto", "auto"]}
+                    tick={{ fontSize: 9, fill: "var(--muted-foreground)" }}
+                    tickFormatter={n => n > 10000 ? (n / 1000).toFixed(0) + "K" : n > 1000 ? n.toLocaleString() : String(n)}
+                    width={52}
+                    axisLine={false}
+                    tickLine={false}
+                    orientation="right"
+                  />
+                  <Tooltip content={<CandleTooltip />} cursor={{ stroke: "var(--border)", strokeWidth: 1 }} />
+                  <Bar dataKey="high" shape={<CandleShape />} isAnimationActive={false}>
+                    {chartData.map((d, i) => <Cell key={i} fill={d.isUp ? "#ef4444" : "#3b82f6"} />)}
+                  </Bar>
+                  {maVisible.ma5 && <Line type="monotone" dataKey="ma5" stroke="#a855f7" strokeWidth={1.5} dot={false} connectNulls />}
+                  {maVisible.ma20 && <Line type="monotone" dataKey="ma20" stroke="#f59e0b" strokeWidth={1.5} dot={false} connectNulls />}
+                  {maVisible.ma60 && <Line type="monotone" dataKey="ma60" stroke="#10b981" strokeWidth={1.5} dot={false} connectNulls />}
+                </ComposedChart>
+              </ResponsiveContainer>
+
+              {/* 거래량 차트 */}
+              <ResponsiveContainer width="100%" height={60}>
+                <ComposedChart data={chartData} margin={{ top: 0, right: 4, left: -20, bottom: 0 }}>
+                  <XAxis dataKey="date" hide />
+                  <YAxis domain={[0, maxVolume]} hide width={52} />
+                  <Bar dataKey="volume" isAnimationActive={false} radius={[1,1,0,0]}>
+                    {chartData.map((d, i) => (
+                      <Cell key={i} fill={d.isUp ? "rgb(239 68 68 / 0.4)" : "rgb(59 130 246 / 0.4)"} />
+                    ))}
+                  </Bar>
+                </ComposedChart>
+              </ResponsiveContainer>
+              <p className="text-[10px] text-muted-foreground text-center -mt-1">거래량</p>
+            </div>
+          )}
         </TabsContent>
 
         {/* ── 보유현황 탭 ── */}
         <TabsContent value="holding" className="mt-4">
           {holding ? (
             <div className="space-y-4">
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm">내 보유현황</CardTitle></CardHeader>
-                <CardContent className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              <div className="bg-muted/30 rounded-2xl p-5">
+                <div className="grid grid-cols-2 gap-y-5">
                   <div>
-                    <p className="text-xs text-muted-foreground">보유 수량</p>
-                    <p className="text-2xl font-bold">{holding.quantity.toLocaleString()}</p>
-                    <p className="text-xs text-muted-foreground">주</p>
+                    <p className="text-xs text-muted-foreground mb-1">보유 수량</p>
+                    <p className="text-2xl font-bold">{holding.quantity.toLocaleString()}<span className="text-sm font-normal text-muted-foreground ml-1">주</span></p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">평균단가</p>
+                    <p className="text-xs text-muted-foreground mb-1">평균단가</p>
                     <p className="text-2xl font-bold">{priceLabel(holding.avgPrice)}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">평가금액</p>
-                    <p className="text-2xl font-bold">{priceLabel((displayPrice ?? holding.currentPrice) * holding.quantity)}</p>
+                    <p className="text-xs text-muted-foreground mb-1">평가금액</p>
+                    <p className="text-xl font-bold">{priceLabel((displayPrice ?? holding.currentPrice) * holding.quantity)}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">매입금액</p>
-                    <p className="font-semibold">{priceLabel(holding.avgPrice * holding.quantity)}</p>
+                    <p className="text-xs text-muted-foreground mb-1">매입금액</p>
+                    <p className="text-xl font-bold">{priceLabel(holding.avgPrice * holding.quantity)}</p>
                   </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">평가손익</p>
-                    <p className={`font-semibold text-lg ${(holdingProfitAmt ?? 0) >= 0 ? "text-red-500" : "text-blue-500"}`}>
-                      {(holdingProfitAmt ?? 0) >= 0 ? "+" : ""}
-                      {priceLabel(holdingProfitAmt)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">수익률</p>
-                    <p className={`font-semibold text-lg flex items-center gap-1 ${(holdingProfitRate ?? 0) >= 0 ? "text-red-500" : "text-blue-500"}`}>
-                      {(holdingProfitRate ?? 0) >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-                      {(holdingProfitRate ?? 0) >= 0 ? "+" : ""}
-                      {(holdingProfitRate ?? 0).toFixed(2)}%
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-              <div className="flex gap-2">
-                <Link href="/portfolio" passHref className="flex-1">
-                  <Button variant="outline" className="w-full">포트폴리오 보기</Button>
-                </Link>
+                </div>
               </div>
+
+              <div className={`rounded-2xl p-5 ${(holdingProfitAmt ?? 0) >= 0 ? "bg-red-50 dark:bg-red-950/20" : "bg-blue-50 dark:bg-blue-950/20"}`}>
+                <p className="text-xs text-muted-foreground mb-2">평가손익</p>
+                <div className="flex items-baseline gap-3">
+                  <p className={`text-3xl font-bold ${(holdingProfitAmt ?? 0) >= 0 ? "text-red-500" : "text-blue-500"}`}>
+                    {(holdingProfitAmt ?? 0) >= 0 ? "+" : ""}{priceLabel(holdingProfitAmt)}
+                  </p>
+                  <p className={`text-lg font-semibold ${(holdingProfitRate ?? 0) >= 0 ? "text-red-500" : "text-blue-500"}`}>
+                    {(holdingProfitRate ?? 0) >= 0 ? "+" : ""}{(holdingProfitRate ?? 0).toFixed(2)}%
+                  </p>
+                </div>
+              </div>
+
+              <Link href="/portfolio" passHref>
+                <Button variant="outline" className="w-full rounded-xl">포트폴리오 보기</Button>
+              </Link>
             </div>
           ) : (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
-                <Briefcase className="w-10 h-10 opacity-30" />
-                <p className="font-medium">보유하지 않은 종목입니다</p>
-                <p className="text-sm text-center">포트폴리오에서 이 종목을 추가하면<br/>수익률을 여기서 바로 확인할 수 있습니다.</p>
-                <Link href="/portfolio" passHref>
-                  <Button size="sm" variant="outline">포트폴리오로 이동</Button>
-                </Link>
-              </CardContent>
-            </Card>
+            <div className="flex flex-col items-center py-16 text-muted-foreground gap-3">
+              <Briefcase className="w-10 h-10 opacity-30" />
+              <p className="font-medium">보유하지 않은 종목입니다</p>
+              <p className="text-sm text-center">포트폴리오에서 이 종목을 추가하면<br/>수익률을 여기서 바로 확인할 수 있습니다.</p>
+              <Link href="/portfolio" passHref>
+                <Button size="sm" variant="outline" className="rounded-xl">포트폴리오로 이동</Button>
+              </Link>
+            </div>
           )}
         </TabsContent>
 
         {/* ── AI 뉴스 탭 ── */}
         <TabsContent value="news" className="mt-4">
-          <Card>
-            <CardContent className="p-4">
-              {newsLoading ? (
-                <div className="flex items-center gap-2 py-8 justify-center text-muted-foreground">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  AI가 최신 뉴스를 분석하는 중...
-                </div>
-              ) : news ? (
-                <div className="space-y-3">
-                  {news.sources.length > 0 && (
-                    <div className="flex gap-1 flex-wrap mb-1">
-                      {news.sources.map(s => (
-                        <Badge key={s} variant="outline" className="text-xs">{s}</Badge>
-                      ))}
-                    </div>
-                  )}
-                  {news.sections.map((section, i) => (
-                    <NewsSectionCard key={i} section={section} />
+          {newsLoading ? (
+            <div className="flex items-center gap-2 py-12 justify-center text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              AI가 최신 뉴스를 분석하는 중...
+            </div>
+          ) : news ? (
+            <div className="space-y-3">
+              {news.sources.length > 0 && (
+                <div className="flex gap-1 flex-wrap">
+                  {news.sources.map(s => (
+                    <Badge key={s} variant="outline" className="text-xs">{s}</Badge>
                   ))}
-                  <div className="pt-2 border-t flex gap-2">
-                    <Button size="sm" variant="outline" onClick={() => setNews(null)}>
-                      <RefreshCw className="w-3.5 h-3.5 mr-1.5" />다시 분석
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center py-10 text-muted-foreground gap-3">
-                  <Newspaper className="w-10 h-10 opacity-30" />
-                  <p>AI 뉴스 분석을 불러옵니다</p>
-                  <Button onClick={loadNews} size="sm">
-                    <Newspaper className="w-3.5 h-3.5 mr-1.5" />뉴스 분석 시작
-                  </Button>
                 </div>
               )}
-            </CardContent>
-          </Card>
+              {news.sections.map((section, i) => (
+                <NewsSectionCard key={i} section={section} />
+              ))}
+              <Button size="sm" variant="outline" className="rounded-xl" onClick={() => setNews(null)}>
+                <RefreshCw className="w-3.5 h-3.5 mr-1.5" />다시 분석
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center py-12 text-muted-foreground gap-3">
+              <Newspaper className="w-10 h-10 opacity-30" />
+              <p>AI가 최신 뉴스를 분석합니다</p>
+              <Button onClick={loadNews} size="sm" className="rounded-xl">
+                <Newspaper className="w-3.5 h-3.5 mr-1.5" />뉴스 분석 시작
+              </Button>
+            </div>
+          )}
         </TabsContent>
 
-        {/* ── 기본정보 탭 ── */}
-        <TabsContent value="info" className="mt-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* 밸류에이션 */}
-            <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-sm">밸류에이션</CardTitle></CardHeader>
-              <CardContent className="space-y-2.5">
-                {[
-                  ["시가총액", info?.marketCapFmt ?? (info?.marketCap != null ? fmt(info.marketCap) : "-")],
-                  ["PER (주가수익비율)", info?.trailingPE != null ? fmt(info.trailingPE) + "x" : "-"],
-                  ["PBR (주가순자산비율)", info?.priceToBook != null ? fmt(info.priceToBook) + "x" : "-"],
-                  ["EPS (주당순이익)", priceLabel(info?.trailingEps)],
-                  ["선행 EPS", priceLabel(info?.forwardEps)],
-                  ["배당수익률", info?.dividendYield != null ? pct(info.dividendYield) : "-"],
-                  ["베타", info?.beta != null ? fmt(info.beta) : "-"],
-                ].map(([label, value]) => (
-                  <div key={label} className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground text-xs">{label}</span>
-                    <span className="font-medium">{value}</span>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
+        {/* ── 종목정보 탭 ── */}
+        <TabsContent value="info" className="mt-4 space-y-6">
 
-            {/* 52주 범위 + 애널리스트 */}
-            <div className="space-y-4">
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm">52주 범위</CardTitle></CardHeader>
-                <CardContent>
-                  {info?.fiftyTwoWeekHigh != null && info?.fiftyTwoWeekLow != null ? (
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>저가 {priceLabel(info.fiftyTwoWeekLow)}</span>
-                        <span>고가 {priceLabel(info.fiftyTwoWeekHigh)}</span>
-                      </div>
-                      {displayPrice != null && (
-                        <div className="relative h-2 bg-muted rounded-full overflow-hidden">
-                          <div
-                            className="absolute left-0 top-0 h-full bg-primary rounded-full"
-                            style={{
-                              width: `${Math.min(100, Math.max(0, ((displayPrice - info.fiftyTwoWeekLow) / (info.fiftyTwoWeekHigh - info.fiftyTwoWeekLow)) * 100))}%`
-                            }}
-                          />
-                        </div>
-                      )}
-                      <div className="flex justify-between text-xs">
-                        <span className="text-blue-500">저가</span>
-                        {displayPrice != null && (
-                          <span className="font-medium">현재 {priceLabel(displayPrice)}</span>
-                        )}
-                        <span className="text-red-500">고가</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">데이터 없음</p>
+          {/* 52주 가격 범위 */}
+          {info?.fiftyTwoWeekHigh != null && info?.fiftyTwoWeekLow != null && (
+            <div>
+              <p className="text-sm font-semibold mb-3">52주 가격 범위</p>
+              <div className="space-y-2">
+                <div className="relative h-2 bg-muted rounded-full overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-r from-blue-400 via-muted-foreground/30 to-red-400 rounded-full opacity-30" />
+                  {fiftyTwoPct != null && (
+                    <div
+                      className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-foreground shadow-md border-2 border-background"
+                      style={{ left: `calc(${fiftyTwoPct}% - 6px)` }}
+                    />
                   )}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm">애널리스트 의견</CardTitle></CardHeader>
-                <CardContent className="space-y-2.5">
-                  {info?.recommendationKey ? (
-                    <>
-                      <div className="flex items-center gap-2">
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold text-white ${RECOMMEND_LABEL[info.recommendationKey]?.color ?? "bg-gray-500"}`}>
-                          {RECOMMEND_LABEL[info.recommendationKey]?.label ?? info.recommendationKey}
-                        </span>
-                        {info.numberOfAnalystOpinions != null && (
-                          <span className="text-xs text-muted-foreground">애널리스트 {info.numberOfAnalystOpinions}명</span>
-                        )}
-                      </div>
-                      {info.targetMeanPrice != null && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground text-xs">목표주가 (평균)</span>
-                          <span className="font-semibold">{priceLabel(info.targetMeanPrice)}</span>
-                        </div>
-                      )}
-                      {displayPrice != null && info.targetMeanPrice != null && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground text-xs">현재 대비 상승여력</span>
-                          <span className={`font-semibold ${info.targetMeanPrice > displayPrice ? "text-red-500" : "text-blue-500"}`}>
-                            {info.targetMeanPrice > displayPrice ? "+" : ""}
-                            {(((info.targetMeanPrice - displayPrice) / displayPrice) * 100).toFixed(1)}%
-                          </span>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">데이터 없음</p>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-blue-500 font-medium">{priceLabel(info.fiftyTwoWeekLow)} <span className="text-muted-foreground font-normal">저가</span></span>
+                  {fiftyTwoPct != null && (
+                    <span className="text-muted-foreground">현재 위치 {fiftyTwoPct.toFixed(0)}%</span>
                   )}
-                </CardContent>
-              </Card>
+                  <span className="text-red-500 font-medium"><span className="text-muted-foreground font-normal">고가</span> {priceLabel(info.fiftyTwoWeekHigh)}</span>
+                </div>
+              </div>
             </div>
+          )}
 
-            {/* 재무 지표 */}
-            {(info?.revenueGrowth != null || info?.grossMargins != null) && (
-              <Card className="sm:col-span-2">
-                <CardHeader className="pb-2"><CardTitle className="text-sm">재무 지표</CardTitle></CardHeader>
-                <CardContent className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                  {info?.revenueGrowth != null && (
-                    <div>
-                      <p className="text-xs text-muted-foreground">매출 성장률</p>
-                      <p className={`font-semibold ${info.revenueGrowth >= 0 ? "text-red-500" : "text-blue-500"}`}>
-                        {pct(info.revenueGrowth)}
-                      </p>
-                    </div>
-                  )}
-                  {info?.grossMargins != null && (
-                    <div>
-                      <p className="text-xs text-muted-foreground">매출총이익률</p>
-                      <p className="font-semibold">{pct(info.grossMargins)}</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
+          {/* 핵심 밸류에이션 */}
+          <div>
+            <p className="text-sm font-semibold mb-1">밸류에이션</p>
+            <div className="divide-y">
+              <MetricRow label="시가총액" value={info?.marketCapFmt ?? (info?.marketCap != null ? fmt(info.marketCap) : "-")} />
+              <MetricRow label="PER" value={info?.trailingPE != null ? fmt(info.trailingPE) + "x" : "-"} />
+              <MetricRow label="PBR" value={info?.priceToBook != null ? fmt(info.priceToBook) + "x" : "-"} />
+              <MetricRow label="EPS" value={priceLabel(info?.trailingEps)} />
+              <MetricRow label="배당수익률" value={info?.dividendYield != null ? pct(info.dividendYield) : "-"} />
+              <MetricRow label="베타" value={info?.beta != null ? fmt(info.beta) : "-"} />
+            </div>
           </div>
 
-          {/* Yahoo Finance 링크 */}
-          <div className="mt-4">
-            <a
-              href={`https://finance.yahoo.com/quote/${encodeURIComponent(yahooTicker)}`}
-              target="_blank" rel="noopener noreferrer"
-              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-            >
-              <ExternalLink className="w-3 h-3" /> Yahoo Finance에서 더 보기
-            </a>
-          </div>
+          {/* 애널리스트 의견 */}
+          {info?.recommendationKey && (
+            <div>
+              <p className="text-sm font-semibold mb-3">애널리스트 의견</p>
+              <div className="bg-muted/30 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center gap-3">
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold text-white ${RECOMMEND_LABEL[info.recommendationKey]?.color ?? "bg-gray-500"}`}>
+                    {RECOMMEND_LABEL[info.recommendationKey]?.label ?? info.recommendationKey}
+                  </span>
+                  {info.numberOfAnalystOpinions != null && (
+                    <span className="text-xs text-muted-foreground">{info.numberOfAnalystOpinions}명 참여</span>
+                  )}
+                </div>
+                {info.targetMeanPrice != null && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">목표주가 (평균)</span>
+                    <div className="text-right">
+                      <p className="font-semibold">{priceLabel(info.targetMeanPrice)}</p>
+                      {displayPrice != null && (
+                        <p className={`text-xs font-medium ${info.targetMeanPrice > displayPrice ? "text-red-500" : "text-blue-500"}`}>
+                          {info.targetMeanPrice > displayPrice ? "+" : ""}
+                          {(((info.targetMeanPrice - displayPrice) / displayPrice) * 100).toFixed(1)}% 상승여력
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 재무 지표 */}
+          {(info?.revenueGrowth != null || info?.grossMargins != null) && (
+            <div>
+              <p className="text-sm font-semibold mb-1">재무 지표</p>
+              <div className="divide-y">
+                {info?.revenueGrowth != null && (
+                  <MetricRow
+                    label="매출 성장률"
+                    value={pct(info.revenueGrowth)}
+                    valueClass={info.revenueGrowth >= 0 ? "text-red-500" : "text-blue-500"}
+                  />
+                )}
+                {info?.grossMargins != null && (
+                  <MetricRow label="매출총이익률" value={pct(info.grossMargins)} />
+                )}
+              </div>
+            </div>
+          )}
+
+          <a
+            href={`https://finance.yahoo.com/quote/${encodeURIComponent(yahooTicker)}`}
+            target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground w-fit"
+          >
+            <ExternalLink className="w-3 h-3" /> Yahoo Finance에서 더 보기
+          </a>
         </TabsContent>
       </Tabs>
     </div>

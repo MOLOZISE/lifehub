@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { MarketOverview } from "@/components/market/MarketOverview";
 import { toast } from "sonner";
 import type { OHLCVBar } from "@/lib/types";
@@ -294,52 +294,50 @@ function StockCard({
 }) {
   const up = price ? price.change >= 0 : null;
   const fmtPrice = (p: StockPrice) =>
-    p.currency === "KRW" ? p.price.toLocaleString("ko-KR") + "원" : "$" + p.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    p.currency === "KRW"
+      ? "₩" + Math.round(p.price).toLocaleString("ko-KR")
+      : "$" + p.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtChange = (p: StockPrice) =>
+    p.currency === "KRW"
+      ? (p.change >= 0 ? "+" : "") + Math.round(p.change).toLocaleString("ko-KR")
+      : (p.change >= 0 ? "+" : "") + p.change.toFixed(2);
 
   return (
-    <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl border bg-background hover:bg-accent/30 transition-colors">
-      <div className="shrink-0">
-        <span className="text-base">{market === "KR" ? "🇰🇷" : "🇺🇸"}</span>
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
+    <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-muted/30 hover:bg-muted/60 transition-colors group">
+      {/* 왼쪽: 종목 정보 */}
+      <button className="flex-1 min-w-0 text-left" onClick={onChart}>
+        <div className="flex items-center gap-1.5 mb-0.5">
+          <span className="text-[11px] text-muted-foreground">{market === "KR" ? "🇰🇷" : "🇺🇸"}</span>
           <span className="font-semibold text-sm truncate">{name}</span>
-          <span className="text-xs text-muted-foreground font-mono shrink-0">{ticker}</span>
+          <span className="text-[10px] text-muted-foreground font-mono shrink-0 hidden sm:inline">{ticker}</span>
         </div>
         {price ? (
-          <div className="flex items-center gap-2 mt-0.5">
-            <span className="text-sm font-bold">{fmtPrice(price)}</span>
-            <span className={`text-xs font-medium ${up ? "text-red-500" : "text-blue-500"}`}>
-              {up ? "▲" : "▼"} {Math.abs(price.changePercent).toFixed(2)}%
+          <div className="flex items-baseline gap-2">
+            <span className="text-base font-bold tabular-nums">{fmtPrice(price)}</span>
+            <span className={`text-xs font-medium tabular-nums ${up ? "text-red-500" : "text-blue-500"}`}>
+              {fmtChange(price)} ({up ? "+" : ""}{price.changePercent.toFixed(2)}%)
             </span>
           </div>
         ) : (
-          <div className="h-5 flex items-center">
-            <span className="text-xs text-muted-foreground">-</span>
-          </div>
+          <span className="text-xs text-muted-foreground">조회 중...</span>
         )}
-      </div>
-      <div className="flex items-center gap-1 shrink-0">
-        <button
-          onClick={onChart}
-          className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-          title="차트 보기"
-        >
-          <TrendingUp className="w-3.5 h-3.5" />
-        </button>
+      </button>
+
+      {/* 오른쪽: 액션 버튼 */}
+      <div className="flex items-center gap-0.5 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
         <button
           onClick={onAnalyze}
-          className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          className="px-2 py-1 rounded-lg hover:bg-background text-muted-foreground hover:text-foreground transition-colors text-[10px] font-semibold"
           title="AI 분석"
         >
-          <span className="text-xs">AI</span>
+          AI
         </button>
         <button
           onClick={onAddWatchlist}
-          className={`p-1.5 rounded-lg transition-colors ${inWatchlist ? "text-amber-500 hover:text-amber-600" : "text-muted-foreground hover:text-amber-500"}`}
+          className={`p-1.5 rounded-lg transition-colors ${inWatchlist ? "text-amber-500" : "text-muted-foreground hover:text-amber-500"}`}
           title={inWatchlist ? "관심 종목에서 제거" : "관심 종목 추가"}
         >
-          {inWatchlist ? <Star className="w-3.5 h-3.5 fill-current" /> : <StarOff className="w-3.5 h-3.5" />}
+          {inWatchlist ? <Star className="w-3.5 h-3.5 fill-current" /> : <Star className="w-3.5 h-3.5" />}
         </button>
       </div>
     </div>
@@ -778,48 +776,53 @@ export default function StockPage() {
 
           {/* Chart header */}
           {activeTicker && (
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <div>
-                {chartMeta ? (
-                  <>
-                    <h2 className="text-xl font-bold">
-                      {chartMeta.longName}
-                      <span className="text-sm font-normal text-muted-foreground ml-2">{activeTicker.yahoo}</span>
-                    </h2>
-                    <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                      <span className="text-2xl font-bold">
-                        {isKRW
-                          ? (lastBar?.close ?? chartMeta.regularMarketPrice ?? 0).toLocaleString("ko-KR") + "원"
-                          : "$" + (lastBar?.close ?? chartMeta.regularMarketPrice ?? 0).toFixed(2)}
-                      </span>
-                      {lastBar && prevBar && (
-                        <span className={`text-sm font-medium ${priceChange >= 0 ? "text-red-500" : "text-blue-500"}`}>
-                          {priceChange >= 0 ? "▲" : "▼"} {Math.abs(priceChange).toFixed(isKRW ? 0 : 2)} ({Math.abs(priceChangePct).toFixed(2)}%)
+            <div className="space-y-3">
+              {chartMeta ? (
+                <div>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-xs text-muted-foreground">{activeTicker.yahoo}</p>
+                      <h2 className="text-lg font-bold leading-tight">{chartMeta.longName}</h2>
+                      <div className="flex items-baseline gap-2 mt-1">
+                        <span className="text-3xl font-bold tabular-nums">
+                          {isKRW
+                            ? "₩" + (lastBar?.close ?? chartMeta.regularMarketPrice ?? 0).toLocaleString("ko-KR")
+                            : "$" + (lastBar?.close ?? chartMeta.regularMarketPrice ?? 0).toFixed(2)}
                         </span>
-                      )}
-                      <Badge variant="outline" className="text-xs">{chartMeta.currency}</Badge>
+                        {lastBar && prevBar && (
+                          <span className={`text-sm font-medium tabular-nums ${priceChange >= 0 ? "text-red-500" : "text-blue-500"}`}>
+                            {priceChange >= 0 ? "+" : ""}{isKRW ? Math.round(priceChange).toLocaleString() : priceChange.toFixed(2)}
+                            {" "}({priceChange >= 0 ? "+" : ""}{priceChangePct.toFixed(2)}%)
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </>
-                ) : (
-                  <div className="h-12 flex items-center gap-2 text-muted-foreground">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span className="text-sm">{activeTicker.label} 로딩 중...</span>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 mt-1 shrink-0"
+                      onClick={() => fetchChart(activeTicker.yahoo, activeTicker.label, activeTicker.currency)}>
+                      <RefreshCw className="w-3.5 h-3.5" />
+                    </Button>
                   </div>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                {chartMeta && (
-                  <Button variant="ghost" size="icon" className="h-8 w-8"
-                    onClick={() => fetchChart(activeTicker.yahoo, activeTicker.label, activeTicker.currency)}>
-                    <RefreshCw className="w-3.5 h-3.5" />
-                  </Button>
-                )}
-                <div className="flex gap-1">
-                  {(["1W", "1M", "3M", "1Y"] as Period[]).map(p => (
-                    <Button key={p} size="sm" variant={period === p ? "default" : "outline"}
-                      className="h-7 text-xs" onClick={() => handlePeriodChange(p)}>{p}</Button>
-                  ))}
                 </div>
+              ) : (
+                <div className="h-12 flex items-center gap-2 text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="text-sm">{activeTicker.label} 로딩 중...</span>
+                </div>
+              )}
+
+              {/* 기간 선택 - 토스 스타일 pill */}
+              <div className="flex gap-1 bg-muted/50 rounded-xl p-1">
+                {(["1W", "1M", "3M", "1Y"] as Period[]).map(p => (
+                  <button key={p}
+                    onClick={() => handlePeriodChange(p)}
+                    className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
+                      period === p
+                        ? "bg-background shadow-sm text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}>
+                    {p === "1W" ? "1주" : p === "1M" ? "1달" : p === "3M" ? "3달" : "1년"}
+                  </button>
+                ))}
               </div>
             </div>
           )}
@@ -837,59 +840,47 @@ export default function StockPage() {
           )}
 
           {chartMeta && chartData.length > 0 && (
-            <>
-              <Card>
-                <CardContent className="p-4">
-                  <div className="h-72">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.15)" />
-                        <XAxis dataKey="date" tick={{ fontSize: 10 }}
-                          interval={Math.max(0, Math.floor(chartData.length / 6))}
-                          tickFormatter={d => d.slice(5)} />
-                        <YAxis domain={[minPrice, maxPrice]} tick={{ fontSize: 10 }}
-                          tickFormatter={v => isKRW ? (v / 1000).toFixed(0) + "k" : v.toFixed(0)} width={48} />
-                        <Tooltip content={<CandleTooltip />} />
-                        <Bar dataKey="candleRange" shape={CandleShape as never} isAnimationActive={false}>
-                          {chartData.map((e, i) => <Cell key={i} fill={e.isUp ? "#ef4444" : "#3b82f6"} />)}
-                        </Bar>
-                        <Line type="monotone" dataKey="ma5" stroke="#a855f7" dot={false} strokeWidth={1} connectNulls />
-                        <Line type="monotone" dataKey="ma20" stroke="#eab308" dot={false} strokeWidth={1} connectNulls />
-                        <Line type="monotone" dataKey="ma60" stroke="#22c55e" dot={false} strokeWidth={1.5} connectNulls />
-                      </ComposedChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="flex gap-4 text-xs mt-2 flex-wrap">
-                    <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-purple-400 inline-block" />MA5</span>
-                    <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-yellow-400 inline-block" />MA20</span>
-                    <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-green-400 inline-block" />MA60</span>
-                    <span className="flex items-center gap-1"><span className="w-3 h-2 bg-red-500 inline-block" />양봉</span>
-                    <span className="flex items-center gap-1"><span className="w-3 h-2 bg-blue-500 inline-block" />음봉</span>
-                    <span className="ml-auto text-muted-foreground text-xs">{chartData.length}봉 · Yahoo Finance</span>
-                  </div>
-                </CardContent>
-              </Card>
+            <div className="space-y-1">
+              {/* 캔들 차트 */}
+              <ResponsiveContainer width="100%" height={280}>
+                <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="0" stroke="transparent" />
+                  <XAxis dataKey="date" tick={{ fontSize: 9, fill: "var(--muted-foreground)" }}
+                    interval={Math.max(0, Math.floor(chartData.length / 5))}
+                    tickFormatter={d => d.slice(5)} axisLine={false} tickLine={false} />
+                  <YAxis domain={[minPrice, maxPrice]} tick={{ fontSize: 9, fill: "var(--muted-foreground)" }}
+                    tickFormatter={v => isKRW ? (v / 1000).toFixed(0) + "K" : v.toFixed(0)}
+                    width={52} axisLine={false} tickLine={false} orientation="right" />
+                  <Tooltip content={<CandleTooltip />} cursor={{ stroke: "var(--border)", strokeWidth: 1 }} />
+                  <Bar dataKey="candleRange" shape={CandleShape as never} isAnimationActive={false}>
+                    {chartData.map((e, i) => <Cell key={i} fill={e.isUp ? "#ef4444" : "#3b82f6"} />)}
+                  </Bar>
+                  <Line type="monotone" dataKey="ma5" stroke="#a855f7" dot={false} strokeWidth={1.5} connectNulls />
+                  <Line type="monotone" dataKey="ma20" stroke="#f59e0b" dot={false} strokeWidth={1.5} connectNulls />
+                  <Line type="monotone" dataKey="ma60" stroke="#10b981" dot={false} strokeWidth={1.5} connectNulls />
+                </ComposedChart>
+              </ResponsiveContainer>
 
-              <Card>
-                <CardHeader className="pb-2 pt-3 px-4">
-                  <CardTitle className="text-xs text-muted-foreground">거래량</CardTitle>
-                </CardHeader>
-                <CardContent className="px-4 pb-4">
-                  <div className="h-24">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <ComposedChart data={chartData} margin={{ top: 0, right: 10, left: 10, bottom: 0 }}>
-                        <XAxis dataKey="date" hide />
-                        <YAxis tick={{ fontSize: 9 }} tickFormatter={v => (v / 1000000).toFixed(0) + "M"} width={36} />
-                        <Tooltip formatter={v => typeof v === "number" ? v.toLocaleString() : String(v)} labelFormatter={l => `날짜: ${l}`} />
-                        <Bar dataKey="volume" isAnimationActive={false}>
-                          {chartData.map((e, i) => <Cell key={i} fill={e.isUp ? "rgba(239,68,68,0.6)" : "rgba(59,130,246,0.6)"} />)}
-                        </Bar>
-                      </ComposedChart>
-                    </ResponsiveContainer>
-                  </div>
-                </CardContent>
-              </Card>
-            </>
+              {/* 이평선 범례 */}
+              <div className="flex gap-3 text-[10px] text-muted-foreground px-1 pb-1">
+                <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-purple-400 inline-block rounded" />MA5</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-amber-400 inline-block rounded" />MA20</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-emerald-400 inline-block rounded" />MA60</span>
+                <span className="ml-auto">{chartData.length}봉</span>
+              </div>
+
+              {/* 거래량 */}
+              <ResponsiveContainer width="100%" height={60}>
+                <ComposedChart data={chartData} margin={{ top: 0, right: 4, left: -20, bottom: 0 }}>
+                  <XAxis dataKey="date" hide />
+                  <YAxis hide orientation="right" width={52} />
+                  <Bar dataKey="volume" isAnimationActive={false} radius={[1,1,0,0]}>
+                    {chartData.map((e, i) => <Cell key={i} fill={e.isUp ? "rgb(239 68 68 / 0.4)" : "rgb(59 130 246 / 0.4)"} />)}
+                  </Bar>
+                </ComposedChart>
+              </ResponsiveContainer>
+              <p className="text-[10px] text-muted-foreground text-center">거래량</p>
+            </div>
           )}
         </div>
       )}
