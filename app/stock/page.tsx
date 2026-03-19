@@ -932,7 +932,7 @@ export default function StockPage() {
                 새로고침
               </button>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {POPULAR_KR.map(s => {
                 const priceKey = `${s.ticker}.KS`;
                 const price = krPrices[priceKey] ?? null;
@@ -953,7 +953,7 @@ export default function StockPage() {
             </div>
 
             <h2 className="text-sm font-semibold pt-2">해외 인기 종목</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {POPULAR_US.map(s => {
                 const price = usPrices[s.ticker] ?? null;
                 return (

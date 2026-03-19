@@ -48,18 +48,17 @@ function MarketChip({ item }: { item: MarketItem }) {
   );
 }
 
-// 풀모드 — 카테고리별 인라인 row
-function MarketRow({ item }: { item: MarketItem }) {
+// 풀모드 — 인기 종목 카드와 동일한 카드 스타일
+function MarketCard({ item }: { item: MarketItem }) {
   const up = item.changeRate >= 0;
+  const pct = (up ? "+" : "") + item.changeRate.toFixed(2) + "%";
   return (
-    <div className="flex items-center justify-between py-2 border-b last:border-0">
-      <span className="text-sm text-foreground truncate flex-1 min-w-0 mr-2">{item.label}</span>
-      <div className="flex items-center gap-3 shrink-0 tabular-nums">
-        <span className="text-sm font-semibold">{fmt(item)}</span>
-        <span className={`text-xs font-bold w-16 text-right ${up ? "text-red-500" : "text-blue-500"}`}>
-          {up ? "+" : ""}{item.changeRate.toFixed(2)}%
-        </span>
-      </div>
+    <div className="bg-muted/30 hover:bg-muted/60 rounded-2xl p-3 transition-colors flex flex-col gap-1.5">
+      <span className="text-xs text-muted-foreground leading-tight truncate">{item.label}</span>
+      <span className={`text-xl font-bold tabular-nums leading-none ${up ? "text-red-500" : "text-blue-500"}`}>
+        {pct}
+      </span>
+      <span className="text-[11px] text-muted-foreground tabular-nums">{fmt(item)}</span>
     </div>
   );
 }
@@ -236,16 +235,16 @@ export function MarketOverview({ compact = false }: Props) {
           </div>
         </div>
       ) : (
-        /* 풀 모드: 카테고리별 2열 배치 */
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+        /* 풀 모드: 카테고리별 3열 카드 그리드 */
+        <div className="space-y-4">
           {CATEGORY_ORDER.filter(type => byType[type]).map(type => (
-            <div key={type} className="bg-muted/20 rounded-xl px-4 py-3">
-              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1">
+            <div key={type}>
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
                 {CATEGORY_LABELS[type]}
               </p>
-              <div>
+              <div className="grid grid-cols-3 gap-2">
                 {byType[type].map(item => (
-                  <MarketRow key={item.symbol} item={item} />
+                  <MarketCard key={item.symbol} item={item} />
                 ))}
               </div>
             </div>
