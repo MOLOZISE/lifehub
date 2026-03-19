@@ -179,10 +179,10 @@ function CommunityContent() {
           {posts.map((post) => (
             <Link key={post.id} href={`/community/${post.id}`}>
               <Card className="hover:bg-accent/30 transition-colors cursor-pointer">
-                <CardContent className="p-4">
+                <CardContent className="p-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 mb-0.5">
                         <Badge variant="secondary" className="text-xs shrink-0">
                           {CATEGORIES.find((c) => c.value === post.category)?.label ?? post.category}
                         </Badge>
@@ -195,12 +195,9 @@ function CommunityContent() {
                         ))}
                       </div>
                       <h3 className="font-medium text-sm leading-snug line-clamp-1">{post.title}</h3>
-                      <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
-                        {post.content.replace(/[#*`]/g, "")}
-                      </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
                     {post.isAnonymous || !post.user ? (
                       <span>{post.isAnonymous ? "익명" : "알 수 없음"}</span>
                     ) : (

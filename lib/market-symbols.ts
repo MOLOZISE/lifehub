@@ -21,17 +21,17 @@ export const ALL_SYMBOLS: {
   { symbol: "^N225",    label: "닛케이",         currency: "pt",  type: "index",     category: "지수",   defaultOn: false },
   // 환율
   { symbol: "USDKRW=X", label: "원/달러",        currency: "KRW", type: "fx",        category: "환율",   defaultOn: true },
-  { symbol: "EURUSD=X", label: "유로/달러",      currency: "USD", type: "fx",        category: "환율",   defaultOn: false },
-  { symbol: "USDJPY=X", label: "달러/엔",        currency: "JPY", type: "fx",        category: "환율",   defaultOn: false },
+  { symbol: "EURUSD=X", label: "유로/달러",      currency: "USD", type: "fx",        category: "환율",   defaultOn: true },
+  { symbol: "USDJPY=X", label: "달러/엔",        currency: "JPY", type: "fx",        category: "환율",   defaultOn: true },
   // 원자재
   { symbol: "CL=F",     label: "WTI 유가",       currency: "USD", type: "commodity", category: "원자재", defaultOn: true },
   { symbol: "GC=F",     label: "금",             currency: "USD", type: "commodity", category: "원자재", defaultOn: true },
   { symbol: "SI=F",     label: "은",             currency: "USD", type: "commodity", category: "원자재", defaultOn: false },
-  { symbol: "BTC-USD",  label: "비트코인",        currency: "USD", type: "commodity", category: "원자재", defaultOn: false },
+  { symbol: "BTC-USD",  label: "비트코인",        currency: "USD", type: "commodity", category: "원자재", defaultOn: true },
   // 주식
   { symbol: "MU",       label: "마이크론",        currency: "USD", type: "stock",     category: "주식",   defaultOn: true },
   { symbol: "WDC",      label: "웨스턴디지털",    currency: "USD", type: "stock",     category: "주식",   defaultOn: true },
-  { symbol: "NVDA",     label: "엔비디아",        currency: "USD", type: "stock",     category: "주식",   defaultOn: false },
+  { symbol: "NVDA",     label: "엔비디아",        currency: "USD", type: "stock",     category: "주식",   defaultOn: true },
   { symbol: "AAPL",     label: "애플",            currency: "USD", type: "stock",     category: "주식",   defaultOn: false },
   { symbol: "TSLA",     label: "테슬라",          currency: "USD", type: "stock",     category: "주식",   defaultOn: false },
   // 채권

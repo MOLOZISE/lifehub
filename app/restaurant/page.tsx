@@ -98,8 +98,15 @@ export default function RestaurantPage() {
   const [situationTag, setSituationTag] = useState<string>("");
 
   // 리스트에 추가 관련
-  const [userLists, setUserLists] = useState<{ id: string; name: string; emoji: string }[]>([]);
+  const [userLists, setUserLists] = useState<{ id: string; name: string; emoji: string; itemCount: number }[]>([]);
   const [listMenuId, setListMenuId] = useState<string | null>(null);
+
+  // 리스트 선택 필터
+  const [activeListId, setActiveListId] = useState<string | null>(null);
+  const [listItems, setListItems] = useState<string[]>([]);
+  const [newListName, setNewListName] = useState("");
+  const [showNewList, setShowNewList] = useState(false);
+  const [listCreating, setListCreating] = useState(false);
 
   // Kakao search
   const [kakaoQuery, setKakaoQuery] = useState("");
@@ -180,9 +187,46 @@ export default function RestaurantPage() {
 
   useEffect(() => {
     fetch("/api/restaurant/lists").then(r => r.ok ? r.json() : []).then(data => {
-      setUserLists(Array.isArray(data) ? data.map((l: { id: string; name: string; emoji: string }) => ({ id: l.id, name: l.name, emoji: l.emoji })) : []);
+      setUserLists(Array.isArray(data) ? data.map((l: { id: string; name: string; emoji: string; itemCount?: number; _count?: { items: number } }) => ({
+        id: l.id,
+        name: l.name,
+        emoji: l.emoji,
+        itemCount: l.itemCount ?? l._count?.items ?? 0,
+      })) : []);
     });
   }, []);
+
+  async function loadListItems(listId: string) {
+    const res = await fetch(`/api/restaurant/lists/${listId}/items?limit=500`);
+    if (res.ok) {
+      const data = await res.json();
+      setListItems(data.items.map((i: { restaurant: { id: string } }) => i.restaurant.id));
+    }
+  }
+
+  function selectList(id: string | null) {
+    setActiveListId(id);
+    if (id) loadListItems(id);
+    else setListItems([]);
+  }
+
+  async function createList() {
+    if (!newListName.trim()) return;
+    setListCreating(true);
+    const res = await fetch("/api/restaurant/lists", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newListName.trim(), emoji: "📌" }),
+    });
+    if (res.ok) {
+      const list = await res.json();
+      setUserLists(prev => [...prev, { ...list, itemCount: 0 }]);
+      setNewListName("");
+      setShowNewList(false);
+      toast.success("리스트 생성됨");
+    }
+    setListCreating(false);
+  }
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -360,19 +404,23 @@ export default function RestaurantPage() {
     })),
   [kakaoResults]);
 
-  // 상황별 태그 클라이언트 필터
+  // 상황별 태그 + 리스트 클라이언트 필터
   const filteredRestaurants = useMemo(() => {
-    if (!situationTag) return restaurants;
+    let filtered = restaurants;
+    if (activeListId && listItems.length > 0) {
+      filtered = filtered.filter(r => listItems.includes(r.id));
+    }
+    if (!situationTag) return filtered;
     const tag = SITUATION_TAGS.find(t => t.label === situationTag);
-    if (!tag) return restaurants;
-    return restaurants.filter(r => {
+    if (!tag) return filtered;
+    return filtered.filter(r => {
       const matchCategory = tag.categories.length === 0 || tag.categories.includes(r.category);
       const matchKeyword = tag.keywords?.some(kw =>
         r.name.includes(kw) || r.description?.includes(kw) || r.address?.includes(kw)
       ) ?? false;
       return tag.keywords && tag.keywords.length > 0 ? matchKeyword : matchCategory;
     });
-  }, [restaurants, situationTag]);
+  }, [restaurants, situationTag, activeListId, listItems]);
 
   const selectedRestaurant = selectedId ? allRestaurants.find(r => r.id === selectedId) : null;
   const selectedKakaoPlace = selectedKakaoId ? kakaoResults.find(p => p.id === selectedKakaoId) : null;
@@ -556,6 +604,50 @@ export default function RestaurantPage() {
         {/* ── 내 맛집 탭 ── */}
         {activeTab === "mylist" && (
           <div className="flex flex-col flex-1 min-h-0">
+            {/* 리스트 탭 */}
+            <div className="px-2 pt-1.5 pb-0 shrink-0">
+              <div className="flex items-center gap-1 overflow-x-auto pb-1 no-scrollbar">
+                <button
+                  onClick={() => selectList(null)}
+                  className={`shrink-0 text-[10px] px-2.5 py-1 rounded-full border transition-colors whitespace-nowrap ${
+                    activeListId === null ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:bg-muted"
+                  }`}
+                >전체</button>
+                {userLists.map(list => (
+                  <button
+                    key={list.id}
+                    onClick={() => selectList(list.id)}
+                    className={`shrink-0 text-[10px] px-2.5 py-1 rounded-full border transition-colors whitespace-nowrap ${
+                      activeListId === list.id ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:bg-muted"
+                    }`}
+                  >
+                    {list.emoji} {list.name} {list.itemCount > 0 && `(${list.itemCount})`}
+                  </button>
+                ))}
+                {showNewList ? (
+                  <div className="flex items-center gap-1 shrink-0">
+                    <input
+                      className="h-6 text-[10px] border rounded px-2 w-24"
+                      placeholder="리스트 이름"
+                      value={newListName}
+                      onChange={e => setNewListName(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && createList()}
+                      autoFocus
+                    />
+                    <button onClick={createList} disabled={listCreating} className="text-[10px] px-2 py-0.5 rounded bg-primary text-primary-foreground">
+                      {listCreating ? "..." : "만들기"}
+                    </button>
+                    <button onClick={() => setShowNewList(false)} className="text-[10px] px-1 text-muted-foreground">✕</button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowNewList(true)}
+                    className="shrink-0 text-[10px] px-2 py-1 text-muted-foreground hover:text-foreground"
+                  >+ 새 리스트</button>
+                )}
+              </div>
+            </div>
+
             {/* 필터 */}
             <div className="px-2 py-1.5 border-b shrink-0 space-y-1.5">
               <div className="flex gap-1.5">

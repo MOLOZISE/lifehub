@@ -57,11 +57,11 @@ async function fetchYahooOne(sym: typeof ALL_SYMBOLS[number]): Promise<MarketIte
   }
 }
 
-async function fetchAllSymbols(): Promise<{ data: Record<string, MarketItem>; errors: string[] }> {
+async function fetchAllSymbols(symbols: string[] = ALL_SYMBOLS.map(s => s.symbol)): Promise<{ data: Record<string, MarketItem>; errors: string[] }> {
   const errors: string[] = [];
   const data: Record<string, MarketItem> = {};
 
-  const tasks = DEFAULT_SYMBOLS.map(async (symbol) => {
+  const tasks = symbols.map(async (symbol) => {
     const meta = ALL_SYMBOLS.find(s => s.symbol === symbol);
     if (!meta) return;
 
@@ -210,7 +210,7 @@ export async function GET(req: NextRequest) {
 
   // 2. 신규 fetch
   try {
-    const { data, errors } = await fetchAllSymbols();
+    const { data, errors } = await fetchAllSymbols(requestedSymbols);
 
     if (Object.keys(data).length > 0) {
       memCache = { data, ts: Date.now() };

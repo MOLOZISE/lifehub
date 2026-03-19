@@ -313,7 +313,7 @@ export default function PortfolioPage() {
   if (loading) return <div className="p-8 text-center text-muted-foreground">불러오는 중...</div>;
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="max-w-6xl mx-auto space-y-4">
       {/* 글로벌 시황 */}
       <Card>
         <CardContent className="p-4">
@@ -324,21 +324,21 @@ export default function PortfolioPage() {
       {/* Summary */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <p className="text-xs text-muted-foreground mb-1">총 평가금액 (USD)</p>
-            <p className="text-2xl font-bold">${totalUSD.toLocaleString("en-US", { maximumFractionDigits: 0 })}</p>
+            <p className="text-xl font-bold">${totalUSD.toLocaleString("en-US", { maximumFractionDigits: 0 })}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <p className="text-xs text-muted-foreground mb-1">총 손익</p>
-            <p className={`text-2xl font-bold ${getProfitColor(totalProfitUSD)}`}>
+            <p className={`text-xl font-bold ${getProfitColor(totalProfitUSD)}`}>
               {totalProfitUSD >= 0 ? "+" : ""}${totalProfitUSD.toLocaleString("en-US", { maximumFractionDigits: 0 })}
             </p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between mb-1">
               <p className="text-xs text-muted-foreground">총 수익률</p>
               {priceUpdatedAt && (
@@ -347,7 +347,7 @@ export default function PortfolioPage() {
                 </span>
               )}
             </div>
-            <p className={`text-2xl font-bold flex items-center gap-1 ${getProfitColor(totalProfitRate)}`}>
+            <p className={`text-xl font-bold flex items-center gap-1 ${getProfitColor(totalProfitRate)}`}>
               {totalProfitRate >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
               {totalProfitRate >= 0 ? "+" : ""}{totalProfitRate.toFixed(2)}%
             </p>
@@ -357,8 +357,8 @@ export default function PortfolioPage() {
 
       {/* Risk Analysis */}
       <Card className={`border ${RISK_COLORS[risk.riskLevel]}`}>
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between mb-3">
+        <CardContent className="p-3">
+          <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               {risk.riskLevel === "low"
                 ? <ShieldCheck className="w-4 h-4 text-green-600" />
@@ -374,7 +374,7 @@ export default function PortfolioPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
             <div className="text-center">
               <p className="text-xs text-muted-foreground">최대 단일 종목</p>
               <p className="font-bold text-sm">{risk.topHoldingConcentration.toFixed(0)}%</p>
@@ -410,13 +410,13 @@ export default function PortfolioPage() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Donut Chart - Holdings */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">종목별 비중</CardTitle>
           </CardHeader>
-          <CardContent className="h-64">
+          <CardContent className="h-52">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie data={chartData} cx="50%" cy="50%" innerRadius={55} outerRadius={90} dataKey="value" paddingAngle={2}>
@@ -486,7 +486,7 @@ export default function PortfolioPage() {
                   const evalValue = (h.currentPrice ?? 0) * (h.quantity ?? 0);
                   return (
                     <tr key={h.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                      <td className="px-3 py-2.5">
+                      <td className="px-3 py-1.5">
                         <Link
                           href={`/portfolio/stock/${encodeURIComponent(h.ticker)}?market=${h.market}`}
                           className="hover:underline"
@@ -503,11 +503,11 @@ export default function PortfolioPage() {
                           )}
                         </div>
                       </td>
-                      <td className="px-3 py-2.5 text-right">{(h.quantity ?? 0).toLocaleString()}</td>
+                      <td className="px-3 py-1.5 text-right">{(h.quantity ?? 0).toLocaleString()}</td>
                       {holdingView === "price" ? (
                         <>
-                          <td className="px-3 py-2.5 text-right font-medium">{formatCurrency(h.currentPrice, h.currency)}</td>
-                          <td className="px-3 py-2.5 text-right">
+                          <td className="px-3 py-1.5 text-right font-medium">{formatCurrency(h.currentPrice, h.currency)}</td>
+                          <td className="px-3 py-1.5 text-right">
                             {dailyMap[h.ticker] ? (
                               <span className={dailyMap[h.ticker].changeRate >= 0 ? "text-red-500" : "text-blue-500"}>
                                 {dailyMap[h.ticker].changeRate >= 0 ? "▲" : "▼"}{Math.abs(dailyMap[h.ticker].changeRate).toFixed(2)}%
@@ -519,16 +519,16 @@ export default function PortfolioPage() {
                         </>
                       ) : (
                         <>
-                          <td className="px-3 py-2.5 text-right">{formatCurrency(evalValue, h.currency)}</td>
-                          <td className={`px-3 py-2.5 text-right font-medium ${color}`}>
+                          <td className="px-3 py-1.5 text-right">{formatCurrency(evalValue, h.currency)}</td>
+                          <td className={`px-3 py-1.5 text-right font-medium ${color}`}>
                             {rate >= 0 ? "+" : ""}{rate.toFixed(2)}%
                           </td>
                         </>
                       )}
-                      <td className={`px-3 py-2.5 text-right ${color}`}>
+                      <td className={`px-3 py-1.5 text-right ${color}`}>
                         {profit >= 0 ? "+" : ""}{formatCurrency(profit, h.currency)}
                       </td>
-                      <td className="px-3 py-2.5">
+                      <td className="px-3 py-1.5">
                         <div className="flex gap-1 justify-end">
                           <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openEdit(h)}>
                             <Pencil className="w-3 h-3" />
@@ -553,7 +553,7 @@ export default function PortfolioPage() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">자산 변화 추이 <span className="text-xs font-normal text-muted-foreground ml-1">최근 30일 (USD)</span></CardTitle>
           </CardHeader>
-          <CardContent className="h-48 px-2 pb-3">
+          <CardContent className="h-40 px-2 pb-3">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={snapshots.map(s => ({ date: s.date.slice(5), value: Math.round(s.totalValue), cost: Math.round(s.totalCost) }))}>
                 <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="opacity-10" />
