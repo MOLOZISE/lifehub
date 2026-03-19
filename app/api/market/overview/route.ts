@@ -82,10 +82,12 @@ async function fetchAllSymbols(): Promise<{ data: Record<string, MarketItem>; er
         return;
       } catch (e) {
         const msg = String(e);
-        if (msg.includes("초당 거래건수") || msg.includes("rate") || msg.includes("limit") || msg.includes("429")) {
-          errors.push(`KIS 요청 한도 초과 (${meta.label})`);
+        if (msg.includes("분당") || msg.includes("EGW00133") || msg.includes("초당 거래건수") || msg.includes("429")) {
+          errors.push(`${meta.label} (KIS 요청 한도)`);
+        } else if (msg.includes("인증 실패") || msg.includes("토큰")) {
+          errors.push(`${meta.label} (KIS 인증 오류)`);
         } else {
-          errors.push(`${meta.label}: ${msg}`);
+          errors.push(`${meta.label} (조회 실패)`);
         }
         // 폴백: Yahoo Finance
       }
@@ -108,10 +110,12 @@ async function fetchAllSymbols(): Promise<{ data: Record<string, MarketItem>; er
         return;
       } catch (e) {
         const msg = String(e);
-        if (msg.includes("초당 거래건수") || msg.includes("rate") || msg.includes("limit") || msg.includes("429")) {
-          errors.push(`KIS 요청 한도 초과 (${meta.label})`);
+        if (msg.includes("분당") || msg.includes("EGW00133") || msg.includes("초당 거래건수") || msg.includes("429")) {
+          errors.push(`${meta.label} (KIS 요청 한도)`);
+        } else if (msg.includes("인증 실패") || msg.includes("토큰")) {
+          errors.push(`${meta.label} (KIS 인증 오류)`);
         } else {
-          errors.push(`${meta.label}: ${msg}`);
+          errors.push(`${meta.label} (조회 실패)`);
         }
         // 폴백: Yahoo Finance
       }
@@ -236,8 +240,8 @@ export async function GET(req: NextRequest) {
     // 완전 실패 — DB/메모리 캐시 반환
     const fallback = memCache ?? (await loadFromDb());
     const errorMsg = String(e);
-    const reason = errorMsg.includes("초당 거래건수") || errorMsg.includes("429")
-      ? "API 요청 한도 초과"
+    const reason = errorMsg.includes("분당") || errorMsg.includes("EGW00133") || errorMsg.includes("429")
+      ? "KIS API 요청 한도 초과 (분당 1회)"
       : errorMsg.includes("timeout") || errorMsg.includes("ETIMEDOUT")
       ? "API 서버 응답 시간 초과"
       : "외부 API 오류";

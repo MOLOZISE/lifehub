@@ -10,33 +10,47 @@ const APP_SECRET = process.env.KIS_APP_SECRET ?? "";
 
 // In-memory token cache (23h TTL — token expires in 24h)
 let cachedToken: { token: string; expiresAt: number } | null = null;
+// 진행 중인 토큰 발급 요청 — 병렬 호출 시 중복 발급 방지 (KIS: 분당 1회 제한)
+let tokenFetchPromise: Promise<string> | null = null;
 
 export async function getAccessToken(): Promise<string> {
   if (cachedToken && Date.now() < cachedToken.expiresAt) {
     return cachedToken.token;
   }
 
-  const res = await fetch(`${BASE_URL}/oauth2/tokenP`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      grant_type: "client_credentials",
-      appkey: APP_KEY,
-      appsecret: APP_SECRET,
-    }),
-  });
+  // 이미 발급 중이면 같은 프로미스를 공유
+  if (tokenFetchPromise) return tokenFetchPromise;
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`KIS 토큰 발급 실패: ${res.status} ${text}`);
-  }
+  tokenFetchPromise = (async () => {
+    try {
+      const res = await fetch(`${BASE_URL}/oauth2/tokenP`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          grant_type: "client_credentials",
+          appkey: APP_KEY,
+          appsecret: APP_SECRET,
+        }),
+      });
 
-  const data = await res.json();
-  cachedToken = {
-    token: data.access_token,
-    expiresAt: Date.now() + 23 * 60 * 60 * 1000,
-  };
-  return cachedToken.token;
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const desc = body?.error_description ?? `HTTP ${res.status}`;
+        throw new Error(`KIS 인증 실패: ${desc}`);
+      }
+
+      const data = await res.json();
+      cachedToken = {
+        token: data.access_token,
+        expiresAt: Date.now() + 23 * 60 * 60 * 1000,
+      };
+      return cachedToken.token;
+    } finally {
+      tokenFetchPromise = null;
+    }
+  })();
+
+  return tokenFetchPromise;
 }
 
 export interface StockPrice {
