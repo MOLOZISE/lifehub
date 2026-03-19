@@ -56,6 +56,8 @@ model User {
   restaurants    Restaurant[]
   restaurantReviews RestaurantReview[]
   restaurantBookmarks RestaurantBookmark[]
+  restaurantLists RestaurantList[]
+  restaurantListItems RestaurantListItem[]
 
   // Portfolio
   stockTrades        StockTrade[]
@@ -520,6 +522,7 @@ model Restaurant {
   user      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   reviews   RestaurantReview[]
   bookmarks RestaurantBookmark[]
+  listItems RestaurantListItem[]
 
   @@map("restaurants")
 }
@@ -590,4 +593,48 @@ model PortfolioSnapshot {
 
   @@unique([userId, date])
   @@map("portfolio_snapshots")
+}
+
+// ─── Market Cache (글로벌 시황 DB 캐시) ────────────────────────────────────────
+
+model MarketCache {
+  id        String   @id @default("singleton") // 단일 행 캐시
+  data      Json     // Record<string, MarketItem>
+  updatedAt DateTime @updatedAt
+
+  @@map("market_cache")
+}
+
+// ─── Restaurant Lists (사용자 맞춤 맛집 리스트) ────────────────────────────────
+
+model RestaurantList {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  emoji     String   @default("🍽️")
+  color     String   @default("#6366f1") // hex color
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items RestaurantListItem[]
+
+  @@map("restaurant_lists")
+}
+
+model RestaurantListItem {
+  id           String   @id @default(cuid())
+  listId       String
+  restaurantId String
+  userId       String   // denormalized for easy querying
+  memo         String?
+  addedAt      DateTime @default(now())
+
+  list       RestaurantList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  restaurant Restaurant     @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([listId, restaurantId])
+  @@map("restaurant_list_items")
 }

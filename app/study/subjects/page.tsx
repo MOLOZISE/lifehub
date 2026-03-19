@@ -12,7 +12,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SubjectCard } from "@/components/study/SubjectCard";
 import { toast } from "sonner";
-import { COLOR_MAP } from "@/lib/utils-app";
+import { COLOR_MAP, todayString, localDateStr } from "@/lib/utils-app";
 import type { Subject, SubjectColor } from "@/lib/types";
 
 const ACTIVITY_LABELS: Record<string, string> = {
@@ -53,7 +53,7 @@ export default function SubjectsPage() {
   const [quickExpanded, setQuickExpanded] = useState(false);
   const [quickSaving, setQuickSaving] = useState(false);
   const [quickForm, setQuickForm] = useState({
-    date: new Date().toISOString().slice(0, 10),
+    date: todayString(),
     durationMinutes: 60,
     activityType: "lecture",
     memo: "",
@@ -61,7 +61,7 @@ export default function SubjectsPage() {
   });
 
   async function loadAll() {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayString();
     const [subRes, sessRes, examRes] = await Promise.all([
       fetch("/api/study/subjects"),
       fetch(`/api/study/sessions?limit=1000`),
@@ -96,7 +96,7 @@ export default function SubjectsPage() {
   useEffect(() => { loadAll(); }, []);
 
   // 통계 계산
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayString();
   const todayMinutes = allSessions.filter(s => s.date === today).reduce((a, s) => a + s.durationMinutes, 0);
   const weekMinutes = allSessions.filter(s => isThisWeek(s.date)).reduce((a, s) => a + s.durationMinutes, 0);
   const totalSessions = allSessions.length;
@@ -108,7 +108,7 @@ export default function SubjectsPage() {
     while (true) {
       const d = new Date(now);
       d.setDate(d.getDate() - count);
-      if (dateSet.has(d.toISOString().slice(0, 10))) count++;
+      if (dateSet.has(localDateStr(d))) count++;
       else break;
     }
     return count;
@@ -150,7 +150,7 @@ export default function SubjectsPage() {
   }
   function openEdit(s: ApiSubject) {
     setEditTarget(s);
-    setFormData({ name: s.name, color: s.color, emoji: s.emoji ?? "📚", examDate: s.examDate ? new Date(s.examDate).toISOString().slice(0, 10) : "" });
+    setFormData({ name: s.name, color: s.color, emoji: s.emoji ?? "📚", examDate: s.examDate ? localDateStr(new Date(s.examDate)) : "" });
     setFormOpen(true);
   }
   async function handleSave() {

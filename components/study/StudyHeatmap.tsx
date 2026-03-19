@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { cn } from "@/lib/utils";
+import { localDateStr } from "@/lib/utils-app";
 
 interface DayData {
   date: string; // YYYY-MM-DD
@@ -52,7 +53,7 @@ export function StudyHeatmap({ data, weeks = 17 }: StudyHeatmapProps) {
     for (let col = 0; col < weeks; col++) {
       const week: { date: string; minutes: number; isActive: boolean }[] = [];
       for (let row = 0; row < 7; row++) {
-        const dateStr = current.toISOString().slice(0, 10);
+        const dateStr = localDateStr(current);
         const month = current.getMonth();
         if (row === 0 && month !== lastMonth) {
           monthLabels.push({

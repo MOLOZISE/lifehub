@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { todayString } from "@/lib/utils-app";
+import { todayString, localDateStr } from "@/lib/utils-app";
 import { toast } from "sonner";
 
 type ExamStatus = "upcoming" | "passed" | "failed" | "cancelled";
@@ -66,7 +66,7 @@ export default function ExamsPage() {
     setEditing(exam);
     setForm({
       name: exam.name, category: exam.category ?? "자격증",
-      examDate: new Date(exam.examDate).toISOString().slice(0, 10),
+      examDate: localDateStr(new Date(exam.examDate)),
       targetScore: exam.targetScore?.toString() ?? "",
       passScore: exam.passScore?.toString() ?? "",
       memo: exam.memo ?? "", status: exam.status,

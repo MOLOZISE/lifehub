@@ -10,7 +10,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StudyHeatmap } from "@/components/study/StudyHeatmap";
-import { todayString, COLOR_MAP } from "@/lib/utils-app";
+import { todayString, localDateStr, COLOR_MAP } from "@/lib/utils-app";
 
 interface Subject { id: string; name: string; emoji: string; color: string; }
 interface StudySession {
@@ -22,7 +22,7 @@ function getLast7Days(): string[] {
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() - (6 - i));
-    return d.toISOString().slice(0, 10);
+    return localDateStr(d);
   });
 }
 
@@ -69,7 +69,7 @@ export default function AnalyticsPage() {
   // Subject minutes (last 30 days)
   const cutoff30 = new Date();
   cutoff30.setDate(cutoff30.getDate() - 30);
-  const cutoff30Str = cutoff30.toISOString().slice(0, 10);
+  const cutoff30Str = localDateStr(cutoff30);
   const subjectMinutes = sessions
     .filter(s => s.date >= cutoff30Str)
     .reduce((acc, s) => {
@@ -86,7 +86,7 @@ export default function AnalyticsPage() {
   // Session metrics (last 14 days)
   const cutoff14 = new Date();
   cutoff14.setDate(cutoff14.getDate() - 14);
-  const cutoff14Str = cutoff14.toISOString().slice(0, 10);
+  const cutoff14Str = localDateStr(cutoff14);
   const recentSessions = sessions.filter(s => s.date >= cutoff14Str);
   const avgFocus = recentSessions.length > 0
     ? recentSessions.reduce((s, x) => s + x.focusScore, 0) / recentSessions.length : 0;
@@ -111,7 +111,7 @@ export default function AnalyticsPage() {
     while (true) {
       const d = new Date(now);
       d.setDate(d.getDate() - count);
-      if (dateSet.has(d.toISOString().slice(0, 10))) count++;
+      if (dateSet.has(localDateStr(d))) count++;
       else break;
     }
     return count;

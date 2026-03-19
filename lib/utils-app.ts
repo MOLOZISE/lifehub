@@ -11,7 +11,12 @@ export function formatDate(iso: string): string {
 }
 
 export function todayString(): string {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+export function localDateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 export const COLOR_MAP: Record<SubjectColor, { bg: string; text: string; border: string; light: string }> = {

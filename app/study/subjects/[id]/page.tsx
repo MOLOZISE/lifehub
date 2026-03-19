@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { LinkButton } from "@/components/ui/link-button";
 import { Card, CardContent } from "@/components/ui/card";
-import { COLOR_MAP, formatDate } from "@/lib/utils-app";
+import { COLOR_MAP, formatDate, todayString } from "@/lib/utils-app";
 import { toast } from "sonner";
 
 interface SubjectDetail {
@@ -49,7 +49,7 @@ export default function SubjectDetailPage() {
   // 세션 추가 다이얼로그
   const [sessionDialog, setSessionDialog] = useState(false);
   const [sessionForm, setSessionForm] = useState({
-    date: new Date().toISOString().slice(0, 10),
+    date: todayString(),
     durationMinutes: 60, activityType: "lecture",
     materialName: "", memo: "", satisfactionScore: 3,
   });

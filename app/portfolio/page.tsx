@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { Plus, Pencil, Trash2, TrendingUp, TrendingDown, AlertTriangle, ShieldCheck, RefreshCw } from "lucide-react";
-import type { MarketItem } from "@/app/api/market/overview/route";
+import { MarketOverview } from "@/components/market/MarketOverview";
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend, Treemap,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
 } from "recharts";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -74,102 +75,13 @@ const emptyHolding = {
 
 interface StockMeta { ticker: string; name: string; market: "KR" | "US"; sector: string; }
 
-const MARKET_REFRESH_INTERVAL = 5 * 60 * 1000; // 5분
-
-function MarketOverview() {
-  const [market, setMarket] = useState<Record<string, MarketItem>>({});
-  const [lastUpdate, setLastUpdate] = useState<number | null>(null);
-  const [fetching, setFetching] = useState(false);
-
-  const load = useCallback(async (force = false) => {
-    if (fetching) return;
-    setFetching(true);
-    try {
-      const res = await fetch(`/api/market/overview${force ? "?refresh=1" : ""}`);
-      if (res.ok) {
-        const json = await res.json();
-        setMarket(json.data ?? {});
-        setLastUpdate(json.cachedAt ?? Date.now());
-      }
-    } finally {
-      setFetching(false);
-    }
-  }, [fetching]);
-
-  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    const id = setInterval(() => {
-      if (document.visibilityState === "visible") load();
-    }, MARKET_REFRESH_INTERVAL);
-    return () => clearInterval(id);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const items = Object.values(market);
-  const indices = items.filter(i => i.type === "index");
-  const fx = items.filter(i => i.type === "fx");
-  const commodities = items.filter(i => i.type === "commodity");
-  const stocks = items.filter(i => i.type === "stock");
-
-  function fmt(item: MarketItem) {
-    if (item.type === "fx") return item.price.toLocaleString("ko-KR", { maximumFractionDigits: 1 });
-    if (item.type === "index") return item.price.toLocaleString("en-US", { maximumFractionDigits: 0 });
-    return item.price.toFixed(2);
-  }
-
-  function MarketChip({ item }: { item: MarketItem }) {
-    const up = item.changeRate >= 0;
-    return (
-      <div className="flex flex-col min-w-[80px] px-2.5 py-1.5 rounded-lg bg-muted/60 hover:bg-muted transition-colors">
-        <span className="text-[10px] text-muted-foreground leading-tight">{item.label}</span>
-        <span className="text-sm font-semibold leading-tight mt-0.5">{fmt(item)}</span>
-        <span className={`text-[10px] font-medium ${up ? "text-green-500" : "text-red-500"}`}>
-          {up ? "▲" : "▼"} {Math.abs(item.changeRate).toFixed(2)}%
-        </span>
-      </div>
-    );
-  }
-
-  if (items.length === 0) return (
-    <div className="flex items-center justify-center h-16 text-xs text-muted-foreground gap-2">
-      {fetching ? <><RefreshCw className="w-3 h-3 animate-spin" />시황 로딩 중...</> : "시황 데이터 없음"}
-    </div>
-  );
-
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">글로벌 시황</h3>
-        <div className="flex items-center gap-2">
-          {lastUpdate && (
-            <span className="text-[10px] text-muted-foreground">
-              {new Date(lastUpdate).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 기준
-            </span>
-          )}
-          <button onClick={() => load(true)} disabled={fetching} className="text-muted-foreground hover:text-foreground transition-colors">
-            <RefreshCw className={`w-3 h-3 ${fetching ? "animate-spin" : ""}`} />
-          </button>
-        </div>
-      </div>
-      <div className="overflow-x-auto pb-1 -mx-1 px-1">
-        <div className="flex gap-2 min-w-max">
-          {indices.map(i => <MarketChip key={i.symbol} item={i} />)}
-          <div className="w-px bg-border mx-0.5" />
-          {fx.map(i => <MarketChip key={i.symbol} item={i} />)}
-          {commodities.map(i => <MarketChip key={i.symbol} item={i} />)}
-          <div className="w-px bg-border mx-0.5" />
-          {stocks.map(i => <MarketChip key={i.symbol} item={i} />)}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default function PortfolioPage() {
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [snapshots, setSnapshots] = useState<{ date: string; totalValue: number; totalCost: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [priceUpdatedAt, setPriceUpdatedAt] = useState<number | null>(null);
   const snapshotSaved = useRef(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Holding | null>(null);
@@ -187,6 +99,7 @@ export default function PortfolioPage() {
       if (res.ok) setHoldings(await res.json());
     } catch { /* ignore */ }
     setLoading(false);
+    setPriceUpdatedAt(Date.now());
   }
 
   useEffect(() => { loadHoldings(); }, []);
@@ -412,7 +325,14 @@ export default function PortfolioPage() {
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground mb-1">총 수익률</p>
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-xs text-muted-foreground">총 수익률</p>
+              {priceUpdatedAt && (
+                <span className="text-[10px] text-muted-foreground">
+                  {new Date(priceUpdatedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 기준
+                </span>
+              )}
+            </div>
             <p className={`text-2xl font-bold flex items-center gap-1 ${getProfitColor(totalProfitRate)}`}>
               {totalProfitRate >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
               {totalProfitRate >= 0 ? "+" : ""}{totalProfitRate.toFixed(2)}%

@@ -8,7 +8,8 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { getProfitColor, todayString, formatDistanceToNow } from "@/lib/utils-app";
+import { getProfitColor, todayString, localDateStr, formatDistanceToNow } from "@/lib/utils-app";
+import { MarketOverview } from "@/components/market/MarketOverview";
 
 interface StudySession {
   id: string;
@@ -90,7 +91,7 @@ function calculateStreak(sessions: { date: string }[]): number {
   while (true) {
     const d = new Date(today);
     d.setDate(d.getDate() - streak);
-    const key = d.toISOString().slice(0, 10);
+    const key = localDateStr(d);
     if (dateSet.has(key)) streak++;
     else break;
   }
@@ -104,7 +105,7 @@ function getThisWeekDays(): string[] {
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday);
     d.setDate(d.getDate() + i);
-    return d.toISOString().slice(0, 10);
+    return localDateStr(d);
   });
 }
 
@@ -219,7 +220,7 @@ export default function DashboardPage() {
   );
 
   // 과목별 이번 주 누적 시간
-  const weekStart = weekMonday.toISOString().slice(0, 10);
+  const weekStart = localDateStr(weekMonday);
   const subjectWeekMinutes: Record<string, number> = {};
   for (const s of sessions) {
     if (s.subject && s.date >= weekStart) {
@@ -308,6 +309,13 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* 글로벌 시황 */}
+      <Card>
+        <CardContent className="p-4">
+          <MarketOverview compact />
+        </CardContent>
+      </Card>
 
       {/* 학습 캘린더 */}
       <Card>

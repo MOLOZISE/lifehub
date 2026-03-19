@@ -1,16 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { todayString } from "@/lib/utils-app";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { Star, MapPin, Phone, ExternalLink, Trash2, ArrowLeft, Bookmark, BookmarkCheck, Pencil, Sparkles } from "lucide-react";
+import { Star, MapPin, Phone, ExternalLink, Trash2, ArrowLeft, Bookmark, BookmarkCheck, Pencil, Sparkles, Plus, Check, FolderOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
+
+interface RestaurantList {
+  id: string;
+  name: string;
+  emoji: string;
+  color: string;
+  itemCount: number;
+}
 
 interface Review {
   id: string;
@@ -79,6 +89,10 @@ export default function RestaurantDetailPage() {
   const [editSaving, setEditSaving] = useState(false);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [listSheet, setListSheet] = useState(false);
+  const [myLists, setMyLists] = useState<RestaurantList[]>([]);
+  const [listItemIds, setListItemIds] = useState<Set<string>>(new Set()); // listId -> 이 맛집 포함 여부
+  const [togglingList, setTogglingList] = useState<string | null>(null);
 
   const CATEGORIES = ["한식", "중식", "일식", "양식", "카페", "기타"];
 
@@ -98,18 +112,46 @@ export default function RestaurantDetailPage() {
     }
   }, [loading, restaurant, searchParams]);
 
-  async function handleBookmark() {
-    if (!restaurant) return;
-    const isBookmarked = restaurant.bookmarks.length > 0;
-    const res = await fetch(`/api/restaurant/${id}/bookmark`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ listName: isBookmarked ? restaurant.bookmarks[0].listName : "가고 싶은 곳" }),
-    });
-    if (!res.ok) { toast.error("실패했습니다."); return; }
-    const data = await res.json();
-    toast.success(data.bookmarked ? "북마크에 추가했습니다." : "북마크를 해제했습니다.");
-    loadDetail();
+  async function openListSheet() {
+    const res = await fetch("/api/restaurant/lists");
+    if (res.ok) {
+      const lists: RestaurantList[] = await res.json();
+      setMyLists(lists);
+      // 이 맛집이 어느 리스트에 있는지 확인
+      const inIds = new Set<string>();
+      await Promise.all(lists.map(async (list) => {
+        const r = await fetch(`/api/restaurant/lists/${list.id}/items?limit=500`);
+        if (r.ok) {
+          const data = await r.json();
+          if (data.items?.some((item: { restaurant: { id: string } }) => item.restaurant.id === id)) {
+            inIds.add(list.id);
+          }
+        }
+      }));
+      setListItemIds(inIds);
+    }
+    setListSheet(true);
+  }
+
+  async function toggleList(listId: string) {
+    setTogglingList(listId);
+    try {
+      const res = await fetch(`/api/restaurant/lists/${listId}/items`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ restaurantId: id }),
+      });
+      if (!res.ok) { toast.error("실패했습니다."); return; }
+      const data = await res.json();
+      setListItemIds(prev => {
+        const next = new Set(prev);
+        data.added ? next.add(listId) : next.delete(listId);
+        return next;
+      });
+      toast.success(data.added ? "리스트에 추가했습니다" : "리스트에서 제거했습니다");
+    } finally {
+      setTogglingList(null);
+    }
   }
 
   function openEdit() {
@@ -158,7 +200,7 @@ export default function RestaurantDetailPage() {
 
   async function handleAiSummary() {
     if (!restaurant || restaurant.reviews.length < 2) return;
-    const cacheKey = `ai_summary_${restaurant.id}_${new Date().toISOString().slice(0, 10)}`;
+    const cacheKey = `ai_summary_${restaurant.id}_${todayString()}`;
     const cached = localStorage.getItem(cacheKey);
     if (cached) { setAiSummary(cached); return; }
     setAiLoading(true);
@@ -204,7 +246,7 @@ export default function RestaurantDetailPage() {
   if (!restaurant) return null;
 
   const isOwner = session?.user?.id === restaurant.userId;
-  const isBookmarked = restaurant.bookmarks.length > 0;
+  const isInAnyList = listItemIds.size > 0;
 
   return (
     <div className="max-w-2xl mx-auto space-y-5">
@@ -249,8 +291,8 @@ export default function RestaurantDetailPage() {
               </div>
             </div>
             <div className="flex flex-col gap-1.5">
-              <button onClick={handleBookmark} className="p-2 rounded-md hover:bg-accent transition-colors">
-                {isBookmarked
+              <button onClick={openListSheet} className="p-2 rounded-md hover:bg-accent transition-colors" title="내 리스트에 저장">
+                {isInAnyList
                   ? <BookmarkCheck className="w-5 h-5 text-primary" />
                   : <Bookmark className="w-5 h-5 text-muted-foreground" />
                 }
@@ -469,6 +511,63 @@ export default function RestaurantDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* 리스트 저장 Sheet */}
+      <Sheet open={listSheet} onOpenChange={setListSheet}>
+        <SheetContent side="bottom" className="rounded-t-2xl pb-safe">
+          <SheetHeader className="pb-4">
+            <SheetTitle className="flex items-center gap-2">
+              <Bookmark className="w-4 h-4" />내 리스트에 저장
+            </SheetTitle>
+          </SheetHeader>
+          {myLists.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <FolderOpen className="w-8 h-8 mx-auto mb-2 opacity-40" />
+              <p className="text-sm mb-3">아직 리스트가 없어요</p>
+              <Button size="sm" variant="outline" onClick={() => { setListSheet(false); window.location.href = "/restaurant/mylist"; }}>
+                리스트 만들러 가기
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-2 pb-6">
+              {myLists.map(list => {
+                const inList = listItemIds.has(list.id);
+                return (
+                  <button
+                    key={list.id}
+                    onClick={() => toggleList(list.id)}
+                    disabled={togglingList === list.id}
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all ${
+                      inList ? "border-primary bg-primary/5" : "border-border hover:bg-accent"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl">{list.emoji}</span>
+                      <div className="text-left">
+                        <p className="font-medium text-sm">{list.name}</p>
+                        <p className="text-xs text-muted-foreground">{list.itemCount}개</p>
+                      </div>
+                    </div>
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 transition-all ${
+                      inList ? "bg-primary border-primary" : "border-muted-foreground/30"
+                    }`}>
+                      {inList && <Check className="w-3.5 h-3.5 text-white" />}
+                    </div>
+                  </button>
+                );
+              })}
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full gap-1.5 mt-2"
+                onClick={() => { setListSheet(false); window.location.href = "/restaurant/mylist"; }}
+              >
+                <Plus className="w-3.5 h-3.5" />새 리스트 만들기
+              </Button>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

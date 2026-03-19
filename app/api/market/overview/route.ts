@@ -1,9 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
 
-// In-memory cache: 5분
-let cache: { data: Record<string, MarketItem>; ts: number } | null = null;
-const CACHE_TTL = 5 * 60 * 1000;
+// In-memory cache (서버 재시작 전까지 유효)
+let memCache: { data: Record<string, MarketItem>; ts: number } | null = null;
+const MEM_CACHE_TTL = 5 * 60 * 1000; // 5분
 
 export interface MarketItem {
   symbol: string;
@@ -12,30 +13,55 @@ export interface MarketItem {
   change: number;
   changeRate: number;
   currency: string;
-  type: "index" | "fx" | "commodity" | "stock";
+  type: "index" | "fx" | "commodity" | "stock" | "bond";
 }
 
-const SYMBOLS: { symbol: string; label: string; currency: string; type: MarketItem["type"] }[] = [
-  { symbol: "^IXIC",   label: "나스닥",   currency: "pt",  type: "index" },
-  { symbol: "^GSPC",   label: "S&P 500", currency: "pt",  type: "index" },
-  { symbol: "^DJI",    label: "다우존스", currency: "pt",  type: "index" },
-  { symbol: "USDKRW=X",label: "원/달러", currency: "KRW", type: "fx" },
-  { symbol: "CL=F",    label: "WTI 유가", currency: "USD", type: "commodity" },
-  { symbol: "GC=F",    label: "금",       currency: "USD", type: "commodity" },
-  { symbol: "MU",      label: "마이크론", currency: "USD", type: "stock" },
-  { symbol: "WDC",     label: "웨스턴디지털", currency: "USD", type: "stock" },
+export const ALL_SYMBOLS: {
+  symbol: string; label: string; currency: string;
+  type: MarketItem["type"]; category: string; defaultOn: boolean;
+}[] = [
+  // 지수
+  { symbol: "^IXIC",   label: "나스닥",      currency: "pt",  type: "index",     category: "지수",   defaultOn: true },
+  { symbol: "^GSPC",   label: "S&P 500",     currency: "pt",  type: "index",     category: "지수",   defaultOn: true },
+  { symbol: "^DJI",    label: "다우존스",     currency: "pt",  type: "index",     category: "지수",   defaultOn: true },
+  { symbol: "^KS11",   label: "코스피",       currency: "pt",  type: "index",     category: "지수",   defaultOn: false },
+  { symbol: "^KQ11",   label: "코스닥",       currency: "pt",  type: "index",     category: "지수",   defaultOn: false },
+  { symbol: "^N225",   label: "닛케이",       currency: "pt",  type: "index",     category: "지수",   defaultOn: false },
+  // 환율
+  { symbol: "USDKRW=X",label: "원/달러",      currency: "KRW", type: "fx",        category: "환율",   defaultOn: true },
+  { symbol: "EURUSD=X",label: "유로/달러",    currency: "USD", type: "fx",        category: "환율",   defaultOn: false },
+  { symbol: "USDJPY=X",label: "달러/엔",      currency: "JPY", type: "fx",        category: "환율",   defaultOn: false },
+  // 원자재
+  { symbol: "CL=F",    label: "WTI 유가",     currency: "USD", type: "commodity", category: "원자재", defaultOn: true },
+  { symbol: "GC=F",    label: "금",           currency: "USD", type: "commodity", category: "원자재", defaultOn: true },
+  { symbol: "SI=F",    label: "은",           currency: "USD", type: "commodity", category: "원자재", defaultOn: false },
+  { symbol: "BTC-USD", label: "비트코인",      currency: "USD", type: "commodity", category: "원자재", defaultOn: false },
+  // 주식
+  { symbol: "MU",      label: "마이크론",      currency: "USD", type: "stock",     category: "주식",   defaultOn: true },
+  { symbol: "WDC",     label: "웨스턴디지털",  currency: "USD", type: "stock",     category: "주식",   defaultOn: true },
+  { symbol: "NVDA",    label: "엔비디아",      currency: "USD", type: "stock",     category: "주식",   defaultOn: false },
+  { symbol: "AAPL",    label: "애플",          currency: "USD", type: "stock",     category: "주식",   defaultOn: false },
+  { symbol: "TSLA",    label: "테슬라",        currency: "USD", type: "stock",     category: "주식",   defaultOn: false },
+  // 채권
+  { symbol: "^TNX",    label: "미국 10년채",   currency: "%",   type: "bond",      category: "채권",   defaultOn: false },
+  { symbol: "^TYX",    label: "미국 30년채",   currency: "%",   type: "bond",      category: "채권",   defaultOn: false },
 ];
 
+export const DEFAULT_SYMBOLS = ALL_SYMBOLS.filter(s => s.defaultOn).map(s => s.symbol);
+
 async function fetchYahooQuotes(symbols: string[]): Promise<Record<string, MarketItem>> {
+  if (symbols.length === 0) return {};
   const joined = symbols.join(",");
-  const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${joined}&fields=regularMarketPrice,regularMarketChange,regularMarketChangePercent,shortName`;
+  const url = `https://query1.finance.yahoo.com/v8/finance/quote?symbols=${joined}&fields=regularMarketPrice,regularMarketChange,regularMarketChangePercent,shortName`;
 
   const res = await fetch(url, {
     headers: {
-      "User-Agent": "Mozilla/5.0 (compatible; LifeHub/1.0)",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
       "Accept": "application/json",
+      "Accept-Language": "en-US,en;q=0.9",
     },
     next: { revalidate: 0 },
+    signal: AbortSignal.timeout(8000),
   });
 
   if (!res.ok) throw new Error(`Yahoo Finance 응답 오류: ${res.status}`);
@@ -44,7 +70,7 @@ async function fetchYahooQuotes(symbols: string[]): Promise<Record<string, Marke
   const quotes: Record<string, MarketItem> = {};
 
   for (const q of json?.quoteResponse?.result ?? []) {
-    const meta = SYMBOLS.find(s => s.symbol === q.symbol);
+    const meta = ALL_SYMBOLS.find(s => s.symbol === q.symbol);
     if (!meta) continue;
     quotes[q.symbol] = {
       symbol: q.symbol,
@@ -59,22 +85,80 @@ async function fetchYahooQuotes(symbols: string[]): Promise<Record<string, Marke
   return quotes;
 }
 
-export async function GET() {
+async function loadFromDb(): Promise<{ data: Record<string, MarketItem>; ts: number } | null> {
+  try {
+    const row = await prisma.marketCache.findUnique({ where: { id: "singleton" } });
+    if (!row) return null;
+    return { data: row.data as unknown as Record<string, MarketItem>, ts: row.updatedAt.getTime() };
+  } catch {
+    return null;
+  }
+}
+
+async function saveToDb(data: Record<string, MarketItem>) {
+  try {
+    await prisma.marketCache.upsert({
+      where: { id: "singleton" },
+      create: { id: "singleton", data: data as never },
+      update: { data: data as never },
+    });
+  } catch {
+    // DB 저장 실패는 무시 (in-memory로 fallback)
+  }
+}
+
+export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // 캐시 유효하면 바로 반환
-  if (cache && Date.now() - cache.ts < CACHE_TTL) {
-    return NextResponse.json({ data: cache.data, cached: true, cachedAt: cache.ts });
+  const url = new URL(req.url);
+  const force = url.searchParams.get("refresh") === "1";
+  // 사용자가 요청한 종목 리스트 (없으면 default)
+  const symbolsParam = url.searchParams.get("symbols");
+  const requestedSymbols = symbolsParam
+    ? symbolsParam.split(",").filter(s => ALL_SYMBOLS.some(a => a.symbol === s))
+    : DEFAULT_SYMBOLS;
+
+  // force가 아니면 in-memory 캐시 먼저 확인
+  if (!force && memCache && Date.now() - memCache.ts < MEM_CACHE_TTL) {
+    const filtered = Object.fromEntries(
+      Object.entries(memCache.data).filter(([k]) => requestedSymbols.includes(k))
+    );
+    return NextResponse.json({ data: filtered, cached: true, cachedAt: memCache.ts });
   }
 
+  // DB 캐시 확인 (서버 재시작 후 복원용)
+  if (!force && !memCache) {
+    const dbCache = await loadFromDb();
+    if (dbCache && Date.now() - dbCache.ts < MEM_CACHE_TTL) {
+      memCache = dbCache;
+      const filtered = Object.fromEntries(
+        Object.entries(dbCache.data).filter(([k]) => requestedSymbols.includes(k))
+      );
+      return NextResponse.json({ data: filtered, cached: true, cachedAt: dbCache.ts });
+    }
+  }
+
+  // 전체 default 종목 fetch (캐시는 전체 기준으로 저장)
   try {
-    const data = await fetchYahooQuotes(SYMBOLS.map(s => s.symbol));
-    cache = { data, ts: Date.now() };
-    return NextResponse.json({ data, cached: false, cachedAt: cache.ts });
+    const data = await fetchYahooQuotes(DEFAULT_SYMBOLS);
+    memCache = { data, ts: Date.now() };
+    // DB에 비동기로 저장
+    saveToDb(data);
+
+    const filtered = Object.fromEntries(
+      Object.entries(data).filter(([k]) => requestedSymbols.includes(k))
+    );
+    return NextResponse.json({ data: filtered, cached: false, cachedAt: memCache.ts });
   } catch (e) {
-    // 캐시가 있으면 만료돼도 반환
-    if (cache) return NextResponse.json({ data: cache.data, cached: true, cachedAt: cache.ts });
+    // 캐시 fallback
+    const fallback = memCache ?? (await loadFromDb());
+    if (fallback) {
+      const filtered = Object.fromEntries(
+        Object.entries(fallback.data).filter(([k]) => requestedSymbols.includes(k))
+      );
+      return NextResponse.json({ data: filtered, cached: true, cachedAt: fallback.ts, stale: true });
+    }
     return NextResponse.json({ error: String(e) }, { status: 502 });
   }
 }

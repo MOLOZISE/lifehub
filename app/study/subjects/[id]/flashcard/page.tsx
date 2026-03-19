@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { todayString, localDateStr } from "@/lib/utils-app";
 
 type Mode = "list" | "study" | "add" | "result";
 
@@ -89,7 +90,7 @@ export default function FlashcardPage() {
   }, [mode, showBack, queue, current]);
 
   function startStudy() {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayString();
     const due = cards.filter(c => c.nextReviewAt.slice(0, 10) <= today);
     const fresh = cards.filter(c => c.nextReviewAt.slice(0, 10) > today);
     const q = [...due.sort(() => Math.random() - 0.5), ...fresh.sort(() => Math.random() - 0.5)];
@@ -157,7 +158,7 @@ export default function FlashcardPage() {
     setCards(prev => prev.filter(c => c.id !== cardId));
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayString();
   const dueCount = cards.filter(c => c.nextReviewAt.slice(0, 10) <= today).length;
 
   if (mode === "study" && queue.length > 0) {
@@ -298,7 +299,7 @@ export default function FlashcardPage() {
                     <div className="flex gap-1 flex-wrap">{card.tags.map(t => <Badge key={t} variant="outline" className="text-xs">{t}</Badge>)}</div>
                   )}
                   <p className="text-xs text-muted-foreground mt-2">
-                    복습 {card.reviewCount}회 | 다음: {new Date(card.nextReviewAt).toISOString().slice(0, 10)}
+                    복습 {card.reviewCount}회 | 다음: {localDateStr(new Date(card.nextReviewAt))}
                   </p>
                 </CardContent>
               </Card>
