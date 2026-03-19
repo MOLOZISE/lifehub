@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { TrendingUp, Clock, Zap } from "lucide-react";
+import { TrendingUp, Clock, Zap, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar,
@@ -29,6 +30,38 @@ export default function AnalyticsPage() {
   const [sessions, setSessions] = useState<StudySession[]>([]);
   const [loading, setLoading] = useState(true);
   const today = todayString();
+
+  const [aiAdvice, setAiAdvice] = useState<{
+    sections: { title: string; content: string }[];
+    generatedAt: string;
+    totalMinutes: number;
+    avgFocus: number;
+    sessionCount: number;
+  } | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
+
+  async function loadAiAdvice(force = false) {
+    setAiLoading(true);
+    setAiError("");
+    try {
+      const res = await fetch("/api/study/ai-advice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        setAiError(data.error);
+        return;
+      }
+      setAiAdvice(data);
+    } catch {
+      setAiError("AI 분석 실패");
+    } finally {
+      setAiLoading(false);
+    }
+  }
 
   useEffect(() => {
     async function loadAll() {
@@ -252,6 +285,74 @@ export default function AnalyticsPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* AI 학습 조언 */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm flex items-center gap-2">
+              🤖 AI 학습 조언
+              {aiAdvice && (
+                <span className="text-[10px] text-muted-foreground font-normal">
+                  {new Date(aiAdvice.generatedAt).toLocaleString("ko-KR", {
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })} 생성
+                </span>
+              )}
+            </CardTitle>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => loadAiAdvice(true)}
+              disabled={aiLoading}
+              className="h-7 text-xs"
+            >
+              {aiLoading ? (
+                <Loader2 className="w-3 h-3 animate-spin mr-1" />
+              ) : (
+                "🔄 "
+              )}
+              {aiAdvice ? "재분석" : "AI 분석 시작"}
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {aiLoading && (
+            <div className="flex items-center justify-center py-8 text-muted-foreground gap-2">
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span className="text-sm">학습 패턴 분석 중... (10~20초)</span>
+            </div>
+          )}
+          {aiError && (
+            <p className="text-sm text-destructive p-3 bg-destructive/10 rounded-lg">
+              {aiError}
+            </p>
+          )}
+          {!aiLoading && !aiAdvice && !aiError && (
+            <div className="text-center py-8 text-muted-foreground">
+              <p className="text-3xl mb-2">📊</p>
+              <p className="text-sm">
+                버튼을 클릭하면 30일 학습 데이터를 기반으로 AI 맞춤 조언을 제공합니다
+              </p>
+            </div>
+          )}
+          {aiAdvice && !aiLoading && (
+            <div className="space-y-4">
+              {aiAdvice.sections.map((sec, i) => (
+                <div key={i} className="bg-muted/30 rounded-xl p-3">
+                  <p className="text-xs font-semibold mb-1.5">## {sec.title}</p>
+                  <p className="text-sm text-muted-foreground whitespace-pre-line leading-relaxed">
+                    {sec.content}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
     </div>
   );

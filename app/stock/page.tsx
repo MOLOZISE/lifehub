@@ -5,11 +5,13 @@ import { TradingViewChart } from "@/components/chart/TradingViewChart";
 import {
   Search, Loader2, RefreshCw, Star, StarOff,
   TrendingUp, TrendingDown, Minus, Target, Calendar, ChevronDown, ChevronUp, Clock,
+  Settings2, Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { MarketOverview } from "@/components/market/MarketOverview";
 import { toast } from "sonner";
 import type { OHLCVBar } from "@/lib/types";
@@ -53,7 +55,7 @@ interface AiData {
 
 // ─── Popular stocks ─────────────────────────────────────────────────────────────
 
-const POPULAR_KR = [
+const ALL_POPULAR_KR = [
   { ticker: "005930", name: "삼성전자", market: "KR" as const },
   { ticker: "000660", name: "SK하이닉스", market: "KR" as const },
   { ticker: "035420", name: "NAVER", market: "KR" as const },
@@ -68,7 +70,7 @@ const POPULAR_KR = [
   { ticker: "034020", name: "두산에너빌리티", market: "KR" as const },
 ];
 
-const POPULAR_US = [
+const ALL_POPULAR_US = [
   { ticker: "AAPL", name: "Apple", market: "US" as const },
   { ticker: "NVDA", name: "NVIDIA", market: "US" as const },
   { ticker: "MSFT", name: "Microsoft", market: "US" as const },
@@ -77,7 +79,32 @@ const POPULAR_US = [
   { ticker: "META", name: "Meta", market: "US" as const },
   { ticker: "TSLA", name: "Tesla", market: "US" as const },
   { ticker: "TSM", name: "TSMC", market: "US" as const },
+  { ticker: "ORCL", name: "Oracle", market: "US" as const },
+  { ticker: "AMD", name: "AMD", market: "US" as const },
+  { ticker: "INTC", name: "Intel", market: "US" as const },
+  { ticker: "NFLX", name: "Netflix", market: "US" as const },
 ];
+
+// ─── localStorage helpers ────────────────────────────────────────────────────────
+
+const LS_POPULAR_KR = "popular_kr_tickers";
+const LS_POPULAR_US = "popular_us_tickers";
+
+function getPopularTickers(key: string, defaults: string[]): string[] {
+  if (typeof window === "undefined") return defaults;
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      const parsed = JSON.parse(raw) as string[];
+      if (parsed.length > 0) return parsed;
+    }
+  } catch { /* ignore */ }
+  return defaults;
+}
+
+function savePopularTickers(key: string, tickers: string[]) {
+  try { localStorage.setItem(key, JSON.stringify(tickers)); } catch { /* ignore */ }
+}
 
 // ─── Utils ──────────────────────────────────────────────────────────────────────
 
@@ -550,6 +577,7 @@ function WatchlistItemCard({
 
 function ChartTab({
   watchlistItems, watchlistPrices, krPrices, usPrices,
+  popularKr, popularUs,
   activeTicker, period, chartLoading, chartError, chartMeta,
   chartInputTicker, setChartInputTicker,
   showChartSugg, setShowChartSugg, chartSuggestions,
@@ -560,6 +588,8 @@ function ChartTab({
   watchlistPrices: Record<string, StockPrice>;
   krPrices: Record<string, StockPrice>;
   usPrices: Record<string, StockPrice>;
+  popularKr: { ticker: string; name: string; market: "KR" | "US" }[];
+  popularUs: { ticker: string; name: string; market: "KR" | "US" }[];
   activeTicker: { yahoo: string; label: string; currency: string } | null;
   period: Period;
   chartLoading: boolean;
@@ -710,7 +740,7 @@ function ChartTab({
         <div>
           <p className="text-xs font-semibold text-muted-foreground mb-2">국내 인기 종목</p>
           <div className="grid grid-cols-3 gap-2">
-            {POPULAR_KR.map(s => {
+            {popularKr.map(s => {
               const priceKey = `${s.ticker}.KS`;
               const price = krPrices[priceKey] ?? null;
               const yt = toYahooTicker(s.ticker, s.market);
@@ -733,7 +763,7 @@ function ChartTab({
         <div>
           <p className="text-xs font-semibold text-muted-foreground mb-2">해외 인기 종목</p>
           <div className="grid grid-cols-3 gap-2">
-            {POPULAR_US.map(s => {
+            {popularUs.map(s => {
               const price = usPrices[s.ticker] ?? null;
               const yt = toYahooTicker(s.ticker, s.market);
               return (
@@ -834,6 +864,7 @@ function ChartTab({
 
 function AiAnalysisTab({
   watchlistItems, stockAiData,
+  popularKr, popularUs,
   aiTicker, setAiTicker,
   aiLoading, aiSections, aiError,
   aiAnalyzed, aiAnalyzedAt, aiSources, cachedTickers,
@@ -841,6 +872,8 @@ function AiAnalysisTab({
 }: {
   watchlistItems: WatchlistItem[];
   stockAiData: Record<string, AiData | "loading">;
+  popularKr: { ticker: string; name: string; market: "KR" | "US" }[];
+  popularUs: { ticker: string; name: string; market: "KR" | "US" }[];
   aiTicker: string;
   setAiTicker: (v: string) => void;
   aiLoading: boolean;
@@ -905,7 +938,7 @@ function AiAnalysisTab({
         <div>
           <p className="text-xs font-semibold text-muted-foreground mb-2">국내 인기 종목</p>
           <div className="grid grid-cols-3 gap-2">
-            {POPULAR_KR.map(s => (
+            {popularKr.map(s => (
               <AiSelectorCard
                 key={s.ticker}
                 name={s.name}
@@ -922,7 +955,7 @@ function AiAnalysisTab({
         <div>
           <p className="text-xs font-semibold text-muted-foreground mb-2">해외 인기 종목</p>
           <div className="grid grid-cols-3 gap-2">
-            {POPULAR_US.map(s => (
+            {popularUs.map(s => (
               <AiSelectorCard
                 key={s.ticker}
                 name={s.name}
@@ -1012,8 +1045,18 @@ function AiAnalysisTab({
 
 // ─── Main Page ──────────────────────────────────────────────────────────────────
 
+const DEFAULT_POPULAR_KR_TICKERS = ALL_POPULAR_KR.slice(0, 9).map(s => s.ticker);
+const DEFAULT_POPULAR_US_TICKERS = ALL_POPULAR_US.slice(0, 9).map(s => s.ticker);
+
 export default function StockPage() {
   const [tab, setTab] = useState<Tab>("시황");
+
+  // Popular tickers customization
+  const [popularKrTickers, setPopularKrTickers] = useState<string[]>(DEFAULT_POPULAR_KR_TICKERS);
+  const [popularUsTickers, setPopularUsTickers] = useState<string[]>(DEFAULT_POPULAR_US_TICKERS);
+  const [popularSettingsOpen, setPopularSettingsOpen] = useState(false);
+  const [draftKr, setDraftKr] = useState<string[]>([]);
+  const [draftUs, setDraftUs] = useState<string[]>([]);
 
   // Prices for popular stocks
   const [krPrices, setKrPrices] = useState<Record<string, StockPrice>>({});
@@ -1077,6 +1120,8 @@ export default function StockPage() {
   const [holdings, setHoldings] = useState<{ id: string; name: string; ticker: string; market: "KR" | "US"; currency: string }[]>([]);
 
   useEffect(() => {
+    setPopularKrTickers(getPopularTickers(LS_POPULAR_KR, DEFAULT_POPULAR_KR_TICKERS));
+    setPopularUsTickers(getPopularTickers(LS_POPULAR_US, DEFAULT_POPULAR_US_TICKERS));
     loadWatchlist();
     loadPopularPrices();
     loadStockAiAnalysis();
@@ -1084,7 +1129,7 @@ export default function StockPage() {
     fetch("/api/portfolio/holdings").then(r => r.ok ? r.json() : []).then(data => {
       if (Array.isArray(data)) setHoldings(data.map((h: { id: string; name: string; ticker: string; market: "KR"|"US"; currency: string }) => h));
     });
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadWatchlist() {
     const res = await fetch("/api/portfolio/watchlist");
@@ -1094,8 +1139,17 @@ export default function StockPage() {
     setWatchlistUngrouped(data.ungroupedItems ?? []);
   }
 
-  async function loadStockAiAnalysis() {
-    const allStocks = [...POPULAR_KR, ...POPULAR_US];
+  // 동적 인기 종목 목록 (state 기반)
+  const POPULAR_KR = ALL_POPULAR_KR.filter(s => popularKrTickers.includes(s.ticker));
+  const POPULAR_US = ALL_POPULAR_US.filter(s => popularUsTickers.includes(s.ticker));
+
+  async function loadStockAiAnalysis(krTickers?: string[], usTickers?: string[]) {
+    const kr = krTickers ?? popularKrTickers;
+    const us = usTickers ?? popularUsTickers;
+    const allStocks = [
+      ...ALL_POPULAR_KR.filter(s => kr.includes(s.ticker)),
+      ...ALL_POPULAR_US.filter(s => us.includes(s.ticker)),
+    ];
     // 초기 상태: 전부 로딩 중
     setStockAiData(Object.fromEntries(allStocks.map(s => [s.ticker, "loading"])));
 
@@ -1147,11 +1201,13 @@ export default function StockPage() {
     })();
   }
 
-  async function loadPopularPrices() {
+  async function loadPopularPrices(selectedKr?: string[], selectedUs?: string[]) {
     setPriceLoading(true);
+    const kr = selectedKr ?? popularKrTickers;
+    const us = selectedUs ?? popularUsTickers;
     try {
-      const krTickers = POPULAR_KR.map(s => `${s.ticker}.KS`).join(",");
-      const usTickers = POPULAR_US.map(s => s.ticker).join(",");
+      const krTickers = ALL_POPULAR_KR.filter(s => kr.includes(s.ticker)).map(s => `${s.ticker}.KS`).join(",");
+      const usTickers = ALL_POPULAR_US.filter(s => us.includes(s.ticker)).map(s => s.ticker).join(",");
       const [krRes, usRes] = await Promise.all([
         fetch(`/api/stock/price?tickers=${encodeURIComponent(krTickers)}`),
         fetch(`/api/stock/price?tickers=${encodeURIComponent(usTickers)}`),
@@ -1174,6 +1230,16 @@ export default function StockPage() {
     setMarketRefreshKey(k => k + 1);
     loadPopularPrices();
     loadStockAiAnalysis();
+  }
+
+  function applyPopularSettings() {
+    savePopularTickers(LS_POPULAR_KR, draftKr);
+    savePopularTickers(LS_POPULAR_US, draftUs);
+    setPopularKrTickers(draftKr);
+    setPopularUsTickers(draftUs);
+    setPopularSettingsOpen(false);
+    loadPopularPrices(draftKr, draftUs);
+    loadStockAiAnalysis(draftKr, draftUs);
   }
 
   function isInWatchlist(ticker: string): boolean {
@@ -1518,6 +1584,13 @@ export default function StockPage() {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold">국내 인기 종목</h2>
+              <button
+                onClick={() => { setDraftKr(popularKrTickers); setDraftUs(popularUsTickers); setPopularSettingsOpen(true); }}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+                title="인기 종목 설정"
+              >
+                <Settings2 className="w-3.5 h-3.5" />
+              </button>
             </div>
             <div className="grid grid-cols-3 gap-2">
               {POPULAR_KR.map(s => {
@@ -1571,6 +1644,8 @@ export default function StockPage() {
           watchlistPrices={watchlistPrices}
           krPrices={krPrices}
           usPrices={usPrices}
+          popularKr={POPULAR_KR}
+          popularUs={POPULAR_US}
           activeTicker={activeTicker}
           period={period}
           chartLoading={chartLoading}
@@ -1597,6 +1672,8 @@ export default function StockPage() {
         <AiAnalysisTab
           watchlistItems={watchlistItems}
           stockAiData={stockAiData}
+          popularKr={POPULAR_KR}
+          popularUs={POPULAR_US}
           aiTicker={aiTicker}
           setAiTicker={setAiTicker}
           aiLoading={aiLoading}
@@ -1786,6 +1863,60 @@ export default function StockPage() {
           )}
         </div>
       )}
+
+      {/* ── 인기 종목 설정 Sheet ──────────────────────────────────────────────────── */}
+      <Sheet open={popularSettingsOpen} onOpenChange={setPopularSettingsOpen}>
+        <SheetContent side="bottom" className="rounded-t-2xl max-h-[80vh] overflow-y-auto pb-6">
+          <SheetHeader className="pb-3">
+            <SheetTitle className="text-base">인기 종목 설정</SheetTitle>
+            <p className="text-xs text-muted-foreground">표시할 종목을 선택하세요 (최대 12개)</p>
+          </SheetHeader>
+          <div className="space-y-4">
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground mb-2">🇰🇷 국내</p>
+              <div className="flex flex-wrap gap-2">
+                {ALL_POPULAR_KR.map(s => {
+                  const on = draftKr.includes(s.ticker);
+                  return (
+                    <button key={s.ticker}
+                      onClick={() => setDraftKr(prev => on ? prev.filter(t => t !== s.ticker) : [...prev, s.ticker])}
+                      className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs border transition-colors ${on ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-foreground/40"}`}>
+                      {on && <Check className="w-3 h-3" />}
+                      {s.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground mb-2">🇺🇸 해외</p>
+              <div className="flex flex-wrap gap-2">
+                {ALL_POPULAR_US.map(s => {
+                  const on = draftUs.includes(s.ticker);
+                  return (
+                    <button key={s.ticker}
+                      onClick={() => setDraftUs(prev => on ? prev.filter(t => t !== s.ticker) : [...prev, s.ticker])}
+                      className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs border transition-colors ${on ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-foreground/40"}`}>
+                      {on && <Check className="w-3 h-3" />}
+                      {s.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-2 pt-4 border-t mt-4">
+            <Button variant="outline" size="sm"
+              onClick={() => { setDraftKr(DEFAULT_POPULAR_KR_TICKERS); setDraftUs(DEFAULT_POPULAR_US_TICKERS); }}
+              className="text-xs">
+              기본값으로
+            </Button>
+            <Button size="sm" onClick={applyPopularSettings} className="flex-1">
+              적용 ({draftKr.length + draftUs.length}개)
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

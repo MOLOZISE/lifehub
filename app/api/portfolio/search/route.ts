@@ -20,13 +20,15 @@ export async function GET(req: NextRequest) {
 
   // 먼저 로컬 리스트 검색
   const localResults = searchStocks(q, market || undefined);
-  if (localResults.length >= 8) {
+
+  // 로컬 결과가 있어도 Yahoo Finance 검색도 병행 (로컬에 없는 종목 보완)
+  // 단, 완전히 일치하는 로컬 결과가 충분히 많으면(20개 이상) 스킵
+  if (localResults.length >= 20) {
     return NextResponse.json(localResults.slice(0, 30));
   }
 
-  // 로컬 결과 부족 → Yahoo Finance 검색으로 보완
   try {
-    const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=20&newsCount=0&enableFuzzyQuery=false&lang=ko`;
+    const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=20&newsCount=0&enableFuzzyQuery=true&lang=ko`;
     const res = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0 (compatible)" },
       next: { revalidate: 3600 },
