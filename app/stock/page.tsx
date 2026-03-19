@@ -241,9 +241,9 @@ function NewsSectionCard({ section }: { section: NewsSection }) {
   );
 }
 
-// ─── Popular Stock Row (시황 탭 — % 강조, 가격 토글, AI 배지) ────────────────
+// ─── Popular Stock Card (시황 탭 — 카드형 그리드) ────────────────────────────
 
-function PopularStockRow({
+function PopularStockCard({
   ticker, name, market, price, inWatchlist, aiData,
   onChart, onWatchlist,
 }: {
@@ -254,9 +254,10 @@ function PopularStockRow({
   onChart: () => void;
   onWatchlist: () => void;
 }) {
-  const [showPrice, setShowPrice] = useState(false);
   const up = price ? price.changePercent >= 0 : null;
-  const pct = price ? (price.changePercent >= 0 ? "+" : "") + price.changePercent.toFixed(2) + "%" : null;
+  const pct = price
+    ? (price.changePercent >= 0 ? "+" : "") + price.changePercent.toFixed(2) + "%"
+    : null;
   const fmtPrice = (p: StockPrice) =>
     p.currency === "KRW"
       ? "₩" + Math.round(p.price).toLocaleString("ko-KR")
@@ -267,56 +268,56 @@ function PopularStockRow({
     : null;
 
   return (
-    <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted/50 transition-colors group">
-      {/* 이름 */}
-      <button className="flex-1 min-w-0 text-left" onClick={onChart}>
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs text-muted-foreground">{market === "KR" ? "🇰🇷" : "🇺🇸"}</span>
-          <span className="font-medium text-sm truncate">{name}</span>
-          <span className="text-[10px] text-muted-foreground font-mono shrink-0 hidden sm:inline">{ticker}</span>
-        </div>
-      </button>
+    <div className="relative group bg-muted/30 hover:bg-muted/60 rounded-2xl p-3.5 transition-colors flex flex-col gap-2">
+      {/* 상단: 국기 + 이름 + 관심 버튼 */}
+      <div className="flex items-start justify-between gap-1">
+        <button className="flex-1 min-w-0 text-left" onClick={onChart}>
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <span className="text-xs">{market === "KR" ? "🇰🇷" : "🇺🇸"}</span>
+            <span className="font-semibold text-sm leading-tight truncate">{name}</span>
+          </div>
+          <span className="text-[10px] text-muted-foreground font-mono">{ticker}</span>
+        </button>
+        <button
+          onClick={onWatchlist}
+          className={`p-1 rounded-lg transition-colors shrink-0 mt-0.5 ${
+            inWatchlist ? "text-amber-500" : "text-muted-foreground/40 hover:text-amber-500"
+          }`}
+        >
+          <Star className={`w-3.5 h-3.5 ${inWatchlist ? "fill-current" : ""}`} />
+        </button>
+      </div>
 
-      {/* % 변화 — 메인 포인트 */}
-      <button
-        className="flex flex-col items-end gap-0.5 shrink-0"
-        onClick={() => setShowPrice(v => !v)}
-        title="클릭하여 가격 확인"
-      >
+      {/* 중간: % 변화 — 메인 */}
+      <button className="text-left" onClick={onChart}>
         {pct ? (
-          <span className={`text-base font-bold tabular-nums ${up ? "text-red-500" : "text-blue-500"}`}>
+          <span className={`text-2xl font-bold tabular-nums leading-none ${up ? "text-red-500" : "text-blue-500"}`}>
             {pct}
           </span>
         ) : (
-          <span className="text-sm text-muted-foreground">—</span>
-        )}
-        {showPrice && price ? (
-          <span className="text-[11px] text-muted-foreground tabular-nums">{fmtPrice(price)}</span>
-        ) : (
-          <span className="text-[10px] text-muted-foreground opacity-0 group-hover:opacity-60 transition-opacity">가격 ▾</span>
+          <span className="text-lg text-muted-foreground">—</span>
         )}
       </button>
 
-      {/* AI 배지 */}
-      <div className="shrink-0 w-12 text-right">
-        {aiData === "loading" || aiData === undefined ? (
-          <span className="text-[10px] text-muted-foreground">분석중</span>
-        ) : aiData.opinion && badge ? (
-          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${badge.bg} ${badge.text}`}>
-            {aiData.opinion}
-          </span>
-        ) : (
-          <span className="text-[10px] text-muted-foreground">—</span>
-        )}
+      {/* 하단: 가격 + AI 배지 */}
+      <div className="flex items-center justify-between gap-1">
+        <span className="text-xs text-muted-foreground tabular-nums">
+          {price ? fmtPrice(price) : <span className="opacity-40">로딩 중</span>}
+        </span>
+        <div>
+          {aiData === "loading" || aiData === undefined ? (
+            <span className="text-[10px] text-muted-foreground/60 flex items-center gap-0.5">
+              <Loader2 className="w-2.5 h-2.5 animate-spin" />분석중
+            </span>
+          ) : aiData.opinion && badge ? (
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${badge.bg} ${badge.text}`}>
+              {aiData.opinion}
+            </span>
+          ) : (
+            <span className="text-[10px] text-muted-foreground/40">—</span>
+          )}
+        </div>
       </div>
-
-      {/* 관심 종목 버튼 */}
-      <button
-        onClick={onWatchlist}
-        className={`p-1.5 rounded-lg transition-colors opacity-0 group-hover:opacity-100 ${inWatchlist ? "opacity-100 text-amber-500" : "text-muted-foreground hover:text-amber-500"}`}
-      >
-        <Star className={`w-3.5 h-3.5 ${inWatchlist ? "fill-current" : ""}`} />
-      </button>
     </div>
   );
 }
@@ -925,30 +926,18 @@ export default function StockPage() {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold">국내 인기 종목</h2>
-              <div className="flex items-center gap-3">
-                <span className="text-[10px] text-muted-foreground hidden sm:block">% 클릭 → 가격 확인</span>
-                <button onClick={loadPopularPrices} disabled={priceLoading}
-                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-                  <RefreshCw className={`w-3 h-3 ${priceLoading ? "animate-spin" : ""}`} />
-                  새로고침
-                </button>
-              </div>
+              <button onClick={loadPopularPrices} disabled={priceLoading}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+                <RefreshCw className={`w-3 h-3 ${priceLoading ? "animate-spin" : ""}`} />
+                새로고침
+              </button>
             </div>
-
-            {/* 헤더 레이블 */}
-            <div className="flex items-center gap-3 px-3 pb-1 border-b">
-              <span className="flex-1 text-[10px] text-muted-foreground uppercase tracking-wide">종목</span>
-              <span className="text-[10px] text-muted-foreground uppercase tracking-wide shrink-0">등락률</span>
-              <span className="text-[10px] text-muted-foreground uppercase tracking-wide w-12 text-right shrink-0">AI</span>
-              <span className="w-6 shrink-0" />
-            </div>
-
-            <div className="rounded-2xl bg-muted/20 overflow-hidden">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
               {POPULAR_KR.map(s => {
                 const priceKey = `${s.ticker}.KS`;
                 const price = krPrices[priceKey] ?? null;
                 return (
-                  <PopularStockRow
+                  <PopularStockCard
                     key={s.ticker}
                     ticker={s.ticker}
                     name={s.name}
@@ -964,11 +953,11 @@ export default function StockPage() {
             </div>
 
             <h2 className="text-sm font-semibold pt-2">해외 인기 종목</h2>
-            <div className="rounded-2xl bg-muted/20 overflow-hidden">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
               {POPULAR_US.map(s => {
                 const price = usPrices[s.ticker] ?? null;
                 return (
-                  <PopularStockRow
+                  <PopularStockCard
                     key={s.ticker}
                     ticker={s.ticker}
                     name={s.name}
