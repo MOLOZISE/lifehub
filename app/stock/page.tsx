@@ -387,6 +387,106 @@ function StockCard({
   );
 }
 
+// ─── Stock Selector Card (차트 탭 — 종목 선택 그리드) ────────────────────────
+
+function StockSelectorCard({
+  ticker, name, market, price, isActive, onClick,
+}: {
+  ticker: string; name: string; market: "KR" | "US";
+  price: StockPrice | null;
+  isActive: boolean;
+  onClick: () => void;
+}) {
+  const up = price ? price.changePercent >= 0 : null;
+  const pct = price
+    ? (price.changePercent >= 0 ? "+" : "") + price.changePercent.toFixed(2) + "%"
+    : null;
+  const fmtPrice = (p: StockPrice) =>
+    p.currency === "KRW"
+      ? "₩" + Math.round(p.price).toLocaleString("ko-KR")
+      : "$" + p.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  return (
+    <button
+      onClick={onClick}
+      className={`bg-muted/30 rounded-2xl p-3 cursor-pointer transition-all text-left w-full flex flex-col gap-1 ${
+        isActive ? "ring-2 ring-primary bg-primary/5" : "hover:bg-muted/60"
+      }`}
+    >
+      {/* 상단: 국기 + 이름 */}
+      <div className="flex items-center gap-1 min-w-0">
+        <span className="text-[11px] shrink-0">{market === "KR" ? "🇰🇷" : "🇺🇸"}</span>
+        <span className="text-xs font-semibold truncate leading-tight">{name}</span>
+      </div>
+      {/* 중앙: % 변화 */}
+      <div className="leading-none">
+        {pct ? (
+          <span className={`text-lg font-bold tabular-nums ${up ? "text-red-500" : "text-blue-500"}`}>{pct}</span>
+        ) : (
+          <span className="text-base text-muted-foreground/50">—</span>
+        )}
+      </div>
+      {/* 하단: 가격 */}
+      <div className="text-[10px] text-muted-foreground tabular-nums">
+        {price ? fmtPrice(price) : "-"}
+      </div>
+    </button>
+  );
+}
+
+// ─── AI Selector Card (AI분석 탭 — 종목 선택 그리드) ─────────────────────────
+
+function AiSelectorCard({
+  name, market, aiData, isActive, onClick,
+}: {
+  name: string; market: "KR" | "US";
+  aiData: AiData | "loading" | undefined;
+  isActive: boolean;
+  onClick: () => void;
+}) {
+  const opinion = aiData && aiData !== "loading" ? aiData.opinion : null;
+  const risk    = aiData && aiData !== "loading" ? aiData.risk    : null;
+  const loading = aiData === "loading" || aiData === undefined;
+
+  const opinionBadgeClass = (() => {
+    if (!opinion) return "bg-muted text-muted-foreground";
+    if (opinion === "강력매수" || opinion === "매수") return "bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400";
+    if (opinion === "강력매도" || opinion === "매도") return "bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400";
+    return "bg-yellow-100 text-yellow-600 dark:bg-yellow-900/40 dark:text-yellow-400";
+  })();
+
+  return (
+    <button
+      onClick={onClick}
+      className={`bg-muted/30 rounded-2xl p-3 cursor-pointer transition-all text-left w-full flex flex-col gap-1 ${
+        isActive ? "ring-2 ring-primary bg-primary/5" : "hover:bg-muted/60"
+      }`}
+    >
+      {/* 상단: 국기 + 이름 */}
+      <div className="flex items-center gap-1 min-w-0">
+        <span className="text-[11px] shrink-0">{market === "KR" ? "🇰🇷" : "🇺🇸"}</span>
+        <span className="text-xs font-semibold truncate leading-tight">{name}</span>
+      </div>
+      {/* 중앙: AI 의견 배지 */}
+      <div>
+        {loading ? (
+          <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+            <Loader2 className="w-2.5 h-2.5 animate-spin inline" /> 분석 중...
+          </span>
+        ) : (
+          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${opinionBadgeClass}`}>
+            {opinion ?? "-"}
+          </span>
+        )}
+      </div>
+      {/* 하단: 위험도 */}
+      <div className="text-[10px] text-muted-foreground">
+        {risk ? `위험도: ${risk}` : <span className="opacity-40">-</span>}
+      </div>
+    </button>
+  );
+}
+
 // ─── Watchlist Item Card (관심 종목 탭 전용, 삭제 버튼) ────────────────────────
 
 function WatchlistItemCard({
@@ -436,6 +536,470 @@ function WatchlistItemCard({
           className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive transition-colors">
           <StarOff className="w-3.5 h-3.5" />
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Chart Tab Component ─────────────────────────────────────────────────────────
+
+function ChartTab({
+  watchlistItems, watchlistPrices, krPrices, usPrices,
+  activeTicker, period, chartLoading, chartError, chartMeta,
+  chartInputTicker, setChartInputTicker,
+  showChartSugg, setShowChartSugg, chartSuggestions,
+  holdings, fetchChart, handlePeriodChange,
+  isKRW, lastBar, prevBar, priceChange, priceChangePct,
+}: {
+  watchlistItems: WatchlistItem[];
+  watchlistPrices: Record<string, StockPrice>;
+  krPrices: Record<string, StockPrice>;
+  usPrices: Record<string, StockPrice>;
+  activeTicker: { yahoo: string; label: string; currency: string } | null;
+  period: Period;
+  chartLoading: boolean;
+  chartError: string;
+  chartMeta: { ticker: string; currency: string; regularMarketPrice?: number; longName: string; bars: OHLCVBar[] } | null;
+  chartInputTicker: string;
+  setChartInputTicker: (v: string) => void;
+  showChartSugg: boolean;
+  setShowChartSugg: (v: boolean) => void;
+  chartSuggestions: { ticker: string; name: string; market: "KR" | "US" }[];
+  holdings: { id: string; name: string; ticker: string; market: "KR" | "US"; currency: string }[];
+  fetchChart: (yahoo: string, label: string, currency: string, p?: Period) => void;
+  handlePeriodChange: (p: Period) => void;
+  isKRW: boolean;
+  lastBar: OHLCVBar | undefined;
+  prevBar: OHLCVBar | undefined;
+  priceChange: number;
+  priceChangePct: number;
+}) {
+  const chartViewRef = useRef<HTMLDivElement>(null);
+
+  function handleSelectStock(yahoo: string, label: string, currency: string) {
+    fetchChart(yahoo, label, currency);
+    setTimeout(() => {
+      chartViewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Custom 검색 input */}
+      <div className="flex gap-2 relative">
+        <div className="flex-1 relative">
+          <Input
+            placeholder="종목명 또는 티커 검색 (삼성전자, AAPL ...)"
+            value={chartInputTicker}
+            onChange={e => setChartInputTicker(e.target.value)}
+            onFocus={() => chartInputTicker && setShowChartSugg(true)}
+            onBlur={() => setTimeout(() => setShowChartSugg(false), 150)}
+            onKeyDown={e => {
+              if (e.key === "Enter") {
+                const t = chartInputTicker.trim();
+                setShowChartSugg(false);
+                handleSelectStock(toYahooTicker(t), t.toUpperCase(), /^\d{6}$/.test(t) ? "KRW" : "USD");
+                setChartInputTicker("");
+              }
+            }}
+          />
+          {showChartSugg && chartSuggestions.length > 0 && (
+            <div className="absolute z-50 w-full mt-1 bg-white dark:bg-zinc-900 border rounded-lg shadow-lg max-h-52 overflow-y-auto">
+              {chartSuggestions.map(s => (
+                <button key={s.ticker}
+                  className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted text-left"
+                  onMouseDown={() => {
+                    setShowChartSugg(false);
+                    setChartInputTicker("");
+                    handleSelectStock(toYahooTicker(s.ticker, s.market), `${s.name} (${s.ticker})`, s.market === "KR" ? "KRW" : "USD");
+                  }}>
+                  <span className="text-xs">{s.market === "KR" ? "🇰🇷" : "🇺🇸"}</span>
+                  <span className="font-medium text-sm flex-1">{s.name}</span>
+                  <span className="text-xs text-muted-foreground font-mono">{s.ticker}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <Button
+          onClick={() => {
+            const t = chartInputTicker.trim();
+            if (!t) return;
+            setShowChartSugg(false);
+            handleSelectStock(toYahooTicker(t), t.toUpperCase(), /^\d{6}$/.test(t) ? "KRW" : "USD");
+            setChartInputTicker("");
+          }}
+          disabled={chartLoading || !chartInputTicker.trim()}
+        >
+          {chartLoading && !activeTicker ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+        </Button>
+      </div>
+
+      {/* 보유/관심 종목 pill shortcuts */}
+      {(holdings.length > 0 || watchlistItems.length > 0) && (
+        <div className="space-y-1.5">
+          {holdings.length > 0 && (
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">보유 종목</p>
+              <div className="flex flex-wrap gap-1.5">
+                {holdings.map(h => {
+                  const yt = toYahooTicker(h.ticker, h.market);
+                  const isActive = activeTicker?.yahoo === yt;
+                  return (
+                    <button key={h.id} onClick={() => handleSelectStock(yt, h.name, h.currency)}
+                      className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${isActive ? "bg-primary text-primary-foreground border-primary" : "hover:bg-accent border-border"}`}>
+                      {h.name} <span className={isActive ? "opacity-70" : "text-muted-foreground"}>{h.ticker}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {watchlistItems.length > 0 && (
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">관심 종목</p>
+              <div className="flex flex-wrap gap-1.5">
+                {watchlistItems.map(w => {
+                  const yt = toYahooTicker(w.ticker, w.market);
+                  const isActive = activeTicker?.yahoo === yt;
+                  return (
+                    <button key={w.id} onClick={() => handleSelectStock(yt, w.name, w.currency)}
+                      className={`text-xs px-2.5 py-1 rounded-full border border-dashed transition-colors ${isActive ? "bg-primary text-primary-foreground border-primary border-solid" : "hover:bg-accent border-border"}`}>
+                      {w.name} <span className={isActive ? "opacity-70" : "text-muted-foreground"}>{w.ticker}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 종목 선택 그리드 */}
+      <div className="space-y-4">
+        {/* A. 관심 종목 */}
+        {watchlistItems.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground mb-2">관심 종목</p>
+            <div className="grid grid-cols-3 gap-2">
+              {watchlistItems.map(w => {
+                const yt = toYahooTicker(w.ticker, w.market);
+                const price = watchlistPrices[yt] ?? null;
+                return (
+                  <StockSelectorCard
+                    key={w.id}
+                    ticker={w.ticker}
+                    name={w.name}
+                    market={w.market}
+                    price={price}
+                    isActive={activeTicker?.yahoo === yt}
+                    onClick={() => handleSelectStock(yt, w.name, w.market === "KR" ? "KRW" : "USD")}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* B. 국내 인기 종목 */}
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground mb-2">국내 인기 종목</p>
+          <div className="grid grid-cols-3 gap-2">
+            {POPULAR_KR.map(s => {
+              const priceKey = `${s.ticker}.KS`;
+              const price = krPrices[priceKey] ?? null;
+              const yt = toYahooTicker(s.ticker, s.market);
+              return (
+                <StockSelectorCard
+                  key={s.ticker}
+                  ticker={s.ticker}
+                  name={s.name}
+                  market={s.market}
+                  price={price}
+                  isActive={activeTicker?.yahoo === yt}
+                  onClick={() => handleSelectStock(yt, s.name, "KRW")}
+                />
+              );
+            })}
+          </div>
+        </div>
+
+        {/* C. 해외 인기 종목 */}
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground mb-2">해외 인기 종목</p>
+          <div className="grid grid-cols-3 gap-2">
+            {POPULAR_US.map(s => {
+              const price = usPrices[s.ticker] ?? null;
+              const yt = toYahooTicker(s.ticker, s.market);
+              return (
+                <StockSelectorCard
+                  key={s.ticker}
+                  ticker={s.ticker}
+                  name={s.name}
+                  market={s.market}
+                  price={price}
+                  isActive={activeTicker?.yahoo === yt}
+                  onClick={() => handleSelectStock(yt, s.name, "USD")}
+                />
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* 차트 뷰어 */}
+      <div ref={chartViewRef} className="space-y-3 pt-2">
+        {activeTicker && (
+          <>
+            {chartMeta ? (
+              <div>
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-xs text-muted-foreground">{activeTicker.yahoo}</p>
+                    <h2 className="text-lg font-bold leading-tight">{chartMeta.longName}</h2>
+                    <div className="flex items-baseline gap-2 mt-1">
+                      <span className="text-3xl font-bold tabular-nums">
+                        {isKRW
+                          ? "₩" + (lastBar?.close ?? chartMeta.regularMarketPrice ?? 0).toLocaleString("ko-KR")
+                          : "$" + (lastBar?.close ?? chartMeta.regularMarketPrice ?? 0).toFixed(2)}
+                      </span>
+                      {lastBar && prevBar && (
+                        <span className={`text-sm font-medium tabular-nums ${priceChange >= 0 ? "text-red-500" : "text-blue-500"}`}>
+                          {priceChange >= 0 ? "+" : ""}{isKRW ? Math.round(priceChange).toLocaleString() : priceChange.toFixed(2)}
+                          {" "}({priceChange >= 0 ? "+" : ""}{priceChangePct.toFixed(2)}%)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 mt-1 shrink-0"
+                    onClick={() => fetchChart(activeTicker.yahoo, activeTicker.label, activeTicker.currency)}>
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="h-12 flex items-center gap-2 text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span className="text-sm">{activeTicker.label} 로딩 중...</span>
+              </div>
+            )}
+
+            {/* 기간 선택 pill */}
+            <div className="flex gap-1 bg-muted/50 rounded-xl p-1">
+              {(["1W", "1M", "3M", "1Y"] as Period[]).map(p => (
+                <button key={p}
+                  onClick={() => handlePeriodChange(p)}
+                  className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
+                    period === p
+                      ? "bg-background shadow-sm text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}>
+                  {p === "1W" ? "1주" : p === "1M" ? "1달" : p === "3M" ? "3달" : "1년"}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {chartError && <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{chartError}</div>}
+
+        {!activeTicker && (
+          <Card className="border-dashed">
+            <CardContent className="p-10 text-center">
+              <p className="text-4xl mb-3">📈</p>
+              <p className="font-medium">위 그리드에서 종목을 선택하세요</p>
+              <p className="text-sm text-muted-foreground mt-1">또는 검색창에서 직접 티커를 입력하세요</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {chartMeta && chartMeta.bars.length > 0 && (
+          <TradingViewChart
+            bars={chartMeta.bars}
+            height={380}
+            isKRW={isKRW}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── AI Analysis Tab Component ────────────────────────────────────────────────
+
+function AiAnalysisTab({
+  watchlistItems, stockAiData,
+  aiTicker, setAiTicker,
+  aiLoading, aiSections, aiError,
+  aiAnalyzed, aiAnalyzedAt, aiSources, cachedTickers,
+  handleAiAnalyze, loadFromAiCache, holdings,
+}: {
+  watchlistItems: WatchlistItem[];
+  stockAiData: Record<string, AiData | "loading">;
+  aiTicker: string;
+  setAiTicker: (v: string) => void;
+  aiLoading: boolean;
+  aiSections: NewsSection[];
+  aiError: string;
+  aiAnalyzed: string;
+  aiAnalyzedAt: string | null;
+  aiSources: string[];
+  cachedTickers: string[];
+  handleAiAnalyze: (target?: string, forceRefresh?: boolean) => void;
+  loadFromAiCache: (t: string) => void;
+  holdings: { id: string; name: string; ticker: string; market: "KR" | "US"; currency: string }[];
+}) {
+  const aiViewRef = useRef<HTMLDivElement>(null);
+
+  function handleSelectAi(name: string) {
+    handleAiAnalyze(name);
+    setTimeout(() => {
+      aiViewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Custom 검색 input */}
+      <div className="flex gap-2">
+        <Input
+          placeholder="종목명 또는 티커 (삼성전자, AAPL...)"
+          value={aiTicker}
+          onChange={e => setAiTicker(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && handleAiAnalyze()}
+          className="flex-1"
+        />
+        <Button onClick={() => handleAiAnalyze()} disabled={aiLoading || !aiTicker.trim()}>
+          {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+          분석
+        </Button>
+      </div>
+
+      {/* 종목 선택 그리드 */}
+      <div className="space-y-4">
+        {/* A. 관심 종목 */}
+        {watchlistItems.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground mb-2">관심 종목</p>
+            <div className="grid grid-cols-3 gap-2">
+              {watchlistItems.map(w => (
+                <AiSelectorCard
+                  key={w.id}
+                  name={w.name}
+                  market={w.market}
+                  aiData={stockAiData[w.ticker]}
+                  isActive={aiAnalyzed === w.name}
+                  onClick={() => handleSelectAi(w.name)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* B. 국내 인기 종목 */}
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground mb-2">국내 인기 종목</p>
+          <div className="grid grid-cols-3 gap-2">
+            {POPULAR_KR.map(s => (
+              <AiSelectorCard
+                key={s.ticker}
+                name={s.name}
+                market={s.market}
+                aiData={stockAiData[s.ticker]}
+                isActive={aiAnalyzed === s.name}
+                onClick={() => handleSelectAi(s.name)}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* C. 해외 인기 종목 */}
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground mb-2">해외 인기 종목</p>
+          <div className="grid grid-cols-3 gap-2">
+            {POPULAR_US.map(s => (
+              <AiSelectorCard
+                key={s.ticker}
+                name={s.name}
+                market={s.market}
+                aiData={stockAiData[s.ticker]}
+                isActive={aiAnalyzed === s.name}
+                onClick={() => handleSelectAi(s.name)}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* 이전 검색 기록 */}
+      {cachedTickers.length > 0 && (
+        <div>
+          <p className="text-xs text-muted-foreground mb-1.5 font-medium flex items-center gap-1">
+            <Clock className="w-3 h-3" /> 이전 검색 기록
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {cachedTickers.map(t => (
+              <button key={t} onClick={() => loadFromAiCache(t)} disabled={aiLoading}
+                className={`text-xs px-2.5 py-1 rounded-full border border-dashed transition-colors ${
+                  aiAnalyzed === t ? "bg-muted border-solid" : "hover:bg-accent border-border text-muted-foreground"
+                }`}>
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* AI 분석 뷰어 */}
+      <div ref={aiViewRef} className="space-y-3 pt-1">
+        {aiError && <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{aiError}</div>}
+
+        {aiLoading && (
+          <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-3">
+            <Loader2 className="w-7 h-7 animate-spin" />
+            <div className="text-center">
+              <p className="text-sm font-medium">뉴스 수집 + AI 분석 중...</p>
+              <p className="text-xs mt-1 opacity-60">실시간 검색 기반 — 10~20초 소요</p>
+            </div>
+          </div>
+        )}
+
+        {aiSections.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <span className="font-semibold text-sm">📊 {aiAnalyzed} 분석</span>
+                {aiAnalyzedAt && <span className="text-xs text-muted-foreground ml-2">{aiAnalyzedAt}</span>}
+                {aiSources.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {aiSources.map(src => (
+                      <span key={src} className="text-[10px] bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-800">
+                        {src}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1"
+                onClick={() => handleAiAnalyze(aiAnalyzed, true)} disabled={aiLoading}>
+                <RefreshCw className="w-3 h-3" />새로 분석
+              </Button>
+            </div>
+            {aiSections.filter(s => s.type === "summary").map((s, i) => <NewsSectionCard key={i} section={s} />)}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {aiSections.filter(s => s.type !== "summary").map((s, i) => <NewsSectionCard key={i} section={s} />)}
+            </div>
+            <p className="text-xs text-muted-foreground">⚠️ AI 분석은 참고용입니다. 투자 결정은 본인 책임입니다.</p>
+          </div>
+        )}
+
+        {!aiLoading && aiSections.length === 0 && !aiError && (
+          <div className="text-center py-10 text-muted-foreground">
+            <p className="text-4xl mb-3">📰</p>
+            <p className="text-sm">위 그리드에서 종목을 선택하거나 검색창에 입력하세요</p>
+            <p className="text-xs mt-1 opacity-60">호재·악재·단기전망·중장기전망·목표가 종합 분석</p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -996,289 +1560,50 @@ export default function StockPage() {
 
       {/* ── 차트 Tab ─────────────────────────────────────────────────────────────── */}
       {tab === "차트" && (
-        <div className="space-y-4">
-          {/* Search */}
-          <div className="space-y-2">
-            <div className="flex gap-2 relative">
-              <div className="flex-1 relative">
-                <Input
-                  placeholder="종목명 또는 티커 검색 (삼성전자, AAPL ...)"
-                  value={chartInputTicker}
-                  onChange={e => setChartInputTicker(e.target.value)}
-                  onFocus={() => chartInputTicker && setShowChartSugg(true)}
-                  onBlur={() => setTimeout(() => setShowChartSugg(false), 150)}
-                  onKeyDown={e => {
-                    if (e.key === "Enter") {
-                      const t = chartInputTicker.trim();
-                      setShowChartSugg(false);
-                      fetchChart(toYahooTicker(t), t.toUpperCase(), /^\d{6}$/.test(t) ? "KRW" : "USD");
-                      setChartInputTicker("");
-                    }
-                  }}
-                />
-                {showChartSugg && chartSuggestions.length > 0 && (
-                  <div className="absolute z-50 w-full mt-1 bg-white dark:bg-zinc-900 border rounded-lg shadow-lg max-h-52 overflow-y-auto">
-                    {chartSuggestions.map(s => (
-                      <button key={s.ticker}
-                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted text-left"
-                        onMouseDown={() => {
-                          setShowChartSugg(false);
-                          setChartInputTicker("");
-                          fetchChart(toYahooTicker(s.ticker, s.market), `${s.name} (${s.ticker})`, s.market === "KR" ? "KRW" : "USD");
-                        }}>
-                        <span className="text-xs">{s.market === "KR" ? "🇰🇷" : "🇺🇸"}</span>
-                        <span className="font-medium text-sm flex-1">{s.name}</span>
-                        <span className="text-xs text-muted-foreground font-mono">{s.ticker}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <Button
-                onClick={() => {
-                  const t = chartInputTicker.trim();
-                  if (!t) return;
-                  setShowChartSugg(false);
-                  fetchChart(toYahooTicker(t), t.toUpperCase(), /^\d{6}$/.test(t) ? "KRW" : "USD");
-                  setChartInputTicker("");
-                }}
-                disabled={chartLoading || !chartInputTicker.trim()}
-              >
-                {chartLoading && !activeTicker ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-              </Button>
-            </div>
-
-            {holdings.length > 0 && (
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">보유 종목</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {holdings.map(h => {
-                    const yt = toYahooTicker(h.ticker, h.market);
-                    const isActive = activeTicker?.yahoo === yt;
-                    return (
-                      <button key={h.id} onClick={() => fetchChart(yt, h.name, h.currency)}
-                        className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${isActive ? "bg-primary text-primary-foreground border-primary" : "hover:bg-accent border-border"}`}>
-                        {h.name} <span className={isActive ? "opacity-70" : "text-muted-foreground"}>{h.ticker}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {watchlistItems.length > 0 && (
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">관심 종목</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {watchlistItems.map(w => {
-                    const yt = toYahooTicker(w.ticker, w.market);
-                    const isActive = activeTicker?.yahoo === yt;
-                    return (
-                      <button key={w.id} onClick={() => fetchChart(yt, w.name, w.currency)}
-                        className={`text-xs px-2.5 py-1 rounded-full border border-dashed transition-colors ${isActive ? "bg-primary text-primary-foreground border-primary border-solid" : "hover:bg-accent border-border"}`}>
-                        {w.name} <span className={isActive ? "opacity-70" : "text-muted-foreground"}>{w.ticker}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Chart header */}
-          {activeTicker && (
-            <div className="space-y-3">
-              {chartMeta ? (
-                <div>
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-xs text-muted-foreground">{activeTicker.yahoo}</p>
-                      <h2 className="text-lg font-bold leading-tight">{chartMeta.longName}</h2>
-                      <div className="flex items-baseline gap-2 mt-1">
-                        <span className="text-3xl font-bold tabular-nums">
-                          {isKRW
-                            ? "₩" + (lastBar?.close ?? chartMeta.regularMarketPrice ?? 0).toLocaleString("ko-KR")
-                            : "$" + (lastBar?.close ?? chartMeta.regularMarketPrice ?? 0).toFixed(2)}
-                        </span>
-                        {lastBar && prevBar && (
-                          <span className={`text-sm font-medium tabular-nums ${priceChange >= 0 ? "text-red-500" : "text-blue-500"}`}>
-                            {priceChange >= 0 ? "+" : ""}{isKRW ? Math.round(priceChange).toLocaleString() : priceChange.toFixed(2)}
-                            {" "}({priceChange >= 0 ? "+" : ""}{priceChangePct.toFixed(2)}%)
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 mt-1 shrink-0"
-                      onClick={() => fetchChart(activeTicker.yahoo, activeTicker.label, activeTicker.currency)}>
-                      <RefreshCw className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="h-12 flex items-center gap-2 text-muted-foreground">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span className="text-sm">{activeTicker.label} 로딩 중...</span>
-                </div>
-              )}
-
-              {/* 기간 선택 - 토스 스타일 pill */}
-              <div className="flex gap-1 bg-muted/50 rounded-xl p-1">
-                {(["1W", "1M", "3M", "1Y"] as Period[]).map(p => (
-                  <button key={p}
-                    onClick={() => handlePeriodChange(p)}
-                    className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                      period === p
-                        ? "bg-background shadow-sm text-foreground"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}>
-                    {p === "1W" ? "1주" : p === "1M" ? "1달" : p === "3M" ? "3달" : "1년"}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {chartError && <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{chartError}</div>}
-
-          {!activeTicker && (
-            <Card className="border-dashed">
-              <CardContent className="p-12 text-center">
-                <p className="text-4xl mb-3">📈</p>
-                <p className="font-medium">종목을 선택하거나 티커를 검색하세요</p>
-                <p className="text-sm text-muted-foreground mt-1">보유/관심 종목 버튼 또는 AAPL, 005930 등 직접 입력</p>
-              </CardContent>
-            </Card>
-          )}
-
-          {chartMeta && chartMeta.bars.length > 0 && (
-            <TradingViewChart
-              bars={chartMeta.bars}
-              height={380}
-              isKRW={isKRW}
-            />
-          )}
-        </div>
+        <ChartTab
+          watchlistItems={watchlistItems}
+          watchlistPrices={watchlistPrices}
+          krPrices={krPrices}
+          usPrices={usPrices}
+          activeTicker={activeTicker}
+          period={period}
+          chartLoading={chartLoading}
+          chartError={chartError}
+          chartMeta={chartMeta}
+          chartInputTicker={chartInputTicker}
+          setChartInputTicker={setChartInputTicker}
+          showChartSugg={showChartSugg}
+          setShowChartSugg={setShowChartSugg}
+          chartSuggestions={chartSuggestions}
+          holdings={holdings}
+          fetchChart={fetchChart}
+          handlePeriodChange={handlePeriodChange}
+          isKRW={isKRW}
+          lastBar={lastBar}
+          prevBar={prevBar}
+          priceChange={priceChange}
+          priceChangePct={priceChangePct}
+        />
       )}
 
       {/* ── AI분석 Tab ────────────────────────────────────────────────────────────── */}
       {tab === "AI분석" && (
-        <div className="space-y-4">
-          <div className="flex gap-2">
-            <Input
-              placeholder="종목명 또는 티커 (삼성전자, AAPL...)"
-              value={aiTicker}
-              onChange={e => setAiTicker(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && handleAiAnalyze()}
-              className="flex-1"
-            />
-            <Button onClick={() => handleAiAnalyze()} disabled={aiLoading || !aiTicker.trim()}>
-              {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-              분석
-            </Button>
-          </div>
-
-          {/* Holdings shortcuts */}
-          {holdings.length > 0 && (
-            <div>
-              <p className="text-xs text-muted-foreground mb-1.5 font-medium">보유 종목</p>
-              <div className="flex flex-wrap gap-1.5">
-                {holdings.map(h => (
-                  <button key={h.id} onClick={() => handleAiAnalyze(h.name)} disabled={aiLoading}
-                    className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${
-                      aiAnalyzed === h.name ? "bg-primary text-primary-foreground border-primary" : "hover:bg-accent border-border"
-                    }`}>
-                    {h.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Watchlist shortcuts */}
-          {watchlistItems.length > 0 && (
-            <div>
-              <p className="text-xs text-muted-foreground mb-1.5 font-medium">관심 종목</p>
-              <div className="flex flex-wrap gap-1.5">
-                {watchlistItems.map(w => (
-                  <button key={w.id} onClick={() => handleAiAnalyze(w.name)} disabled={aiLoading}
-                    className={`text-xs px-3 py-1.5 rounded-full border border-dashed transition-colors ${
-                      aiAnalyzed === w.name ? "bg-primary text-primary-foreground border-solid border-primary" : "hover:bg-accent border-border"
-                    }`}>
-                    {w.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Cached tickers */}
-          {cachedTickers.length > 0 && (
-            <div>
-              <p className="text-xs text-muted-foreground mb-1.5 font-medium flex items-center gap-1">
-                <Clock className="w-3 h-3" /> 이전 검색 기록
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {cachedTickers.map(t => (
-                  <button key={t} onClick={() => loadFromAiCache(t)} disabled={aiLoading}
-                    className={`text-xs px-2.5 py-1 rounded-full border border-dashed transition-colors ${
-                      aiAnalyzed === t ? "bg-muted border-solid" : "hover:bg-accent border-border text-muted-foreground"
-                    }`}>
-                    {t}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {aiError && <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{aiError}</div>}
-
-          {aiLoading && (
-            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-3">
-              <Loader2 className="w-7 h-7 animate-spin" />
-              <div className="text-center">
-                <p className="text-sm font-medium">뉴스 수집 + AI 분석 중...</p>
-                <p className="text-xs mt-1 opacity-60">실시간 검색 기반 — 10~20초 소요</p>
-              </div>
-            </div>
-          )}
-
-          {aiSections.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <div>
-                  <span className="font-semibold text-sm">📊 {aiAnalyzed} 분석</span>
-                  {aiAnalyzedAt && <span className="text-xs text-muted-foreground ml-2">{aiAnalyzedAt}</span>}
-                  {aiSources.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {aiSources.map(src => (
-                        <span key={src} className="text-[10px] bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-800">
-                          {src}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <Button variant="ghost" size="sm" className="h-7 text-xs gap-1"
-                  onClick={() => handleAiAnalyze(aiAnalyzed, true)} disabled={aiLoading}>
-                  <RefreshCw className="w-3 h-3" />새로 분석
-                </Button>
-              </div>
-              {aiSections.filter(s => s.type === "summary").map((s, i) => <NewsSectionCard key={i} section={s} />)}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {aiSections.filter(s => s.type !== "summary").map((s, i) => <NewsSectionCard key={i} section={s} />)}
-              </div>
-              <p className="text-xs text-muted-foreground">⚠️ AI 분석은 참고용입니다. 투자 결정은 본인 책임입니다.</p>
-            </div>
-          )}
-
-          {!aiLoading && aiSections.length === 0 && !aiError && (
-            <div className="text-center py-12 text-muted-foreground">
-              <p className="text-4xl mb-3">📰</p>
-              <p className="text-sm">종목을 입력하거나 보유/관심 종목을 클릭하세요</p>
-              <p className="text-xs mt-1 opacity-60">호재·악재·단기전망·중장기전망·목표가 종합 분석</p>
-            </div>
-          )}
-        </div>
+        <AiAnalysisTab
+          watchlistItems={watchlistItems}
+          stockAiData={stockAiData}
+          aiTicker={aiTicker}
+          setAiTicker={setAiTicker}
+          aiLoading={aiLoading}
+          aiSections={aiSections}
+          aiError={aiError}
+          aiAnalyzed={aiAnalyzed}
+          aiAnalyzedAt={aiAnalyzedAt}
+          aiSources={aiSources}
+          cachedTickers={cachedTickers}
+          handleAiAnalyze={handleAiAnalyze}
+          loadFromAiCache={loadFromAiCache}
+          holdings={holdings}
+        />
       )}
 
       {/* ── 관심 종목 Tab ─────────────────────────────────────────────────────────── */}
