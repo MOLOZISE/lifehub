@@ -10,40 +10,43 @@ export { ALL_SYMBOLS, DEFAULT_SYMBOLS };
 let memCache: { data: Record<string, MarketItem>; ts: number } | null = null;
 const MEM_CACHE_TTL = 5 * 60 * 1000; // 5분
 
+async function fetchOneSymbol(sym: { symbol: string; label: string; currency: string; type: MarketItem["type"] }): Promise<MarketItem | null> {
+  try {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym.symbol)}?range=1d&interval=1d&includePrePost=false`;
+    const res = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+      next: { revalidate: 0 },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const meta = json?.chart?.result?.[0]?.meta;
+    if (!meta) return null;
+    const price = meta.regularMarketPrice ?? 0;
+    const prevClose = meta.chartPreviousClose ?? meta.previousClose ?? price;
+    const change = price - prevClose;
+    const changeRate = prevClose > 0 ? (change / prevClose) * 100 : 0;
+    return {
+      symbol: sym.symbol,
+      label: sym.label,
+      price,
+      change: Math.round(change * 100) / 100,
+      changeRate: Math.round(changeRate * 100) / 100,
+      currency: sym.currency,
+      type: sym.type,
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function fetchYahooQuotes(symbols: string[]): Promise<Record<string, MarketItem>> {
   if (symbols.length === 0) return {};
-  const joined = symbols.join(",");
-  // query2 도메인이 더 안정적, fields 파라미터 제거하면 모든 필드 반환
-  const url = `https://query2.finance.yahoo.com/v8/finance/quote?symbols=${joined}&lang=en-US&region=US&corsDomain=finance.yahoo.com`;
-
-  const res = await fetch(url, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      "Accept": "*/*",
-      "Accept-Language": "en-US,en;q=0.9",
-      "Referer": "https://finance.yahoo.com/",
-    },
-    next: { revalidate: 0 },
-    signal: AbortSignal.timeout(10000),
-  });
-
-  if (!res.ok) throw new Error(`Yahoo Finance 응답 오류: ${res.status}`);
-
-  const json = await res.json();
+  const metas = symbols.map(s => ALL_SYMBOLS.find(a => a.symbol === s)).filter(Boolean) as typeof ALL_SYMBOLS;
+  const results = await Promise.all(metas.map(fetchOneSymbol));
   const quotes: Record<string, MarketItem> = {};
-
-  for (const q of json?.quoteResponse?.result ?? []) {
-    const meta = ALL_SYMBOLS.find(s => s.symbol === q.symbol);
-    if (!meta) continue;
-    quotes[q.symbol] = {
-      symbol: q.symbol,
-      label: meta.label,
-      price: q.regularMarketPrice ?? 0,
-      change: q.regularMarketChange ?? 0,
-      changeRate: q.regularMarketChangePercent ?? 0,
-      currency: meta.currency,
-      type: meta.type,
-    };
+  for (const item of results) {
+    if (item) quotes[item.symbol] = item;
   }
   return quotes;
 }
