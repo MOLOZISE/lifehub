@@ -490,7 +490,7 @@ export default function RestaurantDetailPage() {
               <div>
                 <p className="text-xs mb-1">카테고리</p>
                 <Select value={editForm.category} onValueChange={v => setEditForm(f => ({ ...f, category: v ?? f.category }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger><span>{editForm.category}</span></SelectTrigger>
                   <SelectContent>{CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                 </Select>
               </div>

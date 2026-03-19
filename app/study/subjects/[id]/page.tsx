@@ -203,7 +203,7 @@ export default function SubjectDetailPage() {
       <Tabs defaultValue="sessions">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="sessions">📋 공부 기록</TabsTrigger>
-          <TabsTrigger value="exams">🎯 시험 결과</TabsTrigger>
+          <TabsTrigger value="exams">📅 시험 일정</TabsTrigger>
           <TabsTrigger value="sources">📎 자료 링크</TabsTrigger>
         </TabsList>
 
@@ -335,7 +335,7 @@ export default function SubjectDetailPage() {
             <div>
               <p className="text-xs mb-1 font-medium">활동 유형</p>
               <Select value={sessionForm.activityType} onValueChange={v => setSessionForm(f => ({ ...f, activityType: v as string }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger><span>{ACTIVITY_LABELS[sessionForm.activityType] ?? sessionForm.activityType}</span></SelectTrigger>
                 <SelectContent>
                   {Object.entries(ACTIVITY_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
                 </SelectContent>
@@ -355,8 +355,8 @@ export default function SubjectDetailPage() {
               <p className="text-xs mb-1 font-medium">만족도</p>
               <div className="flex gap-1">
                 {[1,2,3,4,5].map(n => (
-                  <button key={n} onClick={() => setSessionForm(f => ({ ...f, satisfactionScore: n }))}
-                    className={`text-xl ${n <= sessionForm.satisfactionScore ? "text-amber-400" : "text-muted"}`}>⭐</button>
+                  <button key={n} type="button" onClick={() => setSessionForm(f => ({ ...f, satisfactionScore: n }))}
+                    className={`text-xl transition-opacity ${n <= sessionForm.satisfactionScore ? "opacity-100" : "opacity-20"}`}>⭐</button>
                 ))}
               </div>
             </div>
@@ -376,7 +376,7 @@ export default function SubjectDetailPage() {
             <div>
               <p className="text-xs mb-1 font-medium">유형</p>
               <Select value={sourceType} onValueChange={v => v && setSourceType(v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger><span>{{ link: "🔗 링크", youtube: "▶️ 유튜브", book: "📗 교재", note: "📝 메모" }[sourceType] ?? sourceType}</span></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="link">🔗 링크</SelectItem>
                   <SelectItem value="youtube">▶️ 유튜브</SelectItem>

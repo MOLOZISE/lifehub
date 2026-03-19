@@ -100,7 +100,7 @@ export function SubjectFormDialog({ open, onClose, onSave, initial }: Props) {
           </div>
 
           <div>
-            <p className="text-sm font-medium mb-1">시험 날짜</p>
+            <p className="text-sm font-medium mb-1">시험 날짜 <span className="text-muted-foreground font-normal text-xs">(선택)</span></p>
             <Input type="date" value={examDate} onChange={(e) => setExamDate(e.target.value)} />
           </div>
         </div>

@@ -184,7 +184,7 @@ export default function StrategyPage() {
               <div>
                 <p className="text-xs mb-1 text-muted-foreground">분석 종목</p>
                 <Select value={focusTicker} onValueChange={v => v && setFocusTicker(v)}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-8 text-xs"><span className="truncate">{focusTicker === "all" ? "전체 포트폴리오" : focusTicker}</span></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">전체 포트폴리오</SelectItem>
                     {holdings.map(h => <SelectItem key={h.id} value={h.name}>{h.name}</SelectItem>)}
@@ -195,7 +195,7 @@ export default function StrategyPage() {
               <div>
                 <p className="text-xs mb-1 text-muted-foreground">투자 목표</p>
                 <Select value={goal} onValueChange={v => v && setGoal(v)}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-8 text-xs"><span>{{ short: "단타", swing: "스윙", long: "장기" }[goal] ?? goal}</span></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="short">단타</SelectItem>
                     <SelectItem value="swing">스윙</SelectItem>
@@ -206,7 +206,7 @@ export default function StrategyPage() {
               <div>
                 <p className="text-xs mb-1 text-muted-foreground">리스크 성향</p>
                 <Select value={risk} onValueChange={v => v && setRisk(v)}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-8 text-xs"><span>{{ aggressive: "공격적", neutral: "중립", conservative: "보수적" }[risk] ?? risk}</span></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="aggressive">공격적</SelectItem>
                     <SelectItem value="neutral">중립</SelectItem>

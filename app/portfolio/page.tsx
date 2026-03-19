@@ -125,13 +125,15 @@ export default function PortfolioPage() {
     );
   }, [holdings]);
 
-  // 3분마다 자동 갱신 (장중에만 의미 있지만 항상 실행)
+  // refreshPrices를 ref에 저장해 stale closure 방지
+  const refreshPricesRef = useRef<(silent: boolean) => Promise<void>>(async () => {});
+
+  // 1분마다 자동 갱신 (장중 실시간 반영)
   useEffect(() => {
     const id = setInterval(() => {
-      if (document.visibilityState === "visible") refreshPricesSilent();
-    }, 3 * 60 * 1000);
+      if (document.visibilityState === "visible") refreshPricesRef.current(true);
+    }, 60 * 1000);
     return () => clearInterval(id);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const totalUSD = holdings.reduce((s, h) => s + toUSD(h), 0);
@@ -298,7 +300,8 @@ export default function PortfolioPage() {
     }
   }
 
-  function refreshPricesSilent() { refreshPrices(true); }
+  // ref 최신화 (매 렌더마다 갱신)
+  refreshPricesRef.current = refreshPrices;
   function handleRefreshPrices() { refreshPrices(false); }
 
   async function handleDelete(id: string) {
@@ -697,7 +700,7 @@ export default function PortfolioPage() {
               <div>
                 <p className="text-xs mb-1">섹터</p>
                 <Select value={form.sector ?? "other"} onValueChange={v => setForm(f => ({ ...f, sector: v as PortfolioSector }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger><span>{SECTOR_LABELS[form.sector as PortfolioSector] ?? form.sector}</span></SelectTrigger>
                   <SelectContent>
                     {(Object.entries(SECTOR_LABELS) as [PortfolioSector, string][]).map(([k, v]) => (
                       <SelectItem key={k} value={k}>{v}</SelectItem>

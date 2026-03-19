@@ -1,14 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import { TrendingUp, Clock, Zap, Sparkles, Loader2 } from "lucide-react";
+import { TrendingUp, Clock, Zap } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { StudyHeatmap } from "@/components/study/StudyHeatmap";
 import { todayString, localDateStr, COLOR_MAP } from "@/lib/utils-app";
 
@@ -30,9 +28,6 @@ export default function AnalyticsPage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [sessions, setSessions] = useState<StudySession[]>([]);
   const [loading, setLoading] = useState(true);
-  const [aiRecs, setAiRecs] = useState<string>("");
-  const [aiLoading, setAiLoading] = useState(false);
-
   const today = todayString();
 
   useEffect(() => {
@@ -116,47 +111,6 @@ export default function AnalyticsPage() {
     }
     return count;
   })();
-
-  async function generateRecommendations() {
-    setAiLoading(true);
-    setAiRecs("");
-    try {
-      const subjectSummary = subjects.map(s => {
-        const mins = subjectMinutes[s.id] ?? 0;
-        return `- ${s.emoji} ${s.name}: 최근30일 ${mins}분 학습`;
-      }).join("\n");
-
-      const prompt = `학습 현황:
-총 학습 (최근 30일): ${Math.round(totalMin30 / 60)}시간 ${totalMin30 % 60}분
-평균 집중도: ${avgFocus > 0 ? avgFocus.toFixed(1) : "기록 없음"}/5
-평균 만족도: ${avgSatisfaction > 0 ? avgSatisfaction.toFixed(1) : "기록 없음"}/5
-연속 학습일: ${streak}일
-
-과목별 현황:
-${subjectSummary || "과목 없음"}
-
-최근 7일 학습 패턴:
-${weeklyData.map(d => `${d.day}: ${d.minutes}분`).join(", ")}`;
-
-      const res = await fetch("/api/ai", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          systemPrompt: `당신은 전문 학습 코치입니다. 학생의 학습 데이터를 분석하여 구체적이고 실용적인 개선 방안을 제시하세요.
-분석은 다음 형식으로 작성하세요:
-1. 현재 학습 패턴 분석 (2-3줄)
-2. 우선 개선 사항 3가지 (각 항목 구체적 행동 제안)
-3. 이번 주 집중 목표 1가지
-간결하고 실천 가능한 조언을 제공하세요.`,
-          userMessage: prompt,
-        }),
-      });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      setAiRecs(data.text);
-    } catch { setAiRecs("추천 생성에 실패했습니다. 다시 시도해주세요."); }
-    finally { setAiLoading(false); }
-  }
 
   if (loading) return <div className="p-8 text-center text-muted-foreground">분석 중...</div>;
 
@@ -299,55 +253,6 @@ ${weeklyData.map(d => `${d.day}: ${d.minutes}분`).join(", ")}`;
         </Card>
       )}
 
-      {/* AI Recommendations */}
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4 text-indigo-500" />AI 학습 추천
-            </CardTitle>
-            <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
-              onClick={generateRecommendations} disabled={aiLoading || sessions.length === 0}>
-              {aiLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-              {aiRecs ? "재분석" : "분석 생성"}
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {aiLoading ? (
-            <div className="flex items-center gap-2 py-6 justify-center text-muted-foreground text-sm">
-              <Loader2 className="w-4 h-4 animate-spin" />학습 데이터 분석 중...
-            </div>
-          ) : aiRecs ? (
-            <p className="text-sm text-muted-foreground whitespace-pre-line leading-relaxed">{aiRecs}</p>
-          ) : (
-            <p className="text-sm text-muted-foreground py-4 text-center">
-              {sessions.length === 0
-                ? "학습 세션을 기록하면 AI 추천을 받을 수 있습니다."
-                : "학습 데이터를 분석하여 맞춤 추천을 받아보세요."}
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Quick links */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { href: "/study/exams", label: "시험 관리", icon: "🎯" },
-          { href: "/study/sessions", label: "세션 기록", icon: "📝" },
-          { href: "/study/subjects", label: "과목 관리", icon: "📚" },
-          { href: "/study/wrong-answers", label: "오답 노트", icon: "✏️" },
-        ].map(item => (
-          <Link key={item.href} href={item.href}>
-            <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
-              <CardContent className="p-3 flex items-center gap-2">
-                <span className="text-xl">{item.icon}</span>
-                <span className="text-sm font-medium">{item.label}</span>
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
-      </div>
     </div>
   );
 }

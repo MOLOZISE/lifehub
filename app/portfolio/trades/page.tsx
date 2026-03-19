@@ -391,7 +391,7 @@ export default function TradesPage() {
               <div>
                 <p className="text-xs mb-1">구분</p>
                 <Select value={form.type} onValueChange={v => setForm(f => ({ ...f, type: v as "buy" | "sell" }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger><span>{form.type === "buy" ? "매수" : "매도"}</span></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="buy">매수</SelectItem>
                     <SelectItem value="sell">매도</SelectItem>
@@ -401,7 +401,7 @@ export default function TradesPage() {
               <div>
                 <p className="text-xs mb-1">시장</p>
                 <Select value={form.market} onValueChange={v => setForm(f => ({ ...f, market: v as "KR" | "US", currency: v === "KR" ? "KRW" : "USD" }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger><span>{form.market === "KR" ? "KR (원)" : "US (달러)"}</span></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="KR">KR (원)</SelectItem>
                     <SelectItem value="US">US (달러)</SelectItem>

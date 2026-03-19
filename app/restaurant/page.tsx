@@ -97,6 +97,10 @@ export default function RestaurantPage() {
   const [activeTab, setActiveTab] = useState<"search" | "mylist">("search");
   const [situationTag, setSituationTag] = useState<string>("");
 
+  // 리스트에 추가 관련
+  const [userLists, setUserLists] = useState<{ id: string; name: string; emoji: string }[]>([]);
+  const [listMenuId, setListMenuId] = useState<string | null>(null);
+
   // Kakao search
   const [kakaoQuery, setKakaoQuery] = useState("");
   const [kakaoResults, setKakaoResults] = useState<KakaoPlace[]>([]);
@@ -173,6 +177,12 @@ export default function RestaurantPage() {
     loadAll();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [category, search, sort]);
+
+  useEffect(() => {
+    fetch("/api/restaurant/lists").then(r => r.ok ? r.json() : []).then(data => {
+      setUserLists(Array.isArray(data) ? data.map((l: { id: string; name: string; emoji: string }) => ({ id: l.id, name: l.name, emoji: l.emoji })) : []);
+    });
+  }, []);
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -275,6 +285,18 @@ export default function RestaurantPage() {
       longitude: String(place.longitude || ""),
     });
     setDialogOpen(true);
+  }
+
+  async function addToList(restaurantId: string, listId: string) {
+    const res = await fetch(`/api/restaurant/lists/${listId}/items`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ restaurantId }),
+    });
+    if (!res.ok) { toast.error("추가 실패"); return; }
+    const data = await res.json();
+    toast.success(data.added ? "리스트에 추가했습니다" : "리스트에서 제거했습니다");
+    setListMenuId(null);
   }
 
   async function handleBookmark(r: Restaurant) {
@@ -628,9 +650,35 @@ export default function RestaurantPage() {
                           <Phone className="w-2.5 h-2.5" /> {r.phone}
                         </span>
                       )}
+                      {/* 리스트에 추가 */}
+                      <div className="relative ml-auto">
+                        <button
+                          onClick={e => { e.stopPropagation(); setListMenuId(listMenuId === r.id ? null : r.id); }}
+                          className="shrink-0 p-1 rounded hover:bg-accent text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5"
+                          title="리스트에 추가"
+                        >
+                          📋
+                        </button>
+                        {listMenuId === r.id && (
+                          <div className="absolute right-0 bottom-6 z-50 bg-popover border rounded-lg shadow-lg min-w-32 py-1">
+                            {userLists.length === 0 ? (
+                              <div className="px-3 py-2 text-xs text-muted-foreground">리스트 없음</div>
+                            ) : userLists.map(list => (
+                              <button
+                                key={list.id}
+                                onClick={e => { e.stopPropagation(); addToList(r.id, list.id); }}
+                                className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent flex items-center gap-1.5"
+                              >
+                                <span>{list.emoji}</span>
+                                <span>{list.name}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                       <button
                         onClick={e => { e.stopPropagation(); handleBookmark(r); }}
-                        className="ml-auto shrink-0 p-1 rounded hover:bg-accent"
+                        className="shrink-0 p-1 rounded hover:bg-accent"
                       >
                         {r.bookmarks.length > 0
                           ? <BookmarkCheck className="w-3.5 h-3.5 text-primary" />
@@ -694,7 +742,7 @@ export default function RestaurantPage() {
               <div>
                 <p className="text-xs mb-1">카테고리</p>
                 <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v ?? f.category }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger><span>{form.category}</span></SelectTrigger>
                   <SelectContent>{CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
