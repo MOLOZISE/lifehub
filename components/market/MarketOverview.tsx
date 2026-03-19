@@ -77,9 +77,10 @@ const CATEGORIES = ["지수", "환율", "원자재", "주식", "채권"];
 
 interface Props {
   compact?: boolean;
+  refreshKey?: number; // 변경 시 force 새로고침 트리거
 }
 
-export function MarketOverview({ compact = false }: Props) {
+export function MarketOverview({ compact = false, refreshKey }: Props) {
   const [market, setMarket] = useState<Record<string, MarketItem>>({});
   const [lastUpdate, setLastUpdate] = useState<number | null>(null);
   const [fetching, setFetching] = useState(false);
@@ -133,6 +134,16 @@ export function MarketOverview({ compact = false }: Props) {
     clearTimeout(staleTimerRef.current);
     load();
   }, [selected]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 외부에서 refreshKey가 바뀌면 force 새로고침
+  const prevRefreshKey = useRef(refreshKey);
+  useEffect(() => {
+    if (refreshKey !== undefined && refreshKey !== prevRefreshKey.current) {
+      prevRefreshKey.current = refreshKey;
+      clearTimeout(staleTimerRef.current);
+      load(true);
+    }
+  }, [refreshKey, load]);
 
   useEffect(() => () => clearTimeout(staleTimerRef.current), []);
 

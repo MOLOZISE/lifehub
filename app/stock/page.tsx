@@ -449,11 +449,14 @@ function AiSelectorCard({
   const loading = aiData === "loading" || aiData === undefined;
 
   const opinionBadgeClass = (() => {
-    if (!opinion) return "bg-muted text-muted-foreground";
+    if (!opinion) return "";
     if (opinion === "강력매수" || opinion === "매수") return "bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400";
     if (opinion === "강력매도" || opinion === "매도") return "bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400";
     return "bg-yellow-100 text-yellow-600 dark:bg-yellow-900/40 dark:text-yellow-400";
   })();
+
+  // 아직 로드 안됨 (stockAiData에 없는 경우)
+  const notLoaded = aiData === undefined;
 
   return (
     <button
@@ -469,19 +472,21 @@ function AiSelectorCard({
       </div>
       {/* 중앙: AI 의견 배지 */}
       <div>
-        {loading ? (
+        {(loading && !notLoaded) ? (
           <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
             <Loader2 className="w-2.5 h-2.5 animate-spin inline" /> 분석 중...
           </span>
-        ) : (
+        ) : opinion ? (
           <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${opinionBadgeClass}`}>
-            {opinion ?? "-"}
+            {opinion}
           </span>
+        ) : (
+          <span className="text-[10px] text-muted-foreground/50">미분석</span>
         )}
       </div>
       {/* 하단: 위험도 */}
       <div className="text-[10px] text-muted-foreground">
-        {risk ? `위험도: ${risk}` : <span className="opacity-40">-</span>}
+        {risk ? `위험도: ${risk}` : <span className="opacity-0">-</span>}
       </div>
     </button>
   );
@@ -1015,6 +1020,7 @@ export default function StockPage() {
   const [usPrices, setUsPrices] = useState<Record<string, StockPrice>>({});
   const [priceLoading, setPriceLoading] = useState(false);
   const [priceLastUpdate, setPriceLastUpdate] = useState<Date | null>(null);
+  const [marketRefreshKey, setMarketRefreshKey] = useState(0);
 
   // AI analysis for popular stocks
   const [stockAiData, setStockAiData] = useState<Record<string, AiData | "loading">>({});
@@ -1162,6 +1168,12 @@ export default function StockPage() {
     } finally {
       setPriceLoading(false);
     }
+  }
+
+  function refreshAll() {
+    setMarketRefreshKey(k => k + 1);
+    loadPopularPrices();
+    loadStockAiAnalysis();
   }
 
   function isInWatchlist(ticker: string): boolean {
@@ -1411,6 +1423,20 @@ export default function StockPage() {
       {/* ── 시황 Tab ─────────────────────────────────────────────────────────────── */}
       {tab === "시황" && (
         <div className="space-y-6">
+          {/* 통합 새로고침 */}
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {priceLastUpdate
+                ? (priceLoading ? "갱신 중..." : `${priceLastUpdate.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} 기준`)
+                : ""}
+            </span>
+            <button onClick={refreshAll} disabled={priceLoading}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40">
+              <RefreshCw className={`w-3.5 h-3.5 ${priceLoading ? "animate-spin" : ""}`} />
+              모두 새로고침
+            </button>
+          </div>
+
           {/* 종목 검색 */}
           <div className="relative">
             <div className="relative">
@@ -1486,27 +1512,12 @@ export default function StockPage() {
           )}
 
           {/* MarketOverview */}
-          <MarketOverview />
+          <MarketOverview refreshKey={marketRefreshKey} />
 
           {/* Popular Stocks */}
           <div className="space-y-3">
-            {/* 공통 헤더 행: 국내 / 해외 타이틀 + 공유 새로고침 */}
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold">국내 인기 종목</h2>
-              <div className="flex items-center gap-2">
-                {priceLastUpdate && !priceLoading && (
-                  <span className="text-[11px] text-muted-foreground tabular-nums">
-                    {priceLastUpdate.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} 기준
-                  </span>
-                )}
-                {priceLoading && (
-                  <span className="text-[11px] text-muted-foreground">갱신 중...</span>
-                )}
-                <button onClick={loadPopularPrices} disabled={priceLoading}
-                  className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40" title="새로고침">
-                  <RefreshCw className={`w-3.5 h-3.5 ${priceLoading ? "animate-spin" : ""}`} />
-                </button>
-              </div>
             </div>
             <div className="grid grid-cols-3 gap-2">
               {POPULAR_KR.map(s => {
@@ -1530,11 +1541,6 @@ export default function StockPage() {
 
             <div className="flex items-center justify-between pt-2">
               <h2 className="text-sm font-semibold">해외 인기 종목</h2>
-              {priceLastUpdate && (
-                <span className="text-[11px] text-muted-foreground tabular-nums">
-                  {priceLoading ? "갱신 중..." : `${priceLastUpdate.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} 기준`}
-                </span>
-              )}
             </div>
             <div className="grid grid-cols-3 gap-2">
               {POPULAR_US.map(s => {
