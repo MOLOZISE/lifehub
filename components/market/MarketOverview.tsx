@@ -48,7 +48,27 @@ function MarketChip({ item }: { item: MarketItem }) {
   );
 }
 
+function MarketCard({ item }: { item: MarketItem }) {
+  const up = item.changeRate >= 0;
+  return (
+    <div className="rounded-xl border bg-card/50 px-3 py-2.5 hover:bg-accent/30 transition-colors">
+      <span className="text-xs text-muted-foreground leading-tight truncate block">{item.label}</span>
+      <span className="text-lg font-bold leading-tight mt-0.5 block">{fmt(item)}</span>
+      <span className={`text-xs font-medium ${up ? "text-red-500" : "text-blue-500"}`}>
+        {up ? "▲" : "▼"} {Math.abs(item.changeRate).toFixed(2)}%
+      </span>
+    </div>
+  );
+}
+
 const CATEGORIES = ["지수", "환율", "원자재", "주식", "채권"];
+const CATEGORY_TYPE_MAP: Record<string, string> = {
+  "지수": "index",
+  "환율": "fx",
+  "원자재": "commodity",
+  "주식": "stock",
+  "채권": "bond",
+};
 
 interface Props {
   /** 헤더 타이틀 숨기기 (홈 위젯 등 공간이 좁은 곳에서) */
@@ -215,15 +235,38 @@ export function MarketOverview({ compact = false }: Props) {
         </div>
       )}
 
-      <div className="overflow-x-auto pb-1 -mx-1 px-1">
-        <div className="flex gap-2 min-w-max">
-          {indices.length > 0 && <>{indices.map(i => <MarketChip key={i.symbol} item={i} />)}<div className="w-px bg-border mx-0.5" /></>}
-          {fx.length > 0 && <>{fx.map(i => <MarketChip key={i.symbol} item={i} />)}</>}
-          {commodities.length > 0 && <>{<div className="w-px bg-border mx-0.5" />}{commodities.map(i => <MarketChip key={i.symbol} item={i} />)}</>}
-          {bonds.length > 0 && <>{<div className="w-px bg-border mx-0.5" />}{bonds.map(i => <MarketChip key={i.symbol} item={i} />)}</>}
-          {stocks.length > 0 && <>{<div className="w-px bg-border mx-0.5" />}{stocks.map(i => <MarketChip key={i.symbol} item={i} />)}</>}
+      {compact ? (
+        /* compact 모드: 기존 가로 스크롤 칩 레이아웃 */
+        <div className="overflow-x-auto pb-1 -mx-1 px-1">
+          <div className="flex gap-2 min-w-max">
+            {indices.length > 0 && <>{indices.map(i => <MarketChip key={i.symbol} item={i} />)}<div className="w-px bg-border mx-0.5" /></>}
+            {fx.length > 0 && <>{fx.map(i => <MarketChip key={i.symbol} item={i} />)}</>}
+            {commodities.length > 0 && <>{<div className="w-px bg-border mx-0.5" />}{commodities.map(i => <MarketChip key={i.symbol} item={i} />)}</>}
+            {bonds.length > 0 && <>{<div className="w-px bg-border mx-0.5" />}{bonds.map(i => <MarketChip key={i.symbol} item={i} />)}</>}
+            {stocks.length > 0 && <>{<div className="w-px bg-border mx-0.5" />}{stocks.map(i => <MarketChip key={i.symbol} item={i} />)}</>}
+          </div>
         </div>
-      </div>
+      ) : (
+        /* full 모드: 카테고리별 그리드 레이아웃 */
+        <div className="space-y-4">
+          {([
+            { label: "지수", items: indices },
+            { label: "환율", items: fx },
+            { label: "원자재", items: commodities },
+            { label: "주식", items: stocks },
+            { label: "채권", items: bonds },
+          ] as { label: string; items: MarketItem[] }[]).filter(c => c.items.length > 0).map(cat => (
+            <div key={cat.label}>
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">{cat.label}</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                {cat.items.map(item => (
+                  <MarketCard key={item.symbol} item={item} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* 종목 선택 Sheet */}
       <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>

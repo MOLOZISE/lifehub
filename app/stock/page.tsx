@@ -19,7 +19,7 @@ import type { OHLCVBar } from "@/lib/types";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-type Tab = "시황" | "차트" | "AI분석";
+type Tab = "시황" | "차트" | "AI분석" | "관심 종목";
 type Period = "1W" | "1M" | "3M" | "1Y";
 
 interface StockPrice {
@@ -379,6 +379,13 @@ export default function StockPage() {
   const [aiSources, setAiSources] = useState<string[]>([]);
   const [cachedTickers, setCachedTickers] = useState<string[]>([]);
 
+  // Watchlist tab state
+  const [watchlistPrices, setWatchlistPrices] = useState<Record<string, StockPrice>>({});
+  const [watchlistPriceLoading, setWatchlistPriceLoading] = useState(false);
+  const [watchlistSearchQ, setWatchlistSearchQ] = useState("");
+  const [watchlistSuggestions, setWatchlistSuggestions] = useState<{ ticker: string; name: string; market: "KR" | "US" }[]>([]);
+  const [showWatchlistSugg, setShowWatchlistSugg] = useState(false);
+
   // Holdings for chart/AI shortcuts
   const [holdings, setHoldings] = useState<{ id: string; name: string; ticker: string; market: "KR" | "US"; currency: string }[]>([]);
 
@@ -555,9 +562,41 @@ export default function StockPage() {
     }
   }
 
+  // ── Watchlist prices ──────────────────────────────────────────────────────────
+
+  async function loadWatchlistPrices() {
+    if (watchlistItems.length === 0) return;
+    setWatchlistPriceLoading(true);
+    try {
+      const tickers = watchlistItems.map(w => toYahooTicker(w.ticker, w.market)).join(",");
+      const res = await fetch(`/api/stock/price?tickers=${encodeURIComponent(tickers)}`);
+      if (res.ok) {
+        const d = await res.json();
+        setWatchlistPrices(d.prices ?? {});
+      }
+    } finally {
+      setWatchlistPriceLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (tab === "관심 종목" && watchlistItems.length > 0) {
+      loadWatchlistPrices();
+    }
+  }, [tab, watchlistItems.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!watchlistSearchQ.trim()) { setWatchlistSuggestions([]); return; }
+    const t = setTimeout(() => {
+      fetch(`/api/portfolio/search?q=${encodeURIComponent(watchlistSearchQ)}`)
+        .then(r => r.json()).then(d => { setWatchlistSuggestions(d.slice(0, 8)); setShowWatchlistSugg(true); });
+    }, 150);
+    return () => clearTimeout(t);
+  }, [watchlistSearchQ]);
+
   // ── Render ─────────────────────────────────────────────────────────────────────
 
-  const TABS: Tab[] = ["시황", "차트", "AI분석"];
+  const TABS: Tab[] = ["시황", "차트", "AI분석", "관심 종목"];
 
   return (
     <div className="max-w-5xl mx-auto space-y-4">
@@ -971,6 +1010,84 @@ export default function StockPage() {
               <p className="text-4xl mb-3">📰</p>
               <p className="text-sm">종목을 입력하거나 보유/관심 종목을 클릭하세요</p>
               <p className="text-xs mt-1 opacity-60">호재·악재·단기전망·중장기전망·목표가 종합 분석</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── 관심 종목 Tab ─────────────────────────────────────────────────────────── */}
+      {tab === "관심 종목" && (
+        <div className="space-y-4">
+          {/* Search to add */}
+          <div className="relative">
+            <div className="flex gap-2">
+              <div className="flex-1 relative">
+                <Input
+                  placeholder="종목 검색 후 관심 종목 추가 (삼성전자, AAPL...)"
+                  value={watchlistSearchQ}
+                  onChange={e => { setWatchlistSearchQ(e.target.value); setShowWatchlistSugg(true); }}
+                  onBlur={() => setTimeout(() => setShowWatchlistSugg(false), 150)}
+                />
+                {showWatchlistSugg && watchlistSuggestions.length > 0 && (
+                  <div className="absolute z-50 w-full mt-1 bg-white dark:bg-zinc-900 border rounded-lg shadow-lg max-h-52 overflow-y-auto">
+                    {watchlistSuggestions.map(s => (
+                      <button key={s.ticker}
+                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted text-left"
+                        onMouseDown={() => {
+                          setShowWatchlistSugg(false);
+                          setWatchlistSearchQ("");
+                          toggleWatchlist(s.ticker, s.name, s.market);
+                        }}>
+                        <span className="text-xs">{s.market === "KR" ? "🇰🇷" : "🇺🇸"}</span>
+                        <span className="font-medium text-sm flex-1">{s.name}</span>
+                        <span className="text-xs text-muted-foreground font-mono">{s.ticker}</span>
+                        {isInWatchlist(s.ticker)
+                          ? <Star className="w-3.5 h-3.5 text-amber-500 fill-current shrink-0" />
+                          : <StarOff className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                        }
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <Button variant="outline" size="icon" onClick={loadWatchlistPrices} disabled={watchlistPriceLoading} title="가격 새로고침">
+                <RefreshCw className={`w-4 h-4 ${watchlistPriceLoading ? "animate-spin" : ""}`} />
+              </Button>
+            </div>
+          </div>
+
+          {watchlistItems.length === 0 ? (
+            <Card className="border-dashed">
+              <CardContent className="p-10 text-center">
+                <Star className="w-8 h-8 mx-auto mb-3 text-muted-foreground/40" />
+                <p className="text-sm text-muted-foreground mb-1">관심 종목이 없습니다</p>
+                <p className="text-xs text-muted-foreground">위 검색창에서 종목을 추가하거나<br/>시황 탭의 ★ 버튼으로 추가하세요</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">총 {watchlistItems.length}개 종목</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {watchlistItems.map(w => {
+                  const yahooTicker = toYahooTicker(w.ticker, w.market);
+                  const price = watchlistPrices[yahooTicker] ?? null;
+                  return (
+                    <StockCard
+                      key={w.id}
+                      ticker={w.ticker}
+                      name={w.name}
+                      market={w.market}
+                      price={price}
+                      inWatchlist={true}
+                      onAddWatchlist={() => toggleWatchlist(w.ticker, w.name, w.market)}
+                      onChart={() => fetchChart(yahooTicker, w.name, w.market === "KR" ? "KRW" : "USD")}
+                      onAnalyze={() => openAiAnalysis(w.name)}
+                    />
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>

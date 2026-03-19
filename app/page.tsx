@@ -344,32 +344,27 @@ export default function DashboardPage() {
         </CardHeader>
         <CardContent>
           {calTab === "week" ? (
-            /* ── 주간 뷰 ── */
-            <div>
-              <div className="grid grid-cols-7 gap-1">
-                {DOW_KO.map(d => (
-                  <div key={d} className="text-center text-[10px] text-muted-foreground font-medium pb-1">{d}</div>
-                ))}
-                {thisWeekDays.map((day, i) => {
-                  const mins = sessionDateMap[day] ?? 0;
-                  const isToday = day === today;
-                  const h = mins > 0 ? Math.min(100, Math.round((mins / 180) * 100)) : 0;
-                  return (
-                    <div key={day} className={`flex flex-col items-center gap-1 p-1 rounded-lg ${isToday ? "bg-primary/10 ring-1 ring-primary" : ""}`}>
-                      <span className={`text-[10px] font-medium ${isToday ? "text-primary" : "text-muted-foreground"}`}>{day.slice(8)}</span>
-                      <div className={`w-8 h-8 rounded-md flex items-end justify-center overflow-hidden ${mins === 0 ? "bg-muted" : ""}`}
-                        title={`${mins}분`}>
-                        {mins > 0 && (
-                          <div className="w-full bg-green-500 rounded-sm transition-all" style={{ height: `${Math.max(20, h)}%` }} />
-                        )}
-                      </div>
-                      <span className={`text-[9px] ${mins > 0 ? "text-green-600 dark:text-green-400 font-medium" : "text-muted-foreground"}`}>
-                        {mins > 0 ? (mins >= 60 ? `${Math.floor(mins/60)}h${mins%60>0?`${mins%60}m`:""}` : `${mins}m`) : "-"}
+            <div className="grid grid-cols-7 gap-2">
+              {thisWeekDays.map((day) => {
+                const mins = sessionDateMap[day] ?? 0;
+                const isToday = day === today;
+                const intensity = mins === 0 ? 0 : mins < 30 ? 1 : mins < 60 ? 2 : mins < 120 ? 3 : 4;
+                const bgColors = ["bg-muted/60","bg-green-100 dark:bg-green-900/50","bg-green-300 dark:bg-green-700/60","bg-green-500/70 dark:bg-green-600/70","bg-green-600 dark:bg-green-500"];
+                const dow = new Date(day).toLocaleDateString("ko-KR", { weekday: "short" });
+                return (
+                  <div key={day} className="flex flex-col items-center gap-1">
+                    <span className={`text-[10px] font-medium ${isToday ? "text-primary" : "text-muted-foreground"}`}>{dow}</span>
+                    <div className={`w-full aspect-square rounded-xl flex flex-col items-center justify-center gap-0.5 transition-colors ${bgColors[intensity]} ${isToday ? "ring-2 ring-primary" : ""}`}>
+                      <span className={`text-sm font-bold ${isToday ? "text-primary" : intensity > 2 ? "text-white dark:text-white" : "text-foreground"}`}>
+                        {day.slice(8).replace(/^0/, "")}
                       </span>
                     </div>
-                  );
-                })}
-              </div>
+                    <span className={`text-[9px] font-medium ${mins > 0 ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}`}>
+                      {mins > 0 ? (mins >= 60 ? `${Math.floor(mins/60)}h${mins%60>0?`${mins%60}m`:""}` : `${mins}m`) : "·"}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             /* ── 월간 뷰 ── */
@@ -397,10 +392,10 @@ export default function DashboardPage() {
                   const isToday = day === today;
                   return (
                     <div key={day} title={mins > 0 ? `${mins}분` : undefined}
-                      className={`aspect-square flex flex-col items-center justify-center rounded-md text-[10px] transition-colors
-                        ${isToday ? "ring-1 ring-primary" : ""}
+                      className={`aspect-square flex flex-col items-center justify-center rounded-lg text-[10px] transition-colors hover:bg-accent/30 cursor-default
+                        ${isToday ? "ring-2 ring-primary ring-offset-1" : ""}
                         ${getHeatmapColor(mins)}`}>
-                      <span className={`font-medium ${isToday ? "text-primary" : mins > 0 ? "text-foreground" : "text-muted-foreground"}`}>
+                      <span className={`font-bold text-xs ${isToday ? "text-primary" : mins > 0 ? "text-foreground" : "text-muted-foreground/70"}`}>
                         {day.slice(8).replace(/^0/, "")}
                       </span>
                     </div>
@@ -483,18 +478,27 @@ export default function DashboardPage() {
             ) : (
               effectiveSubjects.slice(0, 5).map(s => {
                 const wMin = subjectWeekMinutes[s.id] ?? 0;
+                const maxMin = Math.max(...effectiveSubjects.map(x => subjectWeekMinutes[x.id] ?? 0), 1);
+                const pct = Math.round((wMin / maxMin) * 100);
                 return (
                   <Link key={s.id} href="/study/subjects" className="block">
-                    <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent transition-colors">
-                      <span className="text-lg">{s.emoji}</span>
+                    <div className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-accent transition-colors">
+                      <span className="text-lg shrink-0">{s.emoji}</span>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{s.name}</p>
+                        <div className="flex items-center justify-between mb-0.5">
+                          <p className="text-sm font-medium truncate">{s.name}</p>
+                          {wMin > 0 && (
+                            <span className="text-xs text-muted-foreground shrink-0 ml-2">
+                              {wMin >= 60 ? `${Math.floor(wMin/60)}h${wMin%60>0?` ${wMin%60}m`:""}` : `${wMin}m`}
+                            </span>
+                          )}
+                        </div>
+                        {wMin > 0 && (
+                          <div className="h-1 bg-muted rounded-full overflow-hidden">
+                            <div className="h-full bg-primary/60 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                          </div>
+                        )}
                       </div>
-                      {wMin > 0 && (
-                        <span className="text-xs text-muted-foreground shrink-0">
-                          이번 주 {wMin >= 60 ? `${Math.floor(wMin/60)}h${wMin%60>0?` ${wMin%60}m`:""}` : `${wMin}m`}
-                        </span>
-                      )}
                     </div>
                   </Link>
                 );
