@@ -450,6 +450,7 @@ export default function StockPage() {
   const [krPrices, setKrPrices] = useState<Record<string, StockPrice>>({});
   const [usPrices, setUsPrices] = useState<Record<string, StockPrice>>({});
   const [priceLoading, setPriceLoading] = useState(false);
+  const [priceLastUpdate, setPriceLastUpdate] = useState<Date | null>(null);
 
   // AI analysis for popular stocks
   const [stockAiData, setStockAiData] = useState<Record<string, AiData | "loading">>({});
@@ -593,6 +594,7 @@ export default function StockPage() {
         const d = await usRes.json();
         setUsPrices(d.prices ?? {});
       }
+      setPriceLastUpdate(new Date());
     } finally {
       setPriceLoading(false);
     }
@@ -924,13 +926,23 @@ export default function StockPage() {
 
           {/* Popular Stocks */}
           <div className="space-y-3">
+            {/* 공통 헤더 행: 국내 / 해외 타이틀 + 공유 새로고침 */}
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold">국내 인기 종목</h2>
-              <button onClick={loadPopularPrices} disabled={priceLoading}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-                <RefreshCw className={`w-3 h-3 ${priceLoading ? "animate-spin" : ""}`} />
-                새로고침
-              </button>
+              <div className="flex items-center gap-2">
+                {priceLastUpdate && !priceLoading && (
+                  <span className="text-[11px] text-muted-foreground tabular-nums">
+                    {priceLastUpdate.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} 기준
+                  </span>
+                )}
+                {priceLoading && (
+                  <span className="text-[11px] text-muted-foreground">갱신 중...</span>
+                )}
+                <button onClick={loadPopularPrices} disabled={priceLoading}
+                  className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40" title="새로고침">
+                  <RefreshCw className={`w-3.5 h-3.5 ${priceLoading ? "animate-spin" : ""}`} />
+                </button>
+              </div>
             </div>
             <div className="grid grid-cols-3 gap-2">
               {POPULAR_KR.map(s => {
@@ -952,7 +964,14 @@ export default function StockPage() {
               })}
             </div>
 
-            <h2 className="text-sm font-semibold pt-2">해외 인기 종목</h2>
+            <div className="flex items-center justify-between pt-2">
+              <h2 className="text-sm font-semibold">해외 인기 종목</h2>
+              {priceLastUpdate && (
+                <span className="text-[11px] text-muted-foreground tabular-nums">
+                  {priceLoading ? "갱신 중..." : `${priceLastUpdate.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} 기준`}
+                </span>
+              )}
+            </div>
             <div className="grid grid-cols-3 gap-2">
               {POPULAR_US.map(s => {
                 const price = usPrices[s.ticker] ?? null;
