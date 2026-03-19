@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { RefreshCw, Settings2, Check } from "lucide-react";
-import type { MarketItem } from "@/app/api/market/overview/route";
-import { ALL_SYMBOLS, DEFAULT_SYMBOLS } from "@/app/api/market/overview/route";
+import type { MarketItem } from "@/lib/market-symbols";
+import { ALL_SYMBOLS, DEFAULT_SYMBOLS } from "@/lib/market-symbols";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 
