@@ -624,6 +624,25 @@ model MarketCache {
   @@map("market_cache")
 }
 
+// ─── Stock AI Analysis Cache (인기 종목 AI 분석 캐시) ─────────────────────────
+
+model StockAiAnalysis {
+  id          String   @id @default(cuid())
+  ticker      String   @unique  // 종목명 or 티커 (검색 키)
+  name        String
+  opinion     String?  // 강력매수 / 매수 / 중립 / 매도 / 강력매도
+  targetPrice String?
+  risk        String?  // 상 / 중 / 하
+  summary     String?  // 한 줄 요약
+  sections    Json     // ParsedNewsSection[]
+  sources     String[]
+  analyzedAt  DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([ticker])
+  @@map("stock_ai_analysis")
+}
+
 // ─── Restaurant Lists (사용자 맞춤 맛집 리스트) ────────────────────────────────
 
 model RestaurantList {

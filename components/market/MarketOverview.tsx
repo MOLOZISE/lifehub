@@ -16,7 +16,6 @@ function getSelectedSymbols(): string[] {
     const raw = localStorage.getItem(LS_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as string[];
-      // 유효한 심볼만 필터
       const valid = parsed.filter(s => ALL_SYMBOLS.some(a => a.symbol === s));
       if (valid.length > 0) return valid;
     }
@@ -35,6 +34,7 @@ function fmt(item: MarketItem) {
   return item.price.toFixed(2);
 }
 
+// 콤팩트 칩 (홈 위젯 등)
 function MarketChip({ item }: { item: MarketItem }) {
   const up = item.changeRate >= 0;
   return (
@@ -48,30 +48,35 @@ function MarketChip({ item }: { item: MarketItem }) {
   );
 }
 
-function MarketCard({ item }: { item: MarketItem }) {
+// 풀모드 — 카테고리별 인라인 row
+function MarketRow({ item }: { item: MarketItem }) {
   const up = item.changeRate >= 0;
   return (
-    <div className="rounded-xl border bg-card/50 px-3 py-2.5 hover:bg-accent/30 transition-colors">
-      <span className="text-xs text-muted-foreground leading-tight truncate block">{item.label}</span>
-      <span className="text-lg font-bold leading-tight mt-0.5 block">{fmt(item)}</span>
-      <span className={`text-xs font-medium ${up ? "text-red-500" : "text-blue-500"}`}>
-        {up ? "▲" : "▼"} {Math.abs(item.changeRate).toFixed(2)}%
-      </span>
+    <div className="flex items-center justify-between py-2 border-b last:border-0">
+      <span className="text-sm text-foreground truncate flex-1 min-w-0 mr-2">{item.label}</span>
+      <div className="flex items-center gap-3 shrink-0 tabular-nums">
+        <span className="text-sm font-semibold">{fmt(item)}</span>
+        <span className={`text-xs font-bold w-16 text-right ${up ? "text-red-500" : "text-blue-500"}`}>
+          {up ? "+" : ""}{item.changeRate.toFixed(2)}%
+        </span>
+      </div>
     </div>
   );
 }
 
-const CATEGORIES = ["지수", "환율", "원자재", "주식", "채권"];
-const CATEGORY_TYPE_MAP: Record<string, string> = {
-  "지수": "index",
-  "환율": "fx",
-  "원자재": "commodity",
-  "주식": "stock",
-  "채권": "bond",
+const CATEGORY_LABELS: Record<string, string> = {
+  index: "지수",
+  fx: "환율",
+  commodity: "원자재",
+  stock: "주식",
+  bond: "채권",
 };
 
+const CATEGORY_ORDER = ["index", "fx", "commodity", "stock", "bond"];
+
+const CATEGORIES = ["지수", "환율", "원자재", "주식", "채권"];
+
 interface Props {
-  /** 헤더 타이틀 숨기기 (홈 위젯 등 공간이 좁은 곳에서) */
   compact?: boolean;
 }
 
@@ -85,7 +90,6 @@ export function MarketOverview({ compact = false }: Props) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [draftSelected, setDraftSelected] = useState<string[]>([]);
 
-  // localStorage는 클라이언트에서만 읽기
   useEffect(() => {
     setSelected(getSelectedSymbols());
   }, []);
@@ -104,7 +108,6 @@ export function MarketOverview({ compact = false }: Props) {
         setLastUpdate(json.cachedAt ?? Date.now());
         setIsStale(!!json.stale);
       }
-      // 에러 메시지: fetchError 또는 errors 배열
       if (json.fetchError) {
         setFetchError(json.fetchError);
       } else if (json.errors?.length) {
@@ -130,7 +133,6 @@ export function MarketOverview({ compact = false }: Props) {
     return () => clearInterval(id);
   }, [load]);
 
-  // 페이지 포커스 복귀 시 캐시가 만료됐으면 갱신
   useEffect(() => {
     function onFocus() {
       if (!lastUpdate || Date.now() - lastUpdate > MARKET_REFRESH_INTERVAL) load();
@@ -163,11 +165,12 @@ export function MarketOverview({ compact = false }: Props) {
     .map(sym => items.find(i => i.symbol === sym))
     .filter(Boolean) as MarketItem[];
 
-  const indices = sortedItems.filter(i => i.type === "index");
-  const fx = sortedItems.filter(i => i.type === "fx");
-  const commodities = sortedItems.filter(i => i.type === "commodity");
-  const stocks = sortedItems.filter(i => i.type === "stock");
-  const bonds = sortedItems.filter(i => i.type === "bond");
+  // 카테고리 그룹
+  const byType = CATEGORY_ORDER.reduce((acc, type) => {
+    const group = sortedItems.filter(i => i.type === type);
+    if (group.length > 0) acc[type] = group;
+    return acc;
+  }, {} as Record<string, MarketItem[]>);
 
   if (items.length === 0) return (
     <div className="space-y-1.5">
@@ -196,71 +199,53 @@ export function MarketOverview({ compact = false }: Props) {
       {!fetchError && isStale && lastUpdate && (
         <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-muted/60 text-xs text-muted-foreground">
           <RefreshCw className="w-3 h-3 animate-spin" />
-          <span>최신 데이터 갱신 중... ({new Date(lastUpdate).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 기준 데이터 표시)</span>
+          <span>최신 데이터 갱신 중... ({new Date(lastUpdate).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 기준)</span>
         </div>
       )}
 
-      {!compact && (
-        <div className="flex items-center justify-between">
-          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">글로벌 시황</h3>
-          <div className="flex items-center gap-2">
-            {lastUpdate && (
-              <span className="text-[10px] text-muted-foreground">
-                {new Date(lastUpdate).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 기준
-              </span>
-            )}
-            <button onClick={openSettings} className="text-muted-foreground hover:text-foreground transition-colors" title="종목 설정">
-              <Settings2 className="w-3.5 h-3.5" />
-            </button>
-            <button onClick={() => load(true)} disabled={fetching} className="text-muted-foreground hover:text-foreground transition-colors" title="새로고침">
-              <RefreshCw className={`w-3 h-3 ${fetching ? "animate-spin" : ""}`} />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {compact && (
-        <div className="flex items-center justify-end gap-1.5 mb-1">
+      {/* 헤더 */}
+      <div className="flex items-center justify-between">
+        {!compact && <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">글로벌 시황</h3>}
+        <div className={`flex items-center gap-2 ${compact ? "w-full justify-end" : ""}`}>
           {lastUpdate && (
             <span className="text-[10px] text-muted-foreground">
               {new Date(lastUpdate).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 기준
             </span>
           )}
-          <button onClick={openSettings} className="text-muted-foreground hover:text-foreground transition-colors">
-            <Settings2 className="w-3 h-3" />
+          <button onClick={openSettings} className="text-muted-foreground hover:text-foreground transition-colors" title="종목 설정">
+            <Settings2 className="w-3.5 h-3.5" />
           </button>
-          <button onClick={() => load(true)} disabled={fetching} className="text-muted-foreground hover:text-foreground transition-colors">
+          <button onClick={() => load(true)} disabled={fetching} className="text-muted-foreground hover:text-foreground transition-colors" title="새로고침">
             <RefreshCw className={`w-3 h-3 ${fetching ? "animate-spin" : ""}`} />
           </button>
         </div>
-      )}
+      </div>
 
       {compact ? (
-        /* compact 모드: 기존 가로 스크롤 칩 레이아웃 */
+        /* compact 모드: 가로 스크롤 칩 */
         <div className="overflow-x-auto pb-1 -mx-1 px-1">
           <div className="flex gap-2 min-w-max">
-            {indices.length > 0 && <>{indices.map(i => <MarketChip key={i.symbol} item={i} />)}<div className="w-px bg-border mx-0.5" /></>}
-            {fx.length > 0 && <>{fx.map(i => <MarketChip key={i.symbol} item={i} />)}</>}
-            {commodities.length > 0 && <>{<div className="w-px bg-border mx-0.5" />}{commodities.map(i => <MarketChip key={i.symbol} item={i} />)}</>}
-            {bonds.length > 0 && <>{<div className="w-px bg-border mx-0.5" />}{bonds.map(i => <MarketChip key={i.symbol} item={i} />)}</>}
-            {stocks.length > 0 && <>{<div className="w-px bg-border mx-0.5" />}{stocks.map(i => <MarketChip key={i.symbol} item={i} />)}</>}
+            {CATEGORY_ORDER.flatMap((type, ci) => {
+              const group = byType[type];
+              if (!group) return [];
+              return [
+                ...(ci > 0 ? [<div key={`sep-${type}`} className="w-px bg-border mx-0.5 self-stretch" />] : []),
+                ...group.map(i => <MarketChip key={i.symbol} item={i} />),
+              ];
+            })}
           </div>
         </div>
       ) : (
-        /* full 모드: 카테고리별 그리드 레이아웃 */
-        <div className="space-y-4">
-          {([
-            { label: "지수", items: indices },
-            { label: "환율", items: fx },
-            { label: "원자재", items: commodities },
-            { label: "주식", items: stocks },
-            { label: "채권", items: bonds },
-          ] as { label: string; items: MarketItem[] }[]).filter(c => c.items.length > 0).map(cat => (
-            <div key={cat.label}>
-              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">{cat.label}</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-                {cat.items.map(item => (
-                  <MarketCard key={item.symbol} item={item} />
+        /* 풀 모드: 카테고리별 2열 배치 */
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+          {CATEGORY_ORDER.filter(type => byType[type]).map(type => (
+            <div key={type} className="bg-muted/20 rounded-xl px-4 py-3">
+              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1">
+                {CATEGORY_LABELS[type]}
+              </p>
+              <div>
+                {byType[type].map(item => (
+                  <MarketRow key={item.symbol} item={item} />
                 ))}
               </div>
             </div>
