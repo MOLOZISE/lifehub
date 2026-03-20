@@ -201,6 +201,7 @@ export default function StockDetailPage() {
   const [period, setPeriod] = useState<Period>("3M");
   const [news, setNews] = useState<NewsResult | null>(null);
   const [newsLoading, setNewsLoading] = useState(false);
+  const [newsError, setNewsError] = useState<string | null>(null);
   const [holding, setHolding] = useState<Holding | null>(null);
   const [inWatchlist, setInWatchlist] = useState(false);
   const [livePrice, setLivePrice] = useState<number | null>(null);
@@ -272,6 +273,7 @@ export default function StockDetailPage() {
   async function loadNews() {
     if (news) return;
     setNewsLoading(true);
+    setNewsError(null);
     try {
       const stockName = info?.name ?? ticker;
       const userMessage = `${stockName}(${ticker}) 종목의 최신 뉴스와 투자 전망을 분석해주세요.`;
@@ -280,11 +282,15 @@ export default function StockDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ systemPrompt: STOCK_ANALYSIS_PROMPT, userMessage, useSearch: true }),
       });
-      if (res.ok) {
-        const data = await res.json() as { text: string; sources: string[] };
-        setNews({ sections: parseNewsResponse(data.text), sources: data.sources });
+      const data = await res.json() as { text?: string; sources?: string[]; error?: string };
+      if (res.ok && data.text) {
+        setNews({ sections: parseNewsResponse(data.text), sources: data.sources ?? [] });
+      } else {
+        setNewsError(data.error ?? "AI 분석 요청에 실패했습니다.");
       }
-    } catch { /* ignore */ }
+    } catch (e) {
+      setNewsError(e instanceof Error ? e.message : "네트워크 오류가 발생했습니다.");
+    }
     setNewsLoading(false);
   }
 
@@ -514,6 +520,15 @@ export default function StockDetailPage() {
               <Loader2 className="w-4 h-4 animate-spin" />
               AI가 최신 뉴스를 분석하는 중...
             </div>
+          ) : newsError ? (
+            <div className="flex flex-col items-center py-12 text-muted-foreground gap-3">
+              <Newspaper className="w-10 h-10 opacity-30" />
+              <p className="font-medium text-destructive">분석 실패</p>
+              <p className="text-xs text-center max-w-xs break-all">{newsError}</p>
+              <Button onClick={() => { setNewsError(null); loadNews(); }} size="sm" variant="outline" className="rounded-xl">
+                <RefreshCw className="w-3.5 h-3.5 mr-1.5" />다시 시도
+              </Button>
+            </div>
           ) : news ? (
             <div className="space-y-3">
               {news.sources.length > 0 && (
@@ -526,7 +541,7 @@ export default function StockDetailPage() {
               {news.sections.map((section, i) => (
                 <NewsSectionCard key={i} section={section} />
               ))}
-              <Button size="sm" variant="outline" className="rounded-xl" onClick={() => setNews(null)}>
+              <Button size="sm" variant="outline" className="rounded-xl" onClick={() => { setNews(null); setNewsError(null); }}>
                 <RefreshCw className="w-3.5 h-3.5 mr-1.5" />다시 분석
               </Button>
             </div>

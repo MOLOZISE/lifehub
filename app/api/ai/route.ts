@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import Groq from "groq-sdk";
 import { tavily } from "@tavily/core";
 
+export const maxDuration = 60; // Vercel Pro: 60s, Hobby: 10s
+
 function getGroq() {
   return new Groq({ apiKey: process.env.GROQ_API_KEY ?? "" });
 }

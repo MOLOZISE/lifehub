@@ -113,6 +113,10 @@ export default function RestaurantPage() {
   const [kakaoResults, setKakaoResults] = useState<KakaoPlace[]>([]);
   const [kakaoLoading, setKakaoLoading] = useState(false);
   const [selectedKakaoId, setSelectedKakaoId] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<KakaoPlace[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestionDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Geolocation
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
@@ -240,6 +244,29 @@ export default function RestaurantPage() {
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     setSearch(searchInput);
+  }
+
+  function handleKakaoQueryChange(val: string) {
+    setKakaoQuery(val);
+    if (suggestionDebounce.current) clearTimeout(suggestionDebounce.current);
+    if (val.trim().length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
+    suggestionDebounce.current = setTimeout(async () => {
+      const params = new URLSearchParams({ query: val });
+      if (userLocation) { params.set("x", String(userLocation[1])); params.set("y", String(userLocation[0])); }
+      const res = await fetch(`/api/places/search?${params}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSuggestions((data.places ?? []).slice(0, 6));
+        setShowSuggestions(true);
+      }
+    }, 300);
+  }
+
+  function selectSuggestion(place: KakaoPlace) {
+    setKakaoQuery(place.name);
+    setSuggestions([]);
+    setShowSuggestions(false);
+    searchKakao({ query: place.name });
   }
 
   async function searchKakao(opts?: { x?: number; y?: number; radius?: number; query?: string }) {
@@ -535,24 +562,46 @@ export default function RestaurantPage() {
           <div className="flex flex-col flex-1 min-h-0">
             {/* 검색 입력창 */}
             <div className="px-2 py-2 border-b shrink-0 flex gap-1.5">
-              <div className="flex-1 flex gap-1 bg-muted/50 rounded-lg px-2.5 py-1.5">
-                <Search className="w-4 h-4 text-muted-foreground shrink-0 self-center" />
-                <input
-                  className="flex-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground"
-                  placeholder="전국 맛집 검색 (예: 강남 삼겹살, 스타벅스)"
-                  value={kakaoQuery}
-                  onChange={e => setKakaoQuery(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && searchKakao()}
-                />
-                {kakaoLoading
-                  ? <Loader2 className="w-4 h-4 animate-spin text-muted-foreground shrink-0 self-center" />
-                  : kakaoQuery && (
-                    <button
-                      onClick={() => { setKakaoQuery(""); setKakaoResults([]); setSelectedKakaoId(null); }}
-                      className="text-muted-foreground hover:text-foreground shrink-0 self-center text-xs"
-                    >✕</button>
-                  )
-                }
+              <div className="flex-1 relative">
+                <div className="flex gap-1 bg-muted/50 rounded-lg px-2.5 py-1.5">
+                  <Search className="w-4 h-4 text-muted-foreground shrink-0 self-center" />
+                  <input
+                    ref={searchInputRef}
+                    className="flex-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground"
+                    placeholder="전국 맛집 검색 (예: 강남 삼겹살, 스타벅스)"
+                    value={kakaoQuery}
+                    onChange={e => handleKakaoQueryChange(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") { setShowSuggestions(false); searchKakao(); } else if (e.key === "Escape") setShowSuggestions(false); }}
+                    onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                  />
+                  {kakaoLoading
+                    ? <Loader2 className="w-4 h-4 animate-spin text-muted-foreground shrink-0 self-center" />
+                    : kakaoQuery && (
+                      <button
+                        onClick={() => { setKakaoQuery(""); setKakaoResults([]); setSelectedKakaoId(null); setSuggestions([]); }}
+                        className="text-muted-foreground hover:text-foreground shrink-0 self-center text-xs"
+                      >✕</button>
+                    )
+                  }
+                </div>
+                {showSuggestions && suggestions.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-background border rounded-lg shadow-lg overflow-hidden">
+                    {suggestions.map(place => (
+                      <button
+                        key={place.id}
+                        onMouseDown={() => selectSuggestion(place)}
+                        className="w-full text-left px-3 py-2 hover:bg-muted/60 flex items-center gap-2 border-b last:border-0"
+                      >
+                        <MapPin className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{place.name}</p>
+                          <p className="text-xs text-muted-foreground truncate">{place.roadAddress || place.address}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <button
                 onClick={() => searchKakao()}
@@ -831,14 +880,35 @@ export default function RestaurantPage() {
             <div className="bg-muted/50 rounded-lg p-3 space-y-2">
               <p className="text-xs font-medium text-muted-foreground">🔍 카카오 지도에서 검색 (자동 입력)</p>
               <div className="flex gap-2">
-                <Input
-                  placeholder="맛집 이름으로 검색..."
-                  value={kakaoQuery}
-                  onChange={e => setKakaoQuery(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && searchKakao()}
-                  className="h-8 text-xs"
-                />
-                <Button size="sm" variant="outline" onClick={() => searchKakao()} disabled={kakaoLoading} className="h-8 shrink-0">
+                <div className="flex-1 relative">
+                  <Input
+                    placeholder="맛집 이름으로 검색..."
+                    value={kakaoQuery}
+                    onChange={e => handleKakaoQueryChange(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") { setShowSuggestions(false); searchKakao(); } else if (e.key === "Escape") setShowSuggestions(false); }}
+                    onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                    className="h-8 text-xs"
+                  />
+                  {showSuggestions && suggestions.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-background border rounded-lg shadow-lg overflow-hidden">
+                      {suggestions.map(place => (
+                        <button
+                          key={place.id}
+                          onMouseDown={() => selectSuggestion(place)}
+                          className="w-full text-left px-3 py-2 hover:bg-muted/60 flex items-center gap-2 border-b last:border-0"
+                        >
+                          <MapPin className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-xs font-medium truncate">{place.name}</p>
+                            <p className="text-xs text-muted-foreground truncate">{place.roadAddress || place.address}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <Button size="sm" variant="outline" onClick={() => { setShowSuggestions(false); searchKakao(); }} disabled={kakaoLoading} className="h-8 shrink-0">
                   {kakaoLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
                 </Button>
               </div>
