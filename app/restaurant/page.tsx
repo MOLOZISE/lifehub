@@ -190,21 +190,24 @@ export default function RestaurantPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [category, search, sort]);
 
-  useEffect(() => {
-    fetch("/api/restaurant/lists").then(r => r.ok ? r.json() : []).then(data => {
-      if (!Array.isArray(data)) return;
-      const lists = data.map((l: { id: string; name: string; emoji: string; isDefault?: boolean; itemCount?: number; _count?: { items: number } }) => ({
-        id: l.id,
-        name: l.name,
-        emoji: l.emoji,
-        isDefault: l.isDefault ?? false,
-        itemCount: l.itemCount ?? l._count?.items ?? 0,
-      }));
-      setUserLists(lists);
-      const def = lists.find(l => l.isDefault) ?? lists[0];
-      if (def) setSelectedListId(def.id);
-    });
-  }, []);
+  async function loadUserLists() {
+    const r = await fetch("/api/restaurant/lists");
+    if (!r.ok) return;
+    const data = await r.json();
+    if (!Array.isArray(data)) return;
+    const lists = data.map((l: { id: string; name: string; emoji: string; isDefault?: boolean; itemCount?: number; _count?: { items: number } }) => ({
+      id: l.id,
+      name: l.name,
+      emoji: l.emoji,
+      isDefault: l.isDefault ?? false,
+      itemCount: l.itemCount ?? l._count?.items ?? 0,
+    }));
+    setUserLists(lists);
+    const def = lists.find(l => l.isDefault) ?? lists[0];
+    if (def) setSelectedListId(prev => prev || def.id);
+  }
+
+  useEffect(() => { loadUserLists(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadListItems(listId: string) {
     const res = await fetch(`/api/restaurant/lists/${listId}/items?limit=500`);
@@ -882,7 +885,7 @@ export default function RestaurantPage() {
       </div>
 
       {/* 등록 다이얼로그 */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={open => { setDialogOpen(open); if (open) loadUserLists(); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>맛집 등록</DialogTitle>
