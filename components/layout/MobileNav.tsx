@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, BookOpen, TrendingUp, MessageSquare, Utensils,
-  ChevronRight,
+  ChevronRight, X,
 } from "lucide-react";
 import { useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -106,10 +106,18 @@ export function MobileNav() {
       <Sheet open={!!openSheet} onOpenChange={(open) => !open && setOpenSheet(null)}>
         <SheetContent side="bottom" className="md:hidden rounded-t-2xl pb-safe" showCloseButton={false}>
           <SheetHeader className="pb-2">
-            <SheetTitle className="text-base flex items-center gap-2">
-              {activeSheetTab && <activeSheetTab.icon className="w-4 h-4" />}
-              {activeSheetTab?.label} 메뉴
-            </SheetTitle>
+            <div className="flex items-center justify-between">
+              <SheetTitle className="text-base flex items-center gap-2">
+                {activeSheetTab && <activeSheetTab.icon className="w-4 h-4" />}
+                {activeSheetTab?.label} 메뉴
+              </SheetTitle>
+              <button
+                onClick={() => setOpenSheet(null)}
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </SheetHeader>
           <div className="grid grid-cols-2 gap-2 pt-2 pb-6">
             {activeSheetTab?.children?.map((child) => {
