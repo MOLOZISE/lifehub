@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, CalendarClock, Clock, Plus, Link2, BookOpen, Trophy, Play, CheckCircle } from "lucide-react";
+import { ArrowLeft, CalendarClock, Clock, Plus, Link2, BookOpen, Trophy, Play, CheckCircle, Pencil, Trash2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -62,7 +62,8 @@ export default function SubjectDetailPage() {
 
   // 시험 결과 입력 다이얼로그
   const [examDialog, setExamDialog] = useState(false);
-  const [examForm, setExamForm] = useState({ name: "", examDate: "", actualScore: "", targetScore: "", memo: "" });
+  const [editingExam, setEditingExam] = useState<Exam | null>(null);
+  const [examForm, setExamForm] = useState({ name: "", examDate: "", actualScore: "", targetScore: "", passScore: "", status: "upcoming", memo: "" });
 
   useEffect(() => { load(); }, [id]);
 
@@ -113,22 +114,51 @@ export default function SubjectDetailPage() {
     load();
   }
 
-  async function addExam() {
-    if (!examForm.name || !examForm.examDate) return;
-    const res = await fetch("/api/study/exams", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: examForm.name, examDate: examForm.examDate, category: subject?.name ?? "",
-        subjectId: id,
-        actualScore: examForm.actualScore ? Number(examForm.actualScore) : null,
-        targetScore: examForm.targetScore ? Number(examForm.targetScore) : null,
-        memo: examForm.memo, status: examForm.actualScore ? "completed" : "preparing",
-      }),
+  function openAddExam() {
+    setEditingExam(null);
+    setExamForm({ name: subject?.name ?? "", examDate: subject?.examDate?.slice(0, 10) ?? "", actualScore: "", targetScore: "", passScore: "", status: "upcoming", memo: "" });
+    setExamDialog(true);
+  }
+
+  function openEditExam(exam: Exam) {
+    setEditingExam(exam);
+    setExamForm({
+      name: exam.name,
+      examDate: exam.examDate?.slice(0, 10) ?? "",
+      actualScore: exam.actualScore?.toString() ?? "",
+      targetScore: exam.targetScore?.toString() ?? "",
+      passScore: exam.passScore?.toString() ?? "",
+      status: exam.status,
+      memo: exam.memo ?? "",
     });
+    setExamDialog(true);
+  }
+
+  async function saveExam() {
+    if (!examForm.name || !examForm.examDate) return;
+    const payload = {
+      name: examForm.name, examDate: examForm.examDate,
+      category: subject?.name ?? "",
+      subjectId: id,
+      actualScore: examForm.actualScore ? Number(examForm.actualScore) : null,
+      targetScore: examForm.targetScore ? Number(examForm.targetScore) : null,
+      passScore: examForm.passScore ? Number(examForm.passScore) : null,
+      memo: examForm.memo || null,
+      status: examForm.status,
+    };
+    const url = editingExam ? `/api/study/exams/${editingExam.id}` : "/api/study/exams";
+    const method = editingExam ? "PUT" : "POST";
+    const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     if (!res.ok) { toast.error("저장 실패"); return; }
-    toast.success("시험 기록이 추가되었습니다.");
+    toast.success(editingExam ? "수정되었습니다." : "시험 기록이 추가되었습니다.");
     setExamDialog(false);
+    load();
+  }
+
+  async function deleteExam(examId: string) {
+    if (!confirm("이 시험을 삭제하시겠습니까?")) return;
+    const res = await fetch(`/api/study/exams/${examId}`, { method: "DELETE" });
+    if (!res.ok) { toast.error("삭제 실패"); return; }
     load();
   }
 
@@ -250,7 +280,7 @@ export default function SubjectDetailPage() {
         <TabsContent value="exams" className="mt-4 space-y-3">
           <div className="flex justify-between items-center">
             <p className="text-sm text-muted-foreground">시험 일정 및 결과</p>
-            <Button size="sm" onClick={() => { setExamForm({ name: subject.name, examDate: subject.examDate?.slice(0,10) ?? "", actualScore: "", targetScore: "", memo: "" }); setExamDialog(true); }}>
+            <Button size="sm" onClick={openAddExam}>
               <Plus className="w-3.5 h-3.5 mr-1" /> 시험 추가
             </Button>
           </div>
@@ -260,27 +290,38 @@ export default function SubjectDetailPage() {
               <p>시험 기록이 없습니다.</p>
             </div>
           ) : (
-            exams.map(e => (
-              <div key={e.id} className="p-3 border rounded-lg">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{e.name}</span>
-                  <Badge variant={e.status === "completed" ? "default" : "secondary"} className="text-xs">
-                    {e.status === "completed" ? "완료" : e.status === "passed" ? "합격" : "준비중"}
-                  </Badge>
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">{e.examDate}</p>
-                {e.actualScore != null && (
-                  <div className="flex gap-3 mt-2 text-sm">
-                    <span>실제: <strong>{e.actualScore}점</strong></span>
-                    {e.targetScore && <span className="text-muted-foreground">목표: {e.targetScore}점</span>}
-                    {e.passScore && <span className={e.actualScore >= e.passScore ? "text-green-500" : "text-red-500"}>
-                      합격선: {e.passScore}점 {e.actualScore >= e.passScore ? <CheckCircle className="inline w-3.5 h-3.5" /> : "✗"}
-                    </span>}
+            exams.map(e => {
+              const STATUS_MAP: Record<string, string> = { upcoming: "준비중", passed: "합격", failed: "불합격", cancelled: "취소", completed: "완료", preparing: "준비중" };
+              return (
+              <div key={e.id} className="p-3 border rounded-lg cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => openEditExam(e)}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium">{e.name}</span>
+                      <Badge variant={e.status === "passed" ? "default" : "secondary"} className="text-xs">
+                        {STATUS_MAP[e.status] ?? e.status}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">{e.examDate?.slice(0, 10)}</p>
+                    {e.actualScore != null && (
+                      <div className="flex gap-3 mt-1 text-sm">
+                        <span>실제: <strong>{e.actualScore}점</strong></span>
+                        {e.targetScore && <span className="text-muted-foreground">목표: {e.targetScore}점</span>}
+                        {e.passScore && <span className={e.actualScore >= e.passScore ? "text-green-500" : "text-red-500"}>
+                          합격선: {e.passScore}점 {e.actualScore >= e.passScore ? <CheckCircle className="inline w-3.5 h-3.5" /> : "✗"}
+                        </span>}
+                      </div>
+                    )}
+                    {e.memo && <p className="text-xs text-muted-foreground mt-1">{e.memo}</p>}
                   </div>
-                )}
-                {e.memo && <p className="text-xs text-muted-foreground mt-1">{e.memo}</p>}
+                  <div className="flex gap-1 shrink-0">
+                    <button className="h-7 w-7 flex items-center justify-center rounded hover:bg-accent" onClick={(ev) => { ev.stopPropagation(); openEditExam(e); }}><Pencil className="w-3.5 h-3.5" /></button>
+                    <button className="h-7 w-7 flex items-center justify-center rounded hover:bg-accent text-destructive" onClick={(ev) => { ev.stopPropagation(); deleteExam(e.id); }}><Trash2 className="w-3.5 h-3.5" /></button>
+                  </div>
+                </div>
               </div>
-            ))
+              );
+            })
           )}
         </TabsContent>
 
@@ -406,28 +447,47 @@ export default function SubjectDetailPage() {
         </DialogContent>
       </Dialog>
 
-      {/* 시험 추가 다이얼로그 */}
+      {/* 시험 추가/수정 다이얼로그 */}
       <Dialog open={examDialog} onOpenChange={setExamDialog}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>시험 일정 추가</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editingExam ? "시험 수정" : "시험 일정 추가"}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div>
               <p className="text-xs mb-1 font-medium">시험명 *</p>
               <Input value={examForm.name} onChange={e => setExamForm(f => ({ ...f, name: e.target.value }))} placeholder="예: 정보처리기사 필기" />
             </div>
-            <div>
-              <p className="text-xs mb-1 font-medium">시험일 *</p>
-              <Input type="date" value={examForm.examDate} onChange={e => setExamForm(f => ({ ...f, examDate: e.target.value }))} />
-            </div>
             <div className="grid grid-cols-2 gap-2">
+              <div>
+                <p className="text-xs mb-1 font-medium">시험일 *</p>
+                <Input type="date" value={examForm.examDate} onChange={e => setExamForm(f => ({ ...f, examDate: e.target.value }))} />
+              </div>
+              <div>
+                <p className="text-xs mb-1 font-medium">상태</p>
+                <Select value={examForm.status} onValueChange={v => setExamForm(f => ({ ...f, status: v }))}>
+                  <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="upcoming">준비중</SelectItem>
+                    <SelectItem value="passed">합격</SelectItem>
+                    <SelectItem value="failed">불합격</SelectItem>
+                    <SelectItem value="cancelled">취소</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
               <div>
                 <p className="text-xs mb-1 font-medium">목표 점수</p>
                 <Input type="number" value={examForm.targetScore} placeholder="선택"
                   onChange={e => setExamForm(f => ({ ...f, targetScore: e.target.value }))} />
               </div>
               <div>
+                <p className="text-xs mb-1 font-medium">합격 기준</p>
+                <Input type="number" value={examForm.passScore} placeholder="선택"
+                  onChange={e => setExamForm(f => ({ ...f, passScore: e.target.value }))} />
+              </div>
+              <div>
                 <p className="text-xs mb-1 font-medium">실제 점수</p>
-                <Input type="number" value={examForm.actualScore} placeholder="응시 후 입력"
+                <Input type="number" value={examForm.actualScore} placeholder="선택"
                   onChange={e => setExamForm(f => ({ ...f, actualScore: e.target.value }))} />
               </div>
             </div>
@@ -439,7 +499,7 @@ export default function SubjectDetailPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setExamDialog(false)}>취소</Button>
-            <Button onClick={addExam} disabled={!examForm.name || !examForm.examDate}>저장</Button>
+            <Button onClick={saveExam} disabled={!examForm.name || !examForm.examDate}>저장</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

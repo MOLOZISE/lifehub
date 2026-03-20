@@ -69,6 +69,9 @@ export async function DELETE(
 
   const { id } = await params;
 
+  // 연결된 시험도 함께 삭제
+  await prisma.exam.deleteMany({ where: { subjectId: id } }).catch(() => {});
+
   const result = await prisma.subject.deleteMany({
     where: { id, userId: session.user.id },
   });
