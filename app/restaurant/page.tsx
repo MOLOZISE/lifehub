@@ -98,7 +98,8 @@ export default function RestaurantPage() {
   const [situationTag, setSituationTag] = useState<string>("");
 
   // 리스트에 추가 관련
-  const [userLists, setUserLists] = useState<{ id: string; name: string; emoji: string; itemCount: number }[]>([]);
+  const [userLists, setUserLists] = useState<{ id: string; name: string; emoji: string; itemCount: number; isDefault?: boolean }[]>([]);
+  const [selectedListId, setSelectedListId] = useState<string>("");
   const [listMenuId, setListMenuId] = useState<string | null>(null);
 
   // 리스트 선택 필터
@@ -191,12 +192,17 @@ export default function RestaurantPage() {
 
   useEffect(() => {
     fetch("/api/restaurant/lists").then(r => r.ok ? r.json() : []).then(data => {
-      setUserLists(Array.isArray(data) ? data.map((l: { id: string; name: string; emoji: string; itemCount?: number; _count?: { items: number } }) => ({
+      if (!Array.isArray(data)) return;
+      const lists = data.map((l: { id: string; name: string; emoji: string; isDefault?: boolean; itemCount?: number; _count?: { items: number } }) => ({
         id: l.id,
         name: l.name,
         emoji: l.emoji,
+        isDefault: l.isDefault ?? false,
         itemCount: l.itemCount ?? l._count?.items ?? 0,
-      })) : []);
+      }));
+      setUserLists(lists);
+      const def = lists.find(l => l.isDefault) ?? lists[0];
+      if (def) setSelectedListId(def.id);
     });
   }, []);
 
@@ -215,6 +221,8 @@ export default function RestaurantPage() {
   }
 
   async function deleteList(listId: string, listName: string) {
+    const list = userLists.find(l => l.id === listId);
+    if (list?.isDefault) { toast.error("기본 리스트는 삭제할 수 없습니다."); return; }
     if (!confirm(`"${listName}" 리스트를 삭제할까요?`)) return;
     const res = await fetch(`/api/restaurant/lists/${listId}`, { method: "DELETE" });
     if (!res.ok) { toast.error("삭제 실패"); return; }
@@ -395,6 +403,7 @@ export default function RestaurantPage() {
 
   async function handleAdd() {
     if (!form.name || !form.address) { toast.error("이름과 주소를 입력하세요."); return; }
+    if (!selectedListId) { toast.error("리스트를 선택해주세요."); return; }
     setSaving(true);
     const res = await fetch("/api/restaurant", {
       method: "POST",
@@ -403,11 +412,13 @@ export default function RestaurantPage() {
         ...form,
         latitude: form.latitude ? Number(form.latitude) : null,
         longitude: form.longitude ? Number(form.longitude) : null,
+        listId: selectedListId,
       }),
     });
     setSaving(false);
     if (!res.ok) { toast.error("등록 실패"); return; }
-    toast.success("맛집이 등록되었습니다!");
+    const selectedListName = userLists.find(l => l.id === selectedListId)?.name ?? "리스트";
+    toast.success(`"${selectedListName}"에 등록되었습니다!`);
     setDialogOpen(false);
     setForm(emptyForm);
     load(1);
@@ -959,6 +970,29 @@ export default function RestaurantPage() {
               <p className="text-xs mb-1">한줄 소개</p>
               <Input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="이 맛집의 특징은..." />
             </div>
+            {userLists.length > 0 && (
+              <div>
+                <p className="text-xs mb-1.5 font-medium">리스트 선택 *</p>
+                <div className="flex flex-wrap gap-2">
+                  {userLists.map(l => (
+                    <button
+                      key={l.id}
+                      type="button"
+                      onClick={() => setSelectedListId(l.id)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs border transition-colors ${
+                        selectedListId === l.id
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-muted/50 border-border hover:bg-muted"
+                      }`}
+                    >
+                      <span>{l.emoji}</span>
+                      <span>{l.name}</span>
+                      {l.isDefault && <span className="opacity-60">(기본)</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>취소</Button>

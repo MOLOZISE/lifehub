@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ listId: string }> };
 
-// PATCH /api/restaurant/lists/[listId] - 리스트 수정 (이름/이모지/색상)
+// PATCH /api/restaurant/lists/[listId] - 리스트 수정
 export async function PATCH(req: NextRequest, { params }: Params) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -29,7 +29,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   return NextResponse.json(updated);
 }
 
-// DELETE /api/restaurant/lists/[listId] - 리스트 삭제 (아이템도 cascade)
+// DELETE /api/restaurant/lists/[listId] - 리스트 삭제 (기본 리스트 삭제 불가)
 export async function DELETE(_req: NextRequest, { params }: Params) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -39,6 +39,9 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   const list = await prisma.restaurantList.findUnique({ where: { id: listId } });
   if (!list || list.userId !== session.user.id)
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  if (list.isDefault)
+    return NextResponse.json({ error: "기본 리스트는 삭제할 수 없습니다." }, { status: 400 });
 
   await prisma.restaurantList.delete({ where: { id: listId } });
   return NextResponse.json({ ok: true });

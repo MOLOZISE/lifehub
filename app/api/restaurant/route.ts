@@ -30,6 +30,8 @@ export async function GET(req: NextRequest) {
     ];
   }
 
+  void myOnly; // reserved for future use
+
   const orderBy = sort === "rating"
     ? [{ avgRating: "desc" as const }, { createdAt: "desc" as const }]
     : { createdAt: "desc" as const };
@@ -57,7 +59,7 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { name, category, address, roadAddress, latitude, longitude, phone, url, description, menus } = body;
+  const { name, category, address, roadAddress, latitude, longitude, phone, url, description, menus, listId } = body;
 
   if (!name || !category || !address) {
     return NextResponse.json({ error: "이름, 카테고리, 주소는 필수입니다." }, { status: 400 });
@@ -76,12 +78,26 @@ export async function POST(req: NextRequest) {
       url: url || null,
       description: description || null,
       menus: menus ?? [],
-      // 등록 즉시 내 맛집으로 자동 저장
-      bookmarks: {
-        create: { userId: session.user.id, listName: "내 맛집" },
-      },
     },
   });
+
+  // 선택한 리스트에 추가 (없으면 기본 내 맛집 리스트 찾아서 추가)
+  let targetListId = listId;
+  if (!targetListId) {
+    const defaultList = await prisma.restaurantList.findFirst({
+      where: { userId: session.user.id, isDefault: true },
+    });
+    targetListId = defaultList?.id;
+  }
+
+  if (targetListId) {
+    const list = await prisma.restaurantList.findUnique({ where: { id: targetListId } });
+    if (list && list.userId === session.user.id) {
+      await prisma.restaurantListItem.create({
+        data: { listId: targetListId, restaurantId: restaurant.id, userId: session.user.id },
+      });
+    }
+  }
 
   return NextResponse.json(restaurant, { status: 201 });
 }

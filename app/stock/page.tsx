@@ -1584,13 +1584,23 @@ export default function StockPage() {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold">국내 인기 종목</h2>
-              <button
-                onClick={() => { setDraftKr(popularKrTickers); setDraftUs(popularUsTickers); setPopularSettingsOpen(true); }}
-                className="text-muted-foreground hover:text-foreground transition-colors"
-                title="인기 종목 설정"
-              >
-                <Settings2 className="w-3.5 h-3.5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => loadPopularPrices()}
+                  disabled={priceLoading}
+                  className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+                  title="새로고침"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${priceLoading ? "animate-spin" : ""}`} />
+                </button>
+                <button
+                  onClick={() => { setDraftKr(popularKrTickers); setDraftUs(popularUsTickers); setPopularSettingsOpen(true); }}
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                  title="인기 종목 설정"
+                >
+                  <Settings2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
             <div className="grid grid-cols-3 gap-2">
               {POPULAR_KR.map(s => {
@@ -1614,6 +1624,14 @@ export default function StockPage() {
 
             <div className="flex items-center justify-between pt-2">
               <h2 className="text-sm font-semibold">해외 인기 종목</h2>
+              <button
+                onClick={() => loadPopularPrices()}
+                disabled={priceLoading}
+                className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+                title="새로고침"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${priceLoading ? "animate-spin" : ""}`} />
+              </button>
             </div>
             <div className="grid grid-cols-3 gap-2">
               {POPULAR_US.map(s => {
