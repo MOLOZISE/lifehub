@@ -159,13 +159,13 @@ export default function AnalyticsPage() {
         <CardHeader className="pb-2">
           <CardTitle className="text-base">📅 학습 잔디</CardTitle>
         </CardHeader>
-        <CardContent className="overflow-x-auto">
+        <CardContent>
           <StudyHeatmap data={heatmapData} weeks={17} />
         </CardContent>
       </Card>
 
       {/* Key numbers */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-4 gap-3">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-1.5 mb-1">

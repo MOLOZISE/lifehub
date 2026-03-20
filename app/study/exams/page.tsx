@@ -168,7 +168,7 @@ export default function ExamsPage() {
                   const days = daysUntil(exam.examDate);
                   const urgency = days <= 7 ? "border-red-400 dark:border-red-700" : days <= 30 ? "border-amber-400 dark:border-amber-700" : "";
                   return (
-                    <Card key={exam.id} className={`border-2 ${urgency}`}>
+                    <Card key={exam.id} className={`border-2 ${urgency} cursor-pointer`} onClick={() => openEdit(exam)}>
                       <CardContent className="p-4 space-y-3">
                         <div className="flex items-start justify-between gap-2">
                           <div>
@@ -182,8 +182,8 @@ export default function ExamsPage() {
                             <p className="text-xs text-muted-foreground">{exam.category}</p>
                           </div>
                           <div className="flex gap-1 shrink-0">
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(exam)}><Pencil className="w-3.5 h-3.5" /></Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDelete(exam.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); openEdit(exam); }}><Pencil className="w-3.5 h-3.5" /></Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={(e) => { e.stopPropagation(); handleDelete(exam.id); }}><Trash2 className="w-3.5 h-3.5" /></Button>
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
@@ -224,7 +224,7 @@ export default function ExamsPage() {
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">완료된 시험</h2>
               <div className="space-y-2">
                 {past.map(exam => (
-                  <div key={exam.id} className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
+                  <div key={exam.id} className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => openEdit(exam)}>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-sm">{exam.name}</span>
@@ -237,8 +237,8 @@ export default function ExamsPage() {
                       </p>
                     </div>
                     <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(exam)}><Pencil className="w-3.5 h-3.5" /></Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDelete(exam.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); openEdit(exam); }}><Pencil className="w-3.5 h-3.5" /></Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={(e) => { e.stopPropagation(); handleDelete(exam.id); }}><Trash2 className="w-3.5 h-3.5" /></Button>
                     </div>
                   </div>
                 ))}

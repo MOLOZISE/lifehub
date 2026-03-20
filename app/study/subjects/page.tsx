@@ -24,7 +24,7 @@ interface ApiSubject extends Subject {
   _count?: { notes: number; flashcards: number; quizQuestions: number };
 }
 interface SessionData { subjectId: string; durationMinutes: number; date: string; }
-interface ExamData { id: string; name: string; examDate: string; }
+interface ExamData { id: string; name: string; examDate: string; subjectId?: string | null; }
 
 function isThisWeek(dateStr: string): boolean {
   const d = new Date(dateStr);
@@ -88,7 +88,7 @@ export default function SubjectsPage() {
       const future = exams
         .filter(e => new Date(e.examDate) >= new Date())
         .sort((a, b) => new Date(a.examDate).getTime() - new Date(b.examDate).getTime());
-      setUpcomingExams(future.slice(0, 3));
+      setUpcomingExams(future);
     }
     setLoading(false);
   }
@@ -247,7 +247,7 @@ export default function SubjectsPage() {
                 </div>
               ) : (
                 <div className="space-y-1.5">
-                  {upcomingExams.map((exam, i) => {
+                  {upcomingExams.slice(0, 3).map((exam, i) => {
                     const dDay = Math.ceil((new Date(exam.examDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
                     return (
                       <div key={exam.id} className="flex items-center justify-between">
@@ -378,7 +378,9 @@ export default function SubjectsPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {subjects.map(subject => (
+            {subjects.map(subject => {
+              const linkedExam = upcomingExams.find(e => e.subjectId === subject.id);
+              return (
               <SubjectCard
                 key={subject.id}
                 subject={subject}
@@ -388,10 +390,12 @@ export default function SubjectsPage() {
                 knownCount={0}
                 totalMinutes={sessionMap[subject.id]?.minutes ?? 0}
                 sessionCount={sessionMap[subject.id]?.count ?? 0}
+                linkedExam={linkedExam}
                 onEdit={() => openEdit(subject)}
                 onDelete={() => setDeleteTarget(subject)}
               />
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

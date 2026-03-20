@@ -19,11 +19,12 @@ interface Props {
   knownCount: number;
   totalMinutes?: number;   // 총 공부 시간 (분)
   sessionCount?: number;   // 공부 횟수
+  linkedExam?: { id: string; name: string; examDate: string };
   onEdit: () => void;
   onDelete: () => void;
 }
 
-export function SubjectCard({ subject, totalMinutes = 0, sessionCount = 0, onEdit, onDelete }: Props) {
+export function SubjectCard({ subject, totalMinutes = 0, sessionCount = 0, linkedExam, onEdit, onDelete }: Props) {
   const colors = COLOR_MAP[subject.color];
 
   const dDay = subject.examDate
@@ -68,17 +69,24 @@ export function SubjectCard({ subject, totalMinutes = 0, sessionCount = 0, onEdi
           <span className="text-muted-foreground">{sessionCount}회 공부</span>
         </div>
 
-        {/* 시험일 / D-Day — 지난 시험일은 표시 안 함 */}
-        {subject.examDate && dDay !== null && dDay >= 0 && (
-          <div className="flex items-center gap-2 mt-2">
-            <Badge variant="secondary" className="text-xs flex items-center gap-1">
-              <CalendarClock className="w-3 h-3" />{formatDate(subject.examDate)}
-            </Badge>
-            <Badge variant={dDay <= 7 ? "destructive" : dDay <= 30 ? "secondary" : "outline"} className="text-xs">
-              {dDay > 0 ? `D-${dDay}` : "D-Day"}
-            </Badge>
-          </div>
-        )}
+        {/* 시험일 / D-Day — subject.examDate 또는 연결된 시험 */}
+        {(() => {
+          const examDate = subject.examDate ?? linkedExam?.examDate ?? null;
+          const examName = subject.examDate ? null : linkedExam?.name ?? null;
+          const d = examDate ? Math.ceil((new Date(examDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null;
+          if (!examDate || d === null || d < 0) return null;
+          return (
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              {examName && <span className="text-xs text-muted-foreground truncate max-w-[100px]">{examName}</span>}
+              <Badge variant="secondary" className="text-xs flex items-center gap-1">
+                <CalendarClock className="w-3 h-3" />{formatDate(examDate)}
+              </Badge>
+              <Badge variant={d <= 7 ? "destructive" : d <= 30 ? "secondary" : "outline"} className="text-xs">
+                {d > 0 ? `D-${d}` : "D-Day"}
+              </Badge>
+            </div>
+          );
+        })()}
       </CardContent>
     </Card>
   );
