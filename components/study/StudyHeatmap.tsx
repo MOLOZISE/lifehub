@@ -11,7 +11,7 @@ interface DayData {
 
 interface StudyHeatmapProps {
   data: DayData[];
-  weeks?: number; // 표시할 주 수 (기본 17주 = 4개월)
+  weeks?: number;
 }
 
 function getIntensity(minutes: number): 0 | 1 | 2 | 3 | 4 {
@@ -32,17 +32,18 @@ const INTENSITY_CLASSES = [
 
 const DAY_LABELS = ["일", "", "화", "", "목", "", "토"];
 
+const CELL = 11;  // px
+const GAP  = 3;   // px
+const MONTH_ROW_H = 14; // px
+
 export function StudyHeatmap({ data, weeks = 17 }: StudyHeatmapProps) {
   const { grid, months } = useMemo(() => {
     const dataMap = new Map(data.map((d) => [d.date, d.minutes]));
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // 오늘부터 거슬러 올라가서 weeks * 7일치 날짜 생성
-    const totalDays = weeks * 7;
     const startDate = new Date(today);
-    startDate.setDate(today.getDate() - totalDays + 1);
-    // 일요일로 정렬
+    startDate.setDate(today.getDate() - weeks * 7 + 1);
     startDate.setDate(startDate.getDate() - startDate.getDay());
 
     const columns: { date: string; minutes: number; isActive: boolean }[][] = [];
@@ -56,10 +57,7 @@ export function StudyHeatmap({ data, weeks = 17 }: StudyHeatmapProps) {
         const dateStr = localDateStr(current);
         const month = current.getMonth();
         if (row === 0 && month !== lastMonth) {
-          monthLabels.push({
-            label: `${month + 1}월`,
-            colIndex: col,
-          });
+          monthLabels.push({ label: `${month + 1}월`, colIndex: col });
           lastMonth = month;
         }
         week.push({
@@ -75,8 +73,9 @@ export function StudyHeatmap({ data, weeks = 17 }: StudyHeatmapProps) {
     return { grid: columns, months: monthLabels };
   }, [data, weeks]);
 
-  const totalDays = data.filter((d) => d.minutes > 0).length;
+  const totalDays    = data.filter((d) => d.minutes > 0).length;
   const totalMinutes = data.reduce((sum, d) => sum + d.minutes, 0);
+
   const maxStreak = useMemo(() => {
     const sorted = [...data].sort((a, b) => a.date.localeCompare(b.date));
     let max = 0, cur = 0, prev = "";
@@ -95,75 +94,107 @@ export function StudyHeatmap({ data, weeks = 17 }: StudyHeatmapProps) {
     return max;
   }, [data]);
 
+  // column-first 순서로 셀 펼치기 (week0-day0..6, week1-day0..6, ...)
+  const allCells = grid.flatMap((col) => col);
+
+  const dayLabelWidth = 18; // px
+
   return (
     <div className="space-y-3">
-      {/* Stats */}
-      <div className="flex gap-4 text-sm">
+      {/* 요약 통계 */}
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
         <span className="text-muted-foreground">
           총 <span className="text-foreground font-semibold">{totalDays}일</span> 학습
         </span>
         <span className="text-muted-foreground">
-          총 <span className="text-foreground font-semibold">{Math.floor(totalMinutes / 60)}시간 {totalMinutes % 60}분</span>
+          총{" "}
+          <span className="text-foreground font-semibold">
+            {Math.floor(totalMinutes / 60)}시간 {totalMinutes % 60}분
+          </span>
         </span>
         <span className="text-muted-foreground">
           최대 연속 <span className="text-foreground font-semibold">{maxStreak}일</span>
         </span>
       </div>
 
-      {/* Heatmap */}
-      <div className="overflow-x-auto">
-        <div className="inline-flex gap-0.5">
-          {/* Day labels */}
-          <div className="flex flex-col gap-0.5 mr-1">
-            <div className="h-4" /> {/* month label spacer */}
-            {DAY_LABELS.map((label, i) => (
-              <div key={i} className="h-3 w-5 text-xs text-muted-foreground flex items-center">
-                {label}
-              </div>
-            ))}
+      {/* 잔디 그리드 */}
+      <div className="flex" style={{ gap: 6 }}>
+        {/* 요일 레이블 */}
+        <div
+          className="flex flex-col shrink-0 text-[10px] text-muted-foreground select-none"
+          style={{ width: dayLabelWidth, gap: GAP, paddingTop: MONTH_ROW_H + GAP }}
+        >
+          {DAY_LABELS.map((label, i) => (
+            <div
+              key={i}
+              style={{ height: CELL, lineHeight: `${CELL}px` }}
+            >
+              {label}
+            </div>
+          ))}
+        </div>
+
+        {/* 월 레이블 + 셀 영역 */}
+        <div className="flex-1 min-w-0 flex flex-col" style={{ gap: GAP }}>
+          {/* 월 레이블 행 */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: `repeat(${weeks}, 1fr)`,
+              gap: GAP,
+              height: MONTH_ROW_H,
+            }}
+          >
+            {grid.map((_, colIdx) => {
+              const m = months.find((m) => m.colIndex === colIdx);
+              return (
+                <div
+                  key={colIdx}
+                  className="text-[10px] text-muted-foreground overflow-hidden whitespace-nowrap"
+                >
+                  {m?.label ?? ""}
+                </div>
+              );
+            })}
           </div>
 
-          {/* Grid columns */}
-          <div className="flex flex-col gap-0.5">
-            {/* Month labels */}
-            <div className="flex gap-0.5">
-              {grid.map((_, colIdx) => {
-                const month = months.find((m) => m.colIndex === colIdx);
-                return (
-                  <div key={colIdx} className="w-3 h-4 text-xs text-muted-foreground">
-                    {month?.label ?? ""}
-                  </div>
-                );
-              })}
-            </div>
-            {/* Rows (days of week) */}
-            {Array.from({ length: 7 }).map((_, row) => (
-              <div key={row} className="flex gap-0.5">
-                {grid.map((col, colIdx) => {
-                  const day = col[row];
-                  const intensity = day.isActive ? getIntensity(day.minutes) : 0;
-                  return (
-                    <div
-                      key={colIdx}
-                      title={day.isActive ? `${day.date}: ${day.minutes}분` : ""}
-                      className={cn(
-                        "w-3 h-3 rounded-sm transition-colors",
-                        day.isActive ? INTENSITY_CLASSES[intensity] : "bg-muted/30"
-                      )}
-                    />
-                  );
-                })}
-              </div>
-            ))}
+          {/* 셀 그리드: 7행 × N열, column-first flow */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateRows: `repeat(7, ${CELL}px)`,
+              gridAutoFlow: "column",
+              gridAutoColumns: "1fr",
+              gap: GAP,
+            }}
+          >
+            {allCells.map((day, i) => {
+              const intensity = day.isActive ? getIntensity(day.minutes) : -1;
+              return (
+                <div
+                  key={i}
+                  title={day.isActive ? `${day.date}: ${day.minutes}분` : ""}
+                  className={cn(
+                    "transition-colors",
+                    intensity === -1 ? "bg-muted/30" : INTENSITY_CLASSES[intensity]
+                  )}
+                  style={{ borderRadius: 2 }}
+                />
+              );
+            })}
           </div>
         </div>
       </div>
 
-      {/* Legend */}
+      {/* 범례 */}
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <span>적음</span>
         {INTENSITY_CLASSES.map((cls, i) => (
-          <div key={i} className={cn("w-3 h-3 rounded-sm", cls)} />
+          <div
+            key={i}
+            className={cn(cls)}
+            style={{ width: CELL, height: CELL, borderRadius: 2, flexShrink: 0 }}
+          />
         ))}
         <span>많음</span>
       </div>
