@@ -1179,7 +1179,7 @@ export default function StockPage() {
       if (res.ok) {
         const cached: Record<string, AiData> = await res.json();
         setStockAiData(Object.fromEntries(
-          allStocks.map(s => [s.ticker, cached[s.ticker] ?? null])
+          allStocks.map(s => [s.ticker, cached[s.ticker] ?? undefined])
         ));
       }
     } catch { /* 무시 */ }
