@@ -81,7 +81,7 @@ function MarketChip({ item }: { item: MarketItem }) {
         </div>
         <span className="text-sm font-semibold leading-tight block">{extPrice !== undefined ? fmt({ ...item, price: extPrice }) : fmt(item)}</span>
       </div>
-      <span className={`text-[11px] font-semibold shrink-0 ${displayUp ? "text-red-500" : "text-blue-500"}`}>
+      <span className={`text-[11px] font-semibold shrink-0 ${displayUp ? "text-green-500" : "text-red-500"}`}>
         {displayUp ? "▲" : "▼"} {Math.abs(displayRate).toFixed(2)}%
       </span>
     </div>

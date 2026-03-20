@@ -323,7 +323,7 @@ export default function SubjectsPage() {
                 <div className="flex gap-1">
                   {[1,2,3,4,5].map(n => (
                     <button key={n} onClick={() => setQuickForm(f => ({ ...f, satisfactionScore: n }))}
-                      className={`text-xl transition-transform hover:scale-110 ${n <= quickForm.satisfactionScore ? "text-amber-400" : "text-muted-foreground/30"}`}>
+                      className={`text-xl transition-opacity hover:scale-110 ${n <= quickForm.satisfactionScore ? "opacity-100" : "opacity-20"}`}>
                       ⭐
                     </button>
                   ))}
