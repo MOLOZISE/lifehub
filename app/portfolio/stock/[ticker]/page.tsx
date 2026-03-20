@@ -115,7 +115,7 @@ const PERIOD_CONFIG: Record<Period, { range: string; interval: string }> = {
   "1Y":  { range: "1y",  interval: "1wk" },
 };
 const PERIOD_LABELS: Record<Period, string> = {
-  "1D": "1일", "1W": "1주", "1M": "1달", "3M": "3달", "6M": "6달", "1Y": "1년",
+  "1D": "일", "1W": "주", "1M": "월", "3M": "3M", "6M": "6M", "1Y": "년",
 };
 
 
@@ -176,6 +176,8 @@ export default function StockDetailPage() {
   const [inWatchlist, setInWatchlist] = useState(false);
   const [livePrice, setLivePrice] = useState<number | null>(null);
   const [livePriceLoading, setLivePriceLoading] = useState(false);
+  const [chartSummary, setChartSummary] = useState<{ text: string; opinion: string | null } | null>(null);
+  const [chartSummaryDismissed, setChartSummaryDismissed] = useState(false);
 
   const yahooTicker = toYahooTicker(ticker, market);
 
@@ -184,6 +186,7 @@ export default function StockDetailPage() {
     loadInfo();
     loadChart(period);
     loadHolding();
+    loadChartSummary();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticker, market]);
 
@@ -194,6 +197,17 @@ export default function StockDetailPage() {
       if (res.ok) setInfo(await res.json());
     } catch { /* ignore */ }
     setInfoLoading(false);
+  }
+
+  async function loadChartSummary() {
+    try {
+      const res = await fetch(`/api/stock/ai-analysis?ticker=${encodeURIComponent(ticker)}`);
+      if (!res.ok) return;
+      const data = await res.json() as { cached?: boolean; summary?: string | null; opinion?: string | null };
+      if (data.cached && data.summary) {
+        setChartSummary({ text: data.summary, opinion: data.opinion ?? null });
+      }
+    } catch { /* ignore */ }
   }
 
   async function loadChart(p: Period) {
@@ -412,13 +426,15 @@ export default function StockDetailPage() {
         </TabsList>
 
         {/* ── 차트 탭 ── */}
-        <TabsContent value="chart" className="mt-4 space-y-3">
-          {/* 기간 선택 */}
-          <div className="flex gap-1 bg-muted/50 rounded-xl p-1">
+        <TabsContent value="chart" className="mt-0 space-y-0">
+          {/* 기간 선택 — Toss 스타일 언더라인 */}
+          <div className="flex border-b overflow-x-auto">
             {(Object.keys(PERIOD_CONFIG) as Period[]).map(p => (
               <button key={p} onClick={() => onPeriodChange(p)}
-                className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                  period === p ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 -mb-px transition-all shrink-0 ${
+                  period === p
+                    ? "border-foreground text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
                 }`}
               >
                 {PERIOD_LABELS[p]}
@@ -426,18 +442,39 @@ export default function StockDetailPage() {
             ))}
           </div>
 
+          {/* AI 차트 요약 배너 */}
+          {chartSummary && !chartSummaryDismissed && (
+            <div className="flex items-start gap-2.5 bg-muted/60 px-4 py-3 text-sm">
+              <span className="text-base shrink-0 mt-0.5">✨</span>
+              <div className="flex-1 min-w-0">
+                <span className="text-xs font-semibold text-muted-foreground mr-1.5">AI 분석 요약</span>
+                {chartSummary.opinion && (
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold mr-1.5 ${
+                    chartSummary.opinion.includes("매수") ? "bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400"
+                    : chartSummary.opinion.includes("매도") ? "bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400"
+                    : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                  }`}>{chartSummary.opinion}</span>
+                )}
+                <span className="text-xs text-foreground/80">{chartSummary.text}</span>
+              </div>
+              <button onClick={() => setChartSummaryDismissed(true)} className="text-muted-foreground hover:text-foreground shrink-0 mt-0.5">
+                <span className="text-xs">✕</span>
+              </button>
+            </div>
+          )}
+
           {chartLoading ? (
-            <div className="flex items-center justify-center h-64 text-muted-foreground gap-2">
+            <div className="flex items-center justify-center h-72 text-muted-foreground gap-2">
               <Loader2 className="w-4 h-4 animate-spin" /> 차트 로딩 중...
             </div>
           ) : !chartMeta?.bars?.length ? (
-            <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">
+            <div className="flex items-center justify-center h-72 text-muted-foreground text-sm">
               차트 데이터가 없습니다.
             </div>
           ) : (
             <TradingViewChart
               bars={chartMeta.bars}
-              height={360}
+              height={400}
               isKRW={currency === "KRW"}
             />
           )}
