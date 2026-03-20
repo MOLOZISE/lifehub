@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, BookOpen, TrendingUp, MessageSquare, Utensils,
-  ChevronRight, X,
+  ChevronRight,
 } from "lucide-react";
 import { useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -105,19 +105,13 @@ export function MobileNav() {
       {/* 하위 메뉴 Sheet */}
       <Sheet open={!!openSheet} onOpenChange={(open) => !open && setOpenSheet(null)}>
         <SheetContent side="bottom" className="md:hidden rounded-t-2xl pb-safe">
-          <SheetHeader className="flex flex-row items-center justify-between pb-2">
+          <SheetHeader className="pb-2">
             <SheetTitle className="text-base flex items-center gap-2">
               {activeSheetTab && <activeSheetTab.icon className="w-4 h-4" />}
               {activeSheetTab?.label} 메뉴
             </SheetTitle>
-            <button
-              onClick={() => setOpenSheet(null)}
-              className="p-1 rounded-md text-muted-foreground hover:text-foreground"
-            >
-              <X className="w-4 h-4" />
-            </button>
           </SheetHeader>
-          <div className="grid grid-cols-1 gap-1 pt-2 pb-6">
+          <div className="grid grid-cols-2 gap-2 pt-2 pb-6">
             {activeSheetTab?.children?.map((child) => {
               const basePath = child.href.split("?")[0];
               const active = pathname === basePath || pathname.startsWith(basePath + "/");
@@ -127,7 +121,7 @@ export function MobileNav() {
                   href={child.href}
                   onClick={() => setOpenSheet(null)}
                   className={cn(
-                    "flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-colors",
+                    "flex items-center gap-2 px-4 py-3 rounded-xl text-sm transition-colors",
                     active
                       ? "bg-primary/10 text-primary font-medium"
                       : "hover:bg-accent text-foreground"
