@@ -208,7 +208,7 @@ export default function AdminExamsPage() {
             </div>
             <div className="space-y-1">
               <p className="text-xs font-medium">카테고리 *</p>
-              <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v }))}>
+              <Select value={form.category} onValueChange={v => v && setForm(f => ({ ...f, category: v }))}>
                 <SelectTrigger className="h-9"><span>{form.category}</span></SelectTrigger>
                 <SelectContent>{CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
               </Select>
