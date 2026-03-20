@@ -326,9 +326,9 @@ export default function SessionsPage() {
                   <Input type="number" value={form.durationMinutes} onChange={e => setForm(f => ({ ...f, durationMinutes: e.target.value }))} className="h-8 text-sm" />
                 </div>
               </div>
-<div className="col-span-2"><p className="text-xs mb-1 font-medium">사용 자료</p><Input value={form.materialName} onChange={e => setForm(f => ({ ...f, materialName: e.target.value }))} placeholder="예: 시나공 필기" /></div>
+              <div><p className="text-xs mb-1 font-medium">사용 자료</p><Input value={form.materialName} onChange={e => setForm(f => ({ ...f, materialName: e.target.value }))} placeholder="예: 시나공 필기" /></div>
               {exams.length > 0 && (
-                <div className="col-span-2"><p className="text-xs mb-1 font-medium">연결 시험 (선택)</p>
+                <div><p className="text-xs mb-1 font-medium">연결 시험 (선택)</p>
                   <Select value={form.examId} onValueChange={v => setForm(f => ({ ...f, examId: v === "none" ? "" : (v ?? f.examId) }))}>
                     <SelectTrigger>
                       <span className="truncate">

@@ -761,10 +761,10 @@ export default function DashboardPage() {
         <h2 className="text-sm font-semibold text-muted-foreground mb-3">빠른 이동</h2>
         <div className="grid grid-cols-4 gap-2">
           {[
-            { href: "/study/subjects", icon: "📚", label: "학습 기록" },
-            { href: "/study/analytics", icon: "📊", label: "학습 분석" },
-            { href: "/portfolio", icon: "📈", label: "포트폴리오" },
-            { href: "/restaurant", icon: "🍜", label: "맛집 지도" },
+            { href: "/study/subjects", icon: "📚", label: "학습 관리" },
+            { href: "/stock", icon: "📡", label: "증권 동향" },
+            { href: "/community?category=free", icon: "🗣️", label: "자유게시판" },
+            { href: "/restaurant", icon: "🍜", label: "맛집" },
           ].map(item => (
             <Link key={item.href} href={item.href}>
               <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
