@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, BookOpen, TrendingUp, MessageSquare, Utensils,
-  ChevronRight, X,
+  ChevronRight, X, UserCircle2,
 } from "lucide-react";
 import { useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -50,6 +50,7 @@ const tabs: Tab[] = [
       { label: "🗺️ 맛집 지도", href: "/restaurant" },
     ],
   },
+  { label: "내 정보", href: "/profile", icon: UserCircle2 },
 ];
 
 function isTabActive(tab: Tab, pathname: string) {
