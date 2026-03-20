@@ -41,7 +41,15 @@ interface Holding {
   quantity: number; avgPrice: number; currentPrice: number; currency: "KRW" | "USD";
   sector: string | null;
 }
-interface ChartMeta { bars: OHLCVBar[]; currency: string; regularMarketPrice?: number; }
+interface Technicals {
+  ma5: number | null; ma20: number | null; ma60: number | null;
+  rsi14: number | null; macdLine: number | null; signalLine: number | null;
+  bbUpper: number | null; bbMid: number | null; bbLower: number | null;
+}
+interface ChartMeta {
+  bars: OHLCVBar[]; currency: string; regularMarketPrice?: number;
+  technicals?: Technicals; techSummary?: string;
+}
 type SectionType = "positive" | "negative" | "neutral" | "short" | "long" | "summary";
 interface NewsSection { type: SectionType; title: string; items: string[]; text?: string; }
 interface NewsResult { sections: NewsSection[]; sources: string[]; }
@@ -176,8 +184,7 @@ export default function StockDetailPage() {
   const [inWatchlist, setInWatchlist] = useState(false);
   const [livePrice, setLivePrice] = useState<number | null>(null);
   const [livePriceLoading, setLivePriceLoading] = useState(false);
-  const [chartSummary, setChartSummary] = useState<{ text: string; opinion: string | null } | null>(null);
-  const [chartSummaryDismissed, setChartSummaryDismissed] = useState(false);
+  const [techSummaryDismissed, setTechSummaryDismissed] = useState(false);
 
   const yahooTicker = toYahooTicker(ticker, market);
 
@@ -186,7 +193,6 @@ export default function StockDetailPage() {
     loadInfo();
     loadChart(period);
     loadHolding();
-    loadChartSummary();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticker, market]);
 
@@ -199,16 +205,6 @@ export default function StockDetailPage() {
     setInfoLoading(false);
   }
 
-  async function loadChartSummary() {
-    try {
-      const res = await fetch(`/api/stock/ai-analysis?ticker=${encodeURIComponent(ticker)}`);
-      if (!res.ok) return;
-      const data = await res.json() as { cached?: boolean; summary?: string | null; opinion?: string | null };
-      if (data.cached && data.summary) {
-        setChartSummary({ text: data.summary, opinion: data.opinion ?? null });
-      }
-    } catch { /* ignore */ }
-  }
 
   async function loadChart(p: Period) {
     setChartLoading(true);
@@ -294,6 +290,7 @@ export default function StockDetailPage() {
 
   function onPeriodChange(p: Period) {
     setPeriod(p);
+    setTechSummaryDismissed(false);
     loadChart(p);
   }
 
@@ -442,24 +439,15 @@ export default function StockDetailPage() {
             ))}
           </div>
 
-          {/* AI 차트 요약 배너 */}
-          {chartSummary && !chartSummaryDismissed && (
-            <div className="flex items-start gap-2.5 bg-muted/60 px-4 py-3 text-sm">
-              <span className="text-base shrink-0 mt-0.5">✨</span>
+          {/* 기술적 분석 요약 배너 */}
+          {chartMeta?.techSummary && !techSummaryDismissed && (
+            <div className="flex items-start gap-2.5 bg-muted/60 px-4 py-3">
+              <span className="text-base shrink-0 mt-0.5">📊</span>
               <div className="flex-1 min-w-0">
-                <span className="text-xs font-semibold text-muted-foreground mr-1.5">AI 분석 요약</span>
-                {chartSummary.opinion && (
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold mr-1.5 ${
-                    chartSummary.opinion.includes("매수") ? "bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400"
-                    : chartSummary.opinion.includes("매도") ? "bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400"
-                    : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
-                  }`}>{chartSummary.opinion}</span>
-                )}
-                <span className="text-xs text-foreground/80">{chartSummary.text}</span>
+                <span className="text-[10px] font-semibold text-muted-foreground mr-1.5">차트 분석</span>
+                <span className="text-xs text-foreground/80">{chartMeta.techSummary}</span>
               </div>
-              <button onClick={() => setChartSummaryDismissed(true)} className="text-muted-foreground hover:text-foreground shrink-0 mt-0.5">
-                <span className="text-xs">✕</span>
-              </button>
+              <button onClick={() => setTechSummaryDismissed(true)} className="text-muted-foreground hover:text-foreground shrink-0 mt-0.5 text-xs">✕</button>
             </div>
           )}
 
