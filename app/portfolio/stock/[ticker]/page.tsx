@@ -46,45 +46,14 @@ type SectionType = "positive" | "negative" | "neutral" | "short" | "long" | "sum
 interface NewsSection { type: SectionType; title: string; items: string[]; text?: string; }
 interface NewsResult { sections: NewsSection[]; sources: string[]; }
 
-const STOCK_ANALYSIS_PROMPT = `당신은 CFA 자격증을 보유한 주식 전문 애널리스트입니다. 최신 뉴스와 시장 데이터를 조사하고 분석하세요.
-
-반드시 다음 형식으로 응답하세요:
-
-## 호재 요인
-- 항목 (출처/날짜)
-
-## 악재 요인
-- 항목 (출처/날짜)
-
-## 중립/주목 요인
-- 항목
-
-## 단기 전망 (1~4주)
-내용.
-
-## 중장기 전망 (3~12개월)
-내용.
-
-## 종합 투자의견
-- 투자의견: [강력매수 / 매수 / 중립 / 매도 / 강력매도]
-- 목표주가: [가격 또는 "정보 없음"]
-- 리스크: [상/중/하]
-- 한 줄 요약: [핵심 판단]`;
-
-function parseNewsResponse(text: string): NewsSection[] {
-  const sectionMap: Record<string, SectionType> = {
-    "호재": "positive", "악재": "negative", "중립": "neutral",
-    "단기 전망": "short", "중장기 전망": "long", "종합 투자의견": "summary",
-  };
-  const parts = text.split(/^## /m).filter(Boolean);
-  return parts.map(part => {
-    const lines = part.trim().split("\n");
-    const title = lines[0].trim();
-    const body = lines.slice(1).join("\n").trim();
-    const items = lines.slice(1).filter(l => l.trim().startsWith("-")).map(l => l.replace(/^-\s*/, "").trim());
-    const typeKey = Object.keys(sectionMap).find(k => title.includes(k));
-    return { type: typeKey ? sectionMap[typeKey] : "neutral", title, items, text: body };
-  }).filter(s => s.title);
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  if (h >= 24) return `${Math.floor(h / 24)}일 전`;
+  if (h > 0) return `${h}시간 전`;
+  if (m > 0) return `${m}분 전`;
+  return "방금 전";
 }
 
 const SECTION_STYLES: Record<SectionType, { icon: string; border: string; bg: string }> = {
@@ -202,6 +171,7 @@ export default function StockDetailPage() {
   const [news, setNews] = useState<NewsResult | null>(null);
   const [newsLoading, setNewsLoading] = useState(false);
   const [newsError, setNewsError] = useState<string | null>(null);
+  const [newsAnalyzedAt, setNewsAnalyzedAt] = useState<string | null>(null);
   const [holding, setHolding] = useState<Holding | null>(null);
   const [inWatchlist, setInWatchlist] = useState(false);
   const [livePrice, setLivePrice] = useState<number | null>(null);
@@ -270,21 +240,35 @@ export default function StockDetailPage() {
     setLivePriceLoading(false);
   }
 
-  async function loadNews() {
-    if (news) return;
+  async function loadNews(force = false) {
+    if (news && !force) return;
     setNewsLoading(true);
     setNewsError(null);
     try {
+      // force가 아니면 GET으로 캐시 먼저 확인 (빠름)
+      if (!force) {
+        const cacheRes = await fetch(`/api/stock/ai-analysis?ticker=${encodeURIComponent(ticker)}`);
+        if (cacheRes.ok) {
+          const data = await cacheRes.json() as { cached: boolean; sections?: NewsSection[]; sources?: string[]; analyzedAt?: string };
+          if (data.cached && data.sections?.length) {
+            setNews({ sections: data.sections, sources: data.sources ?? [] });
+            setNewsAnalyzedAt(data.analyzedAt ?? null);
+            setNewsLoading(false);
+            return;
+          }
+        }
+      }
+      // 캐시 없거나 강제 갱신 → POST로 AI 분석
       const stockName = info?.name ?? ticker;
-      const userMessage = `${stockName}(${ticker}) 종목의 최신 뉴스와 투자 전망을 분석해주세요.`;
-      const res = await fetch("/api/ai", {
+      const res = await fetch("/api/stock/ai-analysis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ systemPrompt: STOCK_ANALYSIS_PROMPT, userMessage, useSearch: true }),
+        body: JSON.stringify({ name: stockName, ticker, force }),
       });
-      const data = await res.json() as { text?: string; sources?: string[]; error?: string };
-      if (res.ok && data.text) {
-        setNews({ sections: parseNewsResponse(data.text), sources: data.sources ?? [] });
+      const data = await res.json() as { sections?: NewsSection[]; sources?: string[]; analyzedAt?: string; cached?: boolean; error?: string };
+      if (res.ok && data.sections?.length) {
+        setNews({ sections: data.sections, sources: data.sources ?? [] });
+        setNewsAnalyzedAt(data.analyzedAt ?? null);
       } else {
         setNewsError(data.error ?? "AI 분석 요청에 실패했습니다.");
       }
@@ -409,7 +393,7 @@ export default function StockDetailPage() {
       </div>
 
       {/* ── 탭 ── */}
-      <Tabs defaultValue="chart">
+      <Tabs defaultValue="chart" onValueChange={v => { if (v === "news") loadNews(); }}>
         <TabsList className="w-full rounded-none border-b bg-transparent h-auto p-0">
           {[
             { value: "chart", icon: <BarChart3 className="w-3.5 h-3.5" />, label: "차트" },
@@ -420,7 +404,6 @@ export default function StockDetailPage() {
             <TabsTrigger
               key={value}
               value={value}
-              onClick={value === "news" ? loadNews : undefined}
               className="flex-1 flex items-center gap-1 rounded-none border-b-2 border-transparent data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:shadow-none pb-2 pt-1 text-xs font-medium text-muted-foreground data-[state=active]:text-foreground"
             >
               {icon}{label}
@@ -525,12 +508,20 @@ export default function StockDetailPage() {
               <Newspaper className="w-10 h-10 opacity-30" />
               <p className="font-medium text-destructive">분석 실패</p>
               <p className="text-xs text-center max-w-xs break-all">{newsError}</p>
-              <Button onClick={() => { setNewsError(null); loadNews(); }} size="sm" variant="outline" className="rounded-xl">
+              <Button onClick={() => { setNewsError(null); loadNews(true); }} size="sm" variant="outline" className="rounded-xl">
                 <RefreshCw className="w-3.5 h-3.5 mr-1.5" />다시 시도
               </Button>
             </div>
           ) : news ? (
             <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                {newsAnalyzedAt ? (
+                  <span className="text-xs text-muted-foreground">분석: {timeAgo(newsAnalyzedAt)}</span>
+                ) : <span />}
+                <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-muted-foreground" onClick={() => loadNews(true)} disabled={newsLoading}>
+                  <RefreshCw className="w-3 h-3" />새로고침
+                </Button>
+              </div>
               {news.sources.length > 0 && (
                 <div className="flex gap-1 flex-wrap">
                   {news.sources.map(s => (
@@ -541,15 +532,12 @@ export default function StockDetailPage() {
               {news.sections.map((section, i) => (
                 <NewsSectionCard key={i} section={section} />
               ))}
-              <Button size="sm" variant="outline" className="rounded-xl" onClick={() => { setNews(null); setNewsError(null); }}>
-                <RefreshCw className="w-3.5 h-3.5 mr-1.5" />다시 분석
-              </Button>
             </div>
           ) : (
             <div className="flex flex-col items-center py-12 text-muted-foreground gap-3">
               <Newspaper className="w-10 h-10 opacity-30" />
               <p>AI가 최신 뉴스를 분석합니다</p>
-              <Button onClick={loadNews} size="sm" className="rounded-xl">
+              <Button onClick={() => loadNews(true)} size="sm" className="rounded-xl">
                 <Newspaper className="w-3.5 h-3.5 mr-1.5" />뉴스 분석 시작
               </Button>
             </div>
