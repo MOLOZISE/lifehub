@@ -7,7 +7,7 @@ import { useTheme } from "@/components/providers/ThemeProvider";
 
 const titles: Record<string, string> = {
   "/": "대시보드",
-  "/study/subjects": "과목 관리",
+  "/study/subjects": "학습 관리",
   "/study/daily": "오늘의 플래너",
   "/portfolio": "포트폴리오",
   "/portfolio/chart": "차트 분석",

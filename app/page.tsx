@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import {
-  BookOpen, TrendingUp, CalendarDays, ArrowRight, Flame,
+  BookOpen, TrendingUp, CalendarDays, ArrowRight, Flame, CalendarClock,
   AlertCircle, MessageSquare, Utensils, Heart, Eye, Star, Target, Pencil, Check,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -153,6 +153,7 @@ export default function DashboardPage() {
   const [recentPosts, setRecentPosts] = useState<CommunityPost[]>([]);
   const [topRestaurants, setTopRestaurants] = useState<RestaurantItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dayChangePct, setDayChangePct] = useState<Record<string, number>>({});
   const [weeklyGoal, setWeeklyGoal] = useState(DEFAULT_WEEKLY_GOAL);
   const [editingGoal, setEditingGoal] = useState(false);
   const [goalInput, setGoalInput] = useState("");
@@ -181,7 +182,26 @@ export default function DashboardPage() {
       const [sessRes, subRes, holdRes, examRes, postsRes, restRes] = results;
       if (sessRes.status === "fulfilled" && sessRes.value?.sessions) setSessions(sessRes.value.sessions);
       if (subRes.status === "fulfilled" && Array.isArray(subRes.value)) setSubjects(subRes.value);
-      if (holdRes.status === "fulfilled" && Array.isArray(holdRes.value)) setHoldings(holdRes.value);
+      if (holdRes.status === "fulfilled" && Array.isArray(holdRes.value)) {
+        const h = holdRes.value as Holding[];
+        setHoldings(h);
+        // 일일 수익률 fetch
+        if (h.length > 0) {
+          const tickers = h.map(x => x.market === "KR" ? `${x.ticker}.KS` : x.ticker).join(",");
+          fetch(`/api/stock/price?tickers=${encodeURIComponent(tickers)}`)
+            .then(r => r.ok ? r.json() : null)
+            .then(data => {
+              if (data?.prices) {
+                const pctMap: Record<string, number> = {};
+                for (const holding of h) {
+                  const key = holding.market === "KR" ? `${holding.ticker}.KS` : holding.ticker;
+                  if (data.prices[key]?.changePercent !== undefined) pctMap[holding.ticker] = data.prices[key].changePercent;
+                }
+                setDayChangePct(pctMap);
+              }
+            }).catch(() => {});
+        }
+      }
       if (examRes.status === "fulfilled" && Array.isArray(examRes.value)) {
         const upcoming = examRes.value.filter((e: Exam) => e.status !== "completed" && e.status !== "passed" && e.examDate >= today);
         setExams(upcoming);
@@ -235,7 +255,23 @@ export default function DashboardPage() {
   const totalCost = holdings.reduce((s, h) => s + costUSD(h), 0);
   const totalProfitPct = totalCost > 0 ? ((totalUSD - totalCost) / totalCost) * 100 : 0;
 
-  const nearestExam = [...exams].sort((a, b) => a.examDate.localeCompare(b.examDate))[0];
+  const sortedExams = [...exams].sort((a, b) => a.examDate.localeCompare(b.examDate));
+  const nearestExam = sortedExams[0];
+
+  // 포트폴리오 일일 수익률 (가중평균)
+  const totalDayChangePct = (() => {
+    if (holdings.length === 0 || Object.keys(dayChangePct).length === 0) return null;
+    let weightedSum = 0, totalW = 0;
+    for (const h of holdings) {
+      const pct = dayChangePct[h.ticker];
+      if (pct !== undefined) {
+        const w = toUSD(h);
+        weightedSum += pct * w;
+        totalW += w;
+      }
+    }
+    return totalW > 0 ? weightedSum / totalW : null;
+  })();
 
   return (
     <div className="max-w-5xl mx-auto space-y-8">
@@ -263,6 +299,7 @@ export default function DashboardPage() {
 
       {/* Quick stats — 4열 컴팩트 */}
       <div className="grid grid-cols-4 gap-2">
+        {/* 오늘 학습 + 연속 학습 */}
         <Card className="overflow-hidden">
           <CardContent className="p-3">
             <div className="flex items-center gap-1.5 mb-1">
@@ -273,30 +310,50 @@ export default function DashboardPage() {
               {todayMinutes}
               <span className="text-xs font-normal text-muted-foreground ml-0.5">분</span>
             </p>
+            {streak > 0 && (
+              <p className="text-[10px] text-orange-500 mt-1 flex items-center gap-0.5">
+                <Flame className="w-2.5 h-2.5" />{streak}일 연속
+              </p>
+            )}
           </CardContent>
         </Card>
-        <Card className="overflow-hidden">
-          <CardContent className="p-3">
-            <div className="flex items-center gap-1.5 mb-1">
-              <Flame className="w-3.5 h-3.5 text-orange-500 shrink-0" />
-              <span className="text-[11px] text-muted-foreground truncate">연속 학습</span>
-            </div>
-            <p className="text-xl font-bold leading-none">
-              {streak}
-              <span className="text-xs font-normal text-muted-foreground ml-0.5">일</span>
-              {streak >= 3 && <span className="text-sm ml-0.5">🔥</span>}
-            </p>
-          </CardContent>
-        </Card>
+        {/* 이번 주 */}
         <Card className="overflow-hidden">
           <CardContent className="p-3">
             <div className="flex items-center gap-1.5 mb-1">
               <BookOpen className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-              <span className="text-[11px] text-muted-foreground truncate">준비 시험</span>
+              <span className="text-[11px] text-muted-foreground truncate">이번 주</span>
             </div>
-            <p className="text-xl font-bold leading-none">{exams.length}</p>
+            <p className="text-xl font-bold leading-none">
+              {weeklyMinutes >= 60 ? Math.floor(weeklyMinutes / 60) : weeklyMinutes}
+              <span className="text-xs font-normal text-muted-foreground ml-0.5">{weeklyMinutes >= 60 ? "h" : "m"}</span>
+            </p>
+            <p className="text-[10px] text-muted-foreground mt-1">{weeklyGoalPct}% 달성</p>
           </CardContent>
         </Card>
+        {/* 시험 D-Day */}
+        <Card className="overflow-hidden">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-1.5 mb-1">
+              <CalendarClock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              <span className="text-[11px] text-muted-foreground truncate">D-Day</span>
+            </div>
+            {nearestExam ? (
+              <>
+                <p className={`text-xl font-bold leading-none ${daysUntil(nearestExam.examDate) <= 7 ? "text-red-500" : "text-amber-600"}`}>
+                  D-{Math.max(0, daysUntil(nearestExam.examDate))}
+                </p>
+                <p className="text-[10px] text-muted-foreground mt-1 truncate">{nearestExam.name}</p>
+                {sortedExams[1] && (
+                  <p className="text-[10px] text-muted-foreground truncate">외 {sortedExams.length - 1}개</p>
+                )}
+              </>
+            ) : (
+              <p className="text-xl font-bold leading-none text-muted-foreground">-</p>
+            )}
+          </CardContent>
+        </Card>
+        {/* 포트폴리오 */}
         <Card className="overflow-hidden">
           <CardContent className="p-3">
             <div className="flex items-center gap-1.5 mb-1">
@@ -306,6 +363,11 @@ export default function DashboardPage() {
             <p className={`text-xl font-bold leading-none ${holdings.length > 0 ? getProfitColor(totalProfitPct) : "text-muted-foreground"}`}>
               {holdings.length > 0 ? `${totalProfitPct >= 0 ? "+" : ""}${totalProfitPct.toFixed(1)}%` : "-"}
             </p>
+            {totalDayChangePct !== null && (
+              <p className={`text-[10px] mt-1 ${getProfitColor(totalDayChangePct)}`}>
+                일일 {totalDayChangePct >= 0 ? "+" : ""}{totalDayChangePct.toFixed(2)}%
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -467,6 +529,27 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-2">
+            {/* 오늘/이번주 요약 + 시험 */}
+            {!loading && (
+              <div className="flex gap-2 mb-1">
+                <div className="flex-1 rounded-lg bg-muted/60 px-3 py-2 text-center">
+                  <p className="text-[10px] text-muted-foreground">오늘</p>
+                  <p className="text-sm font-bold">{todayMinutes}분</p>
+                </div>
+                <div className="flex-1 rounded-lg bg-muted/60 px-3 py-2 text-center">
+                  <p className="text-[10px] text-muted-foreground">이번 주</p>
+                  <p className="text-sm font-bold">{weeklyMinutes >= 60 ? `${Math.floor(weeklyMinutes/60)}h` : `${weeklyMinutes}m`}</p>
+                </div>
+                {nearestExam && (
+                  <div className={`flex-1 rounded-lg px-3 py-2 text-center ${daysUntil(nearestExam.examDate) <= 7 ? "bg-red-50 dark:bg-red-950/30" : "bg-amber-50 dark:bg-amber-950/30"}`}>
+                    <p className="text-[10px] text-muted-foreground truncate">{nearestExam.name}</p>
+                    <p className={`text-sm font-bold ${daysUntil(nearestExam.examDate) <= 7 ? "text-red-500" : "text-amber-600"}`}>
+                      D-{Math.max(0, daysUntil(nearestExam.examDate))}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
             {loading ? (
               <p className="text-sm text-muted-foreground text-center py-4">로딩 중...</p>
             ) : effectiveSubjects.length === 0 ? (
@@ -476,7 +559,7 @@ export default function DashboardPage() {
                 <Link href="/study/subjects" className="text-xs text-primary mt-1 inline-block">과목 추가 →</Link>
               </div>
             ) : (
-              effectiveSubjects.slice(0, 5).map(s => {
+              effectiveSubjects.slice(0, 4).map(s => {
                 const wMin = subjectWeekMinutes[s.id] ?? 0;
                 const maxMin = Math.max(...effectiveSubjects.map(x => subjectWeekMinutes[x.id] ?? 0), 1);
                 const pct = Math.round((wMin / maxMin) * 100);
@@ -555,11 +638,17 @@ export default function DashboardPage() {
                     <p className={`font-bold text-sm ${getProfitColor(totalProfitPct)}`}>
                       {totalProfitPct >= 0 ? "+" : ""}{totalProfitPct.toFixed(2)}%
                     </p>
+                    {totalDayChangePct !== null && (
+                      <p className={`text-[11px] mt-0.5 ${getProfitColor(totalDayChangePct)}`}>
+                        일일 {totalDayChangePct >= 0 ? "+" : ""}{totalDayChangePct.toFixed(2)}%
+                      </p>
+                    )}
                   </div>
                 </div>
 
                 {holdings.slice(0, 3).map(h => {
                   const rate = h.avgPrice > 0 ? ((h.currentPrice - h.avgPrice) / h.avgPrice) * 100 : 0;
+                  const dayPct = dayChangePct[h.ticker];
                   return (
                     <Link key={h.id} href={`/portfolio/stock/${encodeURIComponent(h.ticker)}?market=${h.market}`} className="block">
                       <div className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-accent transition-colors border-b last:border-0">
@@ -567,9 +656,16 @@ export default function DashboardPage() {
                           <span className="text-sm font-medium">{h.name}</span>
                           <span className="text-xs text-muted-foreground ml-1.5">{h.ticker}</span>
                         </div>
-                        <span className={`text-sm font-medium ${getProfitColor(rate)}`}>
-                          {rate >= 0 ? "+" : ""}{rate.toFixed(2)}%
-                        </span>
+                        <div className="text-right">
+                          <p className={`text-sm font-medium ${getProfitColor(rate)}`}>
+                            {rate >= 0 ? "+" : ""}{rate.toFixed(2)}%
+                          </p>
+                          {dayPct !== undefined && (
+                            <p className={`text-[11px] ${getProfitColor(dayPct)}`}>
+                              일일 {dayPct >= 0 ? "+" : ""}{dayPct.toFixed(2)}%
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </Link>
                   );

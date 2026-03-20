@@ -68,17 +68,15 @@ export function SubjectCard({ subject, totalMinutes = 0, sessionCount = 0, onEdi
           <span className="text-muted-foreground">{sessionCount}회 공부</span>
         </div>
 
-        {/* 시험일 / D-Day */}
-        {subject.examDate && (
+        {/* 시험일 / D-Day — 지난 시험일은 표시 안 함 */}
+        {subject.examDate && dDay !== null && dDay >= 0 && (
           <div className="flex items-center gap-2 mt-2">
             <Badge variant="secondary" className="text-xs flex items-center gap-1">
               <CalendarClock className="w-3 h-3" />{formatDate(subject.examDate)}
             </Badge>
-            {dDay !== null && (
-              <Badge variant={dDay <= 7 ? "destructive" : dDay <= 30 ? "secondary" : "outline"} className="text-xs">
-                {dDay > 0 ? `D-${dDay}` : dDay === 0 ? "D-Day" : "종료"}
-              </Badge>
-            )}
+            <Badge variant={dDay <= 7 ? "destructive" : dDay <= 30 ? "secondary" : "outline"} className="text-xs">
+              {dDay > 0 ? `D-${dDay}` : "D-Day"}
+            </Badge>
           </div>
         )}
       </CardContent>

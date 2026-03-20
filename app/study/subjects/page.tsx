@@ -39,7 +39,7 @@ export default function SubjectsPage() {
   const [subjects, setSubjects] = useState<ApiSubject[]>([]);
   const [allSessions, setAllSessions] = useState<SessionData[]>([]);
   const [sessionMap, setSessionMap] = useState<Record<string, { minutes: number; count: number }>>({});
-  const [upcomingExam, setUpcomingExam] = useState<ExamData | null>(null);
+  const [upcomingExams, setUpcomingExams] = useState<ExamData[]>([]);
   const [loading, setLoading] = useState(true);
 
   // 과목 추가/수정 다이얼로그
@@ -88,7 +88,7 @@ export default function SubjectsPage() {
       const future = exams
         .filter(e => new Date(e.examDate) >= new Date())
         .sort((a, b) => new Date(a.examDate).getTime() - new Date(b.examDate).getTime());
-      setUpcomingExam(future[0] ?? null);
+      setUpcomingExams(future.slice(0, 3));
     }
     setLoading(false);
   }
@@ -114,6 +114,7 @@ export default function SubjectsPage() {
     return count;
   })();
 
+  const upcomingExam = upcomingExams[0] ?? null;
   const upcomingDDay = upcomingExam
     ? Math.ceil((new Date(upcomingExam.examDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
     : null;
@@ -202,7 +203,8 @@ export default function SubjectsPage() {
             </Button>
           </Link>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-4 gap-3">
+          {/* 오늘 공부 + 연속 학습 */}
           <Card>
             <CardContent className="p-4 text-center">
               <Clock className="w-5 h-5 mx-auto mb-1 text-blue-500" />
@@ -211,8 +213,12 @@ export default function SubjectsPage() {
                 {todayMinutes % 60 > 0 ? `${todayMinutes % 60}m` : todayMinutes === 0 ? "0m" : ""}
               </p>
               <p className="text-xs text-muted-foreground">오늘 공부</p>
+              {streak > 0 && (
+                <p className="text-[11px] text-orange-500 mt-1">🔥 {streak}일 연속</p>
+              )}
             </CardContent>
           </Card>
+          {/* 이번 주 */}
           <Card>
             <CardContent className="p-4 text-center">
               <Clock className="w-5 h-5 mx-auto mb-1 text-green-500" />
@@ -222,6 +228,7 @@ export default function SubjectsPage() {
               <p className="text-xs text-muted-foreground">이번 주</p>
             </CardContent>
           </Card>
+          {/* 총 공부 횟수 */}
           <Card>
             <CardContent className="p-4 text-center">
               <Trophy className="w-5 h-5 mx-auto mb-1 text-amber-500" />
@@ -229,21 +236,29 @@ export default function SubjectsPage() {
               <p className="text-xs text-muted-foreground">총 공부 횟수</p>
             </CardContent>
           </Card>
+          {/* 시험 D-Day + 목록 */}
           <Card>
-            <CardContent className="p-4 text-center">
+            <CardContent className="p-4">
               <CalendarClock className="w-5 h-5 mx-auto mb-1 text-orange-500" />
-              {upcomingExam ? (
-                <>
-                  <p className={`text-xl font-bold ${upcomingDDay! <= 7 ? "text-red-500" : upcomingDDay! <= 30 ? "text-orange-500" : ""}`}>
-                    {upcomingDDay! > 0 ? `D-${upcomingDDay}` : "D-Day"}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground truncate">{upcomingExam.name}</p>
-                </>
-              ) : (
-                <>
+              {upcomingExams.length === 0 ? (
+                <div className="text-center">
                   <p className="text-xl font-bold text-muted-foreground">-</p>
                   <p className="text-xs text-muted-foreground">예정 시험 없음</p>
-                </>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  {upcomingExams.map((exam, i) => {
+                    const dDay = Math.ceil((new Date(exam.examDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                    return (
+                      <div key={exam.id} className="flex items-center justify-between">
+                        <span className={`text-xs truncate mr-1 ${i === 0 ? "font-medium" : "text-muted-foreground"}`}>{exam.name}</span>
+                        <span className={`text-xs font-bold shrink-0 ${dDay <= 7 ? "text-red-500" : dDay <= 30 ? "text-orange-500" : "text-muted-foreground"}`}>
+                          D-{Math.max(0, dDay)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </CardContent>
           </Card>
