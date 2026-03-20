@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { TradingViewChart } from "@/components/chart/TradingViewChart";
 import {
   Search, Loader2, RefreshCw, Star, StarOff,
@@ -18,7 +19,18 @@ import type { OHLCVBar } from "@/lib/types";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-type Tab = "시황" | "차트" | "AI분석" | "관심 종목";
+type Tab = "시황" | "차트" | "AI분석" | "관심 종목" | "랭킹";
+type RankSort = "volume" | "change_up" | "change_down";
+
+interface RankItem {
+  ticker: string;
+  name: string;
+  price: number;
+  change: number;
+  changePercent: number;
+  volume: number;
+  currency: string;
+}
 type Period = "1W" | "1M" | "3M" | "1Y";
 
 interface StockPrice {
@@ -1049,6 +1061,7 @@ const DEFAULT_POPULAR_KR_TICKERS = ALL_POPULAR_KR.slice(0, 9).map(s => s.ticker)
 const DEFAULT_POPULAR_US_TICKERS = ALL_POPULAR_US.slice(0, 9).map(s => s.ticker);
 
 export default function StockPage() {
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>("시황");
 
   // Popular tickers customization
@@ -1109,6 +1122,12 @@ export default function StockPage() {
   // Watchlist tab state
   const [watchlistPrices, setWatchlistPrices] = useState<Record<string, StockPrice>>({});
   const [watchlistPriceLoading, setWatchlistPriceLoading] = useState(false);
+
+  // ── 랭킹 state ───────────────────────────────────────────────────────────────
+  const [rankItems, setRankItems] = useState<RankItem[]>([]);
+  const [rankLoading, setRankLoading] = useState(false);
+  const [rankMarket, setRankMarket] = useState<"KR" | "US">("US");
+  const [rankSort, setRankSort] = useState<RankSort>("volume");
   const [watchlistSearchQ, setWatchlistSearchQ] = useState("");
   const [watchlistSuggestions, setWatchlistSuggestions] = useState<{ ticker: string; name: string; market: "KR" | "US" }[]>([]);
   const [showWatchlistSugg, setShowWatchlistSugg] = useState(false);
@@ -1414,6 +1433,23 @@ export default function StockPage() {
     }
   }, [tab, watchlistItems.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  async function loadRanking(market: "KR" | "US" = rankMarket, sort: RankSort = rankSort) {
+    setRankLoading(true);
+    try {
+      const res = await fetch(`/api/stock/ranking?market=${market}&sort=${sort}`);
+      if (res.ok) {
+        const data = await res.json() as { items: RankItem[] };
+        setRankItems(data.items ?? []);
+      }
+    } finally {
+      setRankLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (tab === "랭킹") loadRanking(rankMarket, rankSort);
+  }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (!watchlistSearchQ.trim()) { setWatchlistSuggestions([]); return; }
     const t = setTimeout(() => {
@@ -1425,7 +1461,7 @@ export default function StockPage() {
 
   // ── Render ─────────────────────────────────────────────────────────────────────
 
-  const TABS: Tab[] = ["시황", "차트", "AI분석", "관심 종목"];
+  const TABS: Tab[] = ["시황", "랭킹", "차트", "AI분석", "관심 종목"];
 
   return (
     <div className="max-w-5xl mx-auto space-y-4">
@@ -1671,6 +1707,122 @@ export default function StockPage() {
           loadFromAiCache={loadFromAiCache}
           holdings={holdings}
         />
+      )}
+
+      {/* ── 랭킹 Tab ──────────────────────────────────────────────────────────────── */}
+      {tab === "랭킹" && (
+        <div className="space-y-3">
+          {/* 국내 / 해외 토글 */}
+          <div className="flex gap-1 bg-muted/50 rounded-xl p-1 w-fit">
+            {(["KR", "US"] as const).map(m => (
+              <button
+                key={m}
+                onClick={() => { setRankMarket(m); loadRanking(m, rankSort); }}
+                className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                  rankMarket === m ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {m === "KR" ? "🇰🇷 국내" : "🇺🇸 해외"}
+              </button>
+            ))}
+          </div>
+
+          {/* 정렬 필터 칩 */}
+          <div className="flex gap-1.5 flex-wrap">
+            {([
+              { key: "volume",      label: "거래량 순" },
+              { key: "change_up",   label: "급상승" },
+              { key: "change_down", label: "급하락" },
+            ] as { key: RankSort; label: string }[]).map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => { setRankSort(key); loadRanking(rankMarket, key); }}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-all border ${
+                  rankSort === key
+                    ? key === "change_up"
+                      ? "bg-red-500 text-white border-red-500"
+                      : key === "change_down"
+                      ? "bg-blue-500 text-white border-blue-500"
+                      : "bg-foreground text-background border-foreground"
+                    : "border-border text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+            <button
+              onClick={() => loadRanking(rankMarket, rankSort)}
+              disabled={rankLoading}
+              className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+            >
+              <RefreshCw className={`w-3 h-3 ${rankLoading ? "animate-spin" : ""}`} />
+              새로고침
+            </button>
+          </div>
+
+          {/* 순위 리스트 */}
+          {rankLoading ? (
+            <div className="flex items-center justify-center py-16 text-muted-foreground gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span className="text-sm">조회 중...</span>
+            </div>
+          ) : rankItems.length === 0 ? (
+            <div className="flex items-center justify-center py-16 text-muted-foreground text-sm">
+              데이터를 불러오지 못했습니다
+            </div>
+          ) : (
+            <div className="divide-y divide-border/50">
+              {/* 헤더 */}
+              <div className="grid grid-cols-[2rem_1fr_auto] gap-2 px-2 py-1.5">
+                <span className="text-[10px] text-muted-foreground text-center">순위</span>
+                <span className="text-[10px] text-muted-foreground">종목</span>
+                <span className="text-[10px] text-muted-foreground text-right min-w-[120px]">현재가 / 등락</span>
+              </div>
+              {rankItems.map((item, idx) => {
+                const up = item.changePercent >= 0;
+                const fmtPrice = item.currency === "KRW"
+                  ? "₩" + Math.round(item.price).toLocaleString("ko-KR")
+                  : "$" + item.price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                const fmtVol = item.volume >= 1_000_000
+                  ? (item.volume / 1_000_000).toFixed(1) + "M"
+                  : item.volume >= 1_000
+                  ? (item.volume / 1_000).toFixed(0) + "K"
+                  : String(item.volume);
+                return (
+                  <button
+                    key={item.ticker}
+                    className="w-full grid grid-cols-[2rem_1fr_auto] gap-2 px-2 py-3 hover:bg-muted/40 transition-colors text-left"
+                    onClick={() => {
+                      const market = rankMarket;
+                      router.push(`/portfolio/stock/${item.ticker}?market=${market}`);
+                    }}
+                  >
+                    {/* 순위 */}
+                    <span className={`text-sm font-bold tabular-nums text-center self-center ${
+                      idx === 0 ? "text-amber-500" : idx === 1 ? "text-gray-400" : idx === 2 ? "text-amber-700" : "text-muted-foreground"
+                    }`}>
+                      {idx + 1}
+                    </span>
+                    {/* 종목명 + 거래량 */}
+                    <div className="min-w-0 self-center">
+                      <p className="text-sm font-semibold truncate leading-tight">{item.name}</p>
+                      <p className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                        {item.ticker} <span className="text-muted-foreground/60">· {fmtVol}</span>
+                      </p>
+                    </div>
+                    {/* 가격 + 등락률 */}
+                    <div className="text-right self-center min-w-[120px]">
+                      <p className="text-sm font-semibold tabular-nums">{fmtPrice}</p>
+                      <p className={`text-xs font-medium tabular-nums ${up ? "text-red-500" : "text-blue-500"}`}>
+                        {up ? "▲" : "▼"} {Math.abs(item.changePercent).toFixed(2)}%
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       )}
 
       {/* ── 관심 종목 Tab ─────────────────────────────────────────────────────────── */}
