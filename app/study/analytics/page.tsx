@@ -155,11 +155,11 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Heatmap */}
-      <Card>
+      <Card className="overflow-visible">
         <CardHeader className="pb-2">
           <CardTitle className="text-base">📅 학습 잔디</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="overflow-x-auto">
           <StudyHeatmap data={heatmapData} weeks={17} />
         </CardContent>
       </Card>

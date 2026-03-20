@@ -759,19 +759,18 @@ export default function DashboardPage() {
       {/* Quick links */}
       <div>
         <h2 className="text-sm font-semibold text-muted-foreground mb-3">빠른 이동</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-4 gap-2">
           {[
-            { href: "/study/subjects", icon: "📚", label: "학습 기록", desc: "과목별 공부 기록" },
-            { href: "/study/analytics", icon: "📊", label: "학습 분석", desc: "통계 & 추천" },
-            { href: "/portfolio", icon: "📈", label: "포트폴리오", desc: "보유 종목 관리" },
-            { href: "/restaurant", icon: "🍜", label: "맛집 지도", desc: "내 맛집 모아보기" },
+            { href: "/study/subjects", icon: "📚", label: "학습 기록" },
+            { href: "/study/analytics", icon: "📊", label: "학습 분석" },
+            { href: "/portfolio", icon: "📈", label: "포트폴리오" },
+            { href: "/restaurant", icon: "🍜", label: "맛집 지도" },
           ].map(item => (
             <Link key={item.href} href={item.href}>
               <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
-                <CardContent className="p-4">
-                  <span className="text-2xl">{item.icon}</span>
-                  <p className="font-medium text-sm mt-2">{item.label}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{item.desc}</p>
+                <CardContent className="p-3 text-center">
+                  <span className="text-xl">{item.icon}</span>
+                  <p className="font-medium text-xs mt-1.5 leading-tight">{item.label}</p>
                 </CardContent>
               </Card>
             </Link>
