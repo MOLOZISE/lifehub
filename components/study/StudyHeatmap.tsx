@@ -30,21 +30,26 @@ const INTENSITY_CLASSES = [
   "bg-green-600 dark:bg-green-500",
 ];
 
-const DAY_LABELS = ["일", "", "화", "", "목", "", "토"];
+const DAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 
 const CELL = 11;  // px
 const GAP  = 3;   // px
 const MONTH_ROW_H = 14; // px
 
-export function StudyHeatmap({ data, weeks = 17 }: StudyHeatmapProps) {
-  const { grid, months } = useMemo(() => {
+export function StudyHeatmap({ data }: StudyHeatmapProps) {
+  const { grid, months, weeks } = useMemo(() => {
     const dataMap = new Map(data.map((d) => [d.date, d.minutes]));
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    // 3개월 전 1일부터 시작 → 월 레이블은 12월~3월 (4개월)
     const startDate = new Date(today);
-    startDate.setDate(today.getDate() - weeks * 7 + 1);
-    startDate.setDate(startDate.getDate() - startDate.getDay());
+    startDate.setMonth(today.getMonth() - 3);
+    startDate.setDate(1);
+    startDate.setDate(startDate.getDate() - startDate.getDay()); // 일요일로 정렬
+
+    const diffDays = Math.ceil((today.getTime() - startDate.getTime()) / 86400000);
+    const weeks = Math.ceil(diffDays / 7) + 1;
 
     const columns: { date: string; minutes: number; isActive: boolean }[][] = [];
     const monthLabels: { label: string; colIndex: number }[] = [];
@@ -70,8 +75,8 @@ export function StudyHeatmap({ data, weeks = 17 }: StudyHeatmapProps) {
       columns.push(week);
     }
 
-    return { grid: columns, months: monthLabels };
-  }, [data, weeks]);
+    return { grid: columns, months: monthLabels, weeks };
+  }, [data]);
 
   const totalDays    = data.filter((d) => d.minutes > 0).length;
   const totalMinutes = data.reduce((sum, d) => sum + d.minutes, 0);
@@ -97,7 +102,7 @@ export function StudyHeatmap({ data, weeks = 17 }: StudyHeatmapProps) {
   // column-first 순서로 셀 펼치기 (week0-day0..6, week1-day0..6, ...)
   const allCells = grid.flatMap((col) => col);
 
-  const dayLabelWidth = 18; // px
+  const dayLabelWidth = 20; // px
 
   return (
     <div className="space-y-3">
