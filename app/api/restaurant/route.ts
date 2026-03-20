@@ -65,38 +65,50 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "이름, 카테고리, 주소는 필수입니다." }, { status: 400 });
   }
 
-  const restaurant = await prisma.restaurant.create({
-    data: {
-      userId: session.user.id,
-      name,
-      category,
-      address,
-      roadAddress: roadAddress || null,
-      latitude: latitude ? Number(latitude) : null,
-      longitude: longitude ? Number(longitude) : null,
-      phone: phone || null,
-      url: url || null,
-      description: description || null,
-      menus: menus ?? [],
-    },
-  });
-
-  // 선택한 리스트에 추가 (없으면 기본 내 맛집 리스트 찾아서 추가)
-  let targetListId = listId;
-  if (!targetListId) {
-    const defaultList = await prisma.restaurantList.findFirst({
-      where: { userId: session.user.id, isDefault: true },
+  let restaurant;
+  try {
+    restaurant = await prisma.restaurant.create({
+      data: {
+        userId: session.user.id,
+        name,
+        category,
+        address,
+        roadAddress: roadAddress || null,
+        latitude: latitude ? Number(latitude) : null,
+        longitude: longitude ? Number(longitude) : null,
+        phone: phone || null,
+        url: url || null,
+        description: description || null,
+        menus: menus ?? [],
+      },
     });
-    targetListId = defaultList?.id;
+  } catch (e) {
+    console.error("[restaurant POST] create failed:", e);
+    return NextResponse.json({ error: "맛집 등록에 실패했습니다." }, { status: 500 });
   }
 
-  if (targetListId) {
-    const list = await prisma.restaurantList.findUnique({ where: { id: targetListId } });
-    if (list && list.userId === session.user.id) {
-      await prisma.restaurantListItem.create({
-        data: { listId: targetListId, restaurantId: restaurant.id, userId: session.user.id },
+  // 선택한 리스트에 추가 (없으면 기본 내 맛집 리스트 찾아서 추가) — 실패해도 등록 자체는 성공
+  try {
+    let targetListId = listId;
+    if (!targetListId) {
+      const defaultList = await prisma.restaurantList.findFirst({
+        where: { userId: session.user.id, isDefault: true },
       });
+      targetListId = defaultList?.id;
     }
+    if (targetListId) {
+      const list = await prisma.restaurantList.findUnique({ where: { id: targetListId } });
+      if (list && list.userId === session.user.id) {
+        await prisma.restaurantListItem.upsert({
+          where: { listId_restaurantId: { listId: targetListId, restaurantId: restaurant.id } },
+          create: { listId: targetListId, restaurantId: restaurant.id, userId: session.user.id },
+          update: {},
+        });
+      }
+    }
+  } catch (e) {
+    console.error("[restaurant POST] listItem upsert failed:", e);
+    // 리스트 추가 실패는 무시 — 맛집은 등록됨
   }
 
   return NextResponse.json(restaurant, { status: 201 });

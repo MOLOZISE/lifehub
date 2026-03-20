@@ -104,7 +104,7 @@ export function MobileNav() {
 
       {/* 하위 메뉴 Sheet */}
       <Sheet open={!!openSheet} onOpenChange={(open) => !open && setOpenSheet(null)}>
-        <SheetContent side="bottom" className="md:hidden rounded-t-2xl pb-safe">
+        <SheetContent side="bottom" className="md:hidden rounded-t-2xl pb-safe" showCloseButton={false}>
           <SheetHeader className="pb-2">
             <SheetTitle className="text-base flex items-center gap-2">
               {activeSheetTab && <activeSheetTab.icon className="w-4 h-4" />}

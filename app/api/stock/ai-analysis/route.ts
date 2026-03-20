@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import Groq from "groq-sdk";
 import { tavily } from "@tavily/core";
 
-const ANALYSIS_TTL_MS = 12 * 60 * 60 * 1000; // 12시간
+const ANALYSIS_TTL_MS = 72 * 60 * 60 * 1000; // 72시간
 
 const SYSTEM_PROMPT = `당신은 CFA 자격증을 보유한 주식 전문 애널리스트입니다.
 

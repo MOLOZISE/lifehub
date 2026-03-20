@@ -17,9 +17,9 @@ import type { OHLCVBar } from "@/lib/types";
 // ── Types ───────────────────────────────────────────────────────────────────────
 
 type DrawTool = "none" | "hline" | "trendline";
+type Indicator = "BB" | "RSI" | "MACD";
 
 interface TrendPoint { time: Time; price: number; }
-
 interface HLineDef  { id: string; price: number; ref: IPriceLine; }
 interface TrendLineDef {
   id: string;
@@ -72,7 +72,6 @@ class TrendLinePrimitive implements ISeriesPrimitive<Time> {
               context.lineWidth = 1.5;
               context.stroke();
 
-              // Endpoint dots
               for (const [px, py] of [[x1, y1], [x2, y2]] as [number, number][]) {
                 context.beginPath();
                 context.arc(px, py, 3, 0, Math.PI * 2);
@@ -86,6 +85,74 @@ class TrendLinePrimitive implements ISeriesPrimitive<Time> {
       },
     }];
   }
+}
+
+// ── Indicator math ──────────────────────────────────────────────────────────────
+
+function calcSMA(vals: number[], period: number): (number | null)[] {
+  return vals.map((_, i) => {
+    if (i < period - 1) return null;
+    return vals.slice(i - period + 1, i + 1).reduce((a, b) => a + b, 0) / period;
+  });
+}
+
+function calcEMA(vals: number[], period: number): number[] {
+  const k = 2 / (period + 1);
+  const result: number[] = [];
+  let ema = vals.slice(0, period).reduce((a, b) => a + b, 0) / period;
+  for (let i = 0; i < vals.length; i++) {
+    if (i < period - 1) { result.push(vals[i]); continue; }
+    if (i === period - 1) { result.push(ema); continue; }
+    ema = vals[i] * k + ema * (1 - k);
+    result.push(ema);
+  }
+  return result;
+}
+
+function calcBB(closes: number[], period = 20, mult = 2) {
+  const mid = calcSMA(closes, period);
+  const upper: (number | null)[] = [];
+  const lower: (number | null)[] = [];
+  closes.forEach((_, i) => {
+    if (mid[i] == null) { upper.push(null); lower.push(null); return; }
+    const slice = closes.slice(i - period + 1, i + 1);
+    const mean = mid[i]!;
+    const std = Math.sqrt(slice.reduce((s, v) => s + (v - mean) ** 2, 0) / period);
+    upper.push(mean + mult * std);
+    lower.push(mean - mult * std);
+  });
+  return { upper, mid, lower };
+}
+
+function calcRSI(closes: number[], period = 14): (number | null)[] {
+  const result: (number | null)[] = new Array(closes.length).fill(null);
+  if (closes.length < period + 1) return result;
+  let avgGain = 0, avgLoss = 0;
+  for (let i = 1; i <= period; i++) {
+    const d = closes[i] - closes[i - 1];
+    if (d > 0) avgGain += d; else avgLoss += Math.abs(d);
+  }
+  avgGain /= period; avgLoss /= period;
+  result[period] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+  for (let i = period + 1; i < closes.length; i++) {
+    const d = closes[i] - closes[i - 1];
+    const gain = d > 0 ? d : 0;
+    const loss = d < 0 ? Math.abs(d) : 0;
+    avgGain = (avgGain * (period - 1) + gain) / period;
+    avgLoss = (avgLoss * (period - 1) + loss) / period;
+    result[i] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+  }
+  return result;
+}
+
+function calcMACD(closes: number[], fast = 12, slow = 26, signal = 9) {
+  const fastEMA = calcEMA(closes, fast);
+  const slowEMA = calcEMA(closes, slow);
+  const macd = fastEMA.map((v, i) => (i >= slow - 1 ? v - slowEMA[i] : null));
+  const macdFilled = macd.map(v => v ?? 0);
+  const signalLine = calcEMA(macdFilled, signal);
+  const histogram = macd.map((v, i) => (v != null && i >= slow - 1 ? v - signalLine[i] : null));
+  return { macd, signal: signalLine, histogram };
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
@@ -107,6 +174,26 @@ function isDark() {
   return document.documentElement.classList.contains("dark");
 }
 
+function makeSubChart(el: HTMLDivElement, height: number, dark: boolean) {
+  return createChart(el, {
+    width: el.clientWidth,
+    height,
+    layout: {
+      background: { color: "transparent" },
+      textColor: dark ? "#9ca3af" : "#6b7280",
+    },
+    grid: {
+      vertLines: { color: dark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)" },
+      horzLines: { color: dark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)" },
+    },
+    crosshair: { mode: CrosshairMode.Normal },
+    rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.1, bottom: 0.1 } },
+    timeScale: { borderVisible: false, rightOffset: 5, visible: false },
+    handleScale: true,
+    handleScroll: true,
+  });
+}
+
 // ── Props ────────────────────────────────────────────────────────────────────────
 
 interface TradingViewChartProps {
@@ -116,22 +203,28 @@ interface TradingViewChartProps {
   showMA?: boolean;
 }
 
+const SUB_HEIGHT = 100;
+
 // ── Component ────────────────────────────────────────────────────────────────────
 
 export function TradingViewChart({ bars, height = 340, isKRW = false, showMA = true }: TradingViewChartProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const chartRef     = useRef<IChartApi | null>(null);
-  const candleRef    = useRef<ISeriesApi<"Candlestick"> | null>(null);
-  const volumeRef    = useRef<ISeriesApi<"Histogram"> | null>(null);
-  const maRefs       = useRef<ISeriesApi<"Line">[]>([]);
+  const containerRef  = useRef<HTMLDivElement>(null);
+  const subRef        = useRef<HTMLDivElement>(null);
+  const chartRef      = useRef<IChartApi | null>(null);
+  const subChartRef   = useRef<IChartApi | null>(null);
+  const candleRef     = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const volumeRef     = useRef<ISeriesApi<"Histogram"> | null>(null);
+  const maRefs        = useRef<ISeriesApi<"Line">[]>([]);
+  const bbRefs        = useRef<ISeriesApi<"Line">[]>([]);
 
   const [drawTool, setDrawTool] = useState<DrawTool>("none");
   const [trendP1,  setTrendP1]  = useState<TrendPoint | null>(null);
   const [hLines,   setHLines]   = useState<HLineDef[]>([]);
   const [trendLines, setTrendLines] = useState<TrendLineDef[]>([]);
   const [maVisible, setMaVisible] = useState({ ma5: true, ma20: true, ma60: false });
+  const [activeInd, setActiveInd] = useState<Indicator | null>(null);
+  const [bbVisible, setBbVisible] = useState(false);
 
-  // Use refs to access current state inside stable event handler closures
   const drawToolRef = useRef<DrawTool>("none");
   const trendP1Ref  = useRef<TrendPoint | null>(null);
   const isKRWRef    = useRef(isKRW);
@@ -139,11 +232,10 @@ export function TradingViewChart({ bars, height = 340, isKRW = false, showMA = t
   useEffect(() => { trendP1Ref.current = trendP1; },  [trendP1]);
   useEffect(() => { isKRWRef.current = isKRW; }, [isKRW]);
 
-  // ── Chart initialisation (once) ─────────────────────────────────────────────
+  // ── Main chart init ─────────────────────────────────────────────────────────
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-
     const dark = isDark();
 
     const chart = createChart(el, {
@@ -158,30 +250,24 @@ export function TradingViewChart({ bars, height = 340, isKRW = false, showMA = t
         horzLines: { color: dark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)" },
       },
       crosshair: { mode: CrosshairMode.Normal },
-      rightPriceScale: {
-        borderVisible: false,
-        scaleMargins: { top: 0.08, bottom: 0.22 },
-      },
+      rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.08, bottom: 0.22 } },
       timeScale: { borderVisible: false, rightOffset: 5 },
       handleScale: true,
       handleScroll: true,
     });
 
-    // Candlestick
     const candle = chart.addSeries(CandlestickSeries, {
       upColor: "#ef4444", downColor: "#3b82f6",
       borderUpColor: "#ef4444", borderDownColor: "#3b82f6",
       wickUpColor: "#ef4444", wickDownColor: "#3b82f6",
     });
 
-    // Volume (shared pane, bottom band)
     const volume = chart.addSeries(HistogramSeries, {
       priceFormat: { type: "volume" },
       priceScaleId: "vol",
     });
     chart.priceScale("vol").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
 
-    // MA lines
     const maColors = ["#a855f7", "#f59e0b", "#10b981"];
     const mas = maColors.map(color =>
       chart.addSeries(LineSeries, {
@@ -192,20 +278,31 @@ export function TradingViewChart({ bars, height = 340, isKRW = false, showMA = t
       })
     );
 
+    // BB lines: upper, mid, lower
+    const bbColors = ["#60a5fa", "#93c5fd", "#60a5fa"];
+    const bbs = bbColors.map(color =>
+      chart.addSeries(LineSeries, {
+        color, lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        priceLineVisible: false,
+        lastValueVisible: false,
+        crosshairMarkerVisible: false,
+        visible: false,
+      })
+    );
+
     candleRef.current = candle;
     volumeRef.current = volume;
     maRefs.current    = mas;
+    bbRefs.current    = bbs;
     chartRef.current  = chart;
 
-    // ── Click → draw ──────────────────────────────────────────────────────────
     chart.subscribeClick(param => {
       if (!param.time || !param.point) return;
       const price = candle.coordinateToPrice(param.point.y);
       if (price === null) return;
-
       const tool = drawToolRef.current;
       const time  = param.time as Time;
-
       if (tool === "hline") {
         const label = isKRWRef.current
           ? Math.round(price).toLocaleString("ko-KR")
@@ -215,9 +312,7 @@ export function TradingViewChart({ bars, height = 340, isKRW = false, showMA = t
           lineStyle: LineStyle.Dashed,
           axisLabelVisible: true, title: label,
         });
-        const id = crypto.randomUUID();
-        setHLines(prev => [...prev, { id, price, ref: priceLine }]);
-
+        setHLines(prev => [...prev, { id: crypto.randomUUID(), price, ref: priceLine }]);
       } else if (tool === "trendline") {
         const p1 = trendP1Ref.current;
         if (!p1) {
@@ -225,15 +320,13 @@ export function TradingViewChart({ bars, height = 340, isKRW = false, showMA = t
         } else {
           const primitive = new TrendLinePrimitive(p1, { time, price }, "#f97316");
           candle.attachPrimitive(primitive);
-          const id = crypto.randomUUID();
-          setTrendLines(prev => [...prev, { id, p1, p2: { time, price }, primitive }]);
+          setTrendLines(prev => [...prev, { id: crypto.randomUUID(), p1, p2: { time, price }, primitive }]);
           setTrendP1(null);
           setDrawTool("none");
         }
       }
     });
 
-    // ── Resize ────────────────────────────────────────────────────────────────
     const ro = new ResizeObserver(entries => {
       for (const entry of entries) {
         chart.resize(entry.contentRect.width, height);
@@ -245,7 +338,7 @@ export function TradingViewChart({ bars, height = 340, isKRW = false, showMA = t
       ro.disconnect();
       chart.remove();
       chartRef.current = candleRef.current = volumeRef.current = null;
-      maRefs.current = [];
+      maRefs.current = []; bbRefs.current = [];
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -255,6 +348,7 @@ export function TradingViewChart({ bars, height = 340, isKRW = false, showMA = t
     const candle = candleRef.current;
     const volume = volumeRef.current;
     const mas    = maRefs.current;
+    const bbs    = bbRefs.current;
     if (!candle || !volume || bars.length === 0) return;
 
     candle.setData(bars.map(b => ({
@@ -268,18 +362,32 @@ export function TradingViewChart({ bars, height = 340, isKRW = false, showMA = t
       color: b.close >= b.open ? "rgba(239,68,68,0.35)" : "rgba(59,130,246,0.35)",
     })));
 
+    const closes = bars.map(b => b.close);
+    const times  = bars.map(b => parseTime(b.date));
+
+    // MA
     const maPeriods = [5, 20, 60];
     maPeriods.forEach((period, i) => {
       const values = calcMA(bars, period);
-      mas[i]?.setData(
-        bars.flatMap((b, j) => {
-          const v = values[j];
-          return v !== null ? [{ time: parseTime(b.date), value: v }] : [];
-        })
+      mas[i]?.setData(bars.flatMap((b, j) => {
+        const v = values[j];
+        return v !== null ? [{ time: parseTime(b.date), value: v }] : [];
+      }));
+    });
+
+    // BB
+    const { upper, mid, lower } = calcBB(closes);
+    [upper, mid, lower].forEach((vals, i) => {
+      bbs[i]?.setData(
+        vals.flatMap((v, j) => v != null ? [{ time: times[j], value: v }] : [])
       );
     });
 
     chartRef.current?.timeScale().fitContent();
+
+    // sub chart data update if visible
+    updateSubChart(bars);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bars]);
 
   // ── MA visibility ────────────────────────────────────────────────────────────
@@ -289,6 +397,80 @@ export function TradingViewChart({ bars, height = 340, isKRW = false, showMA = t
     m20?.applyOptions({ visible: maVisible.ma20 });
     m60?.applyOptions({ visible: maVisible.ma60 });
   }, [maVisible]);
+
+  // ── BB visibility ────────────────────────────────────────────────────────────
+  useEffect(() => {
+    bbRefs.current.forEach(s => s?.applyOptions({ visible: bbVisible }));
+  }, [bbVisible]);
+
+  // ── Sub chart (RSI / MACD) ──────────────────────────────────────────────────
+  useEffect(() => {
+    const el = subRef.current;
+    // Destroy old sub chart first
+    if (subChartRef.current) {
+      subChartRef.current.remove();
+      subChartRef.current = null;
+    }
+    if (!el || !activeInd) return;
+    const dark = isDark();
+    const sub = makeSubChart(el, SUB_HEIGHT, dark);
+    subChartRef.current = sub;
+
+    // Sync time scale with main chart
+    const main = chartRef.current;
+    if (main) {
+      main.timeScale().subscribeVisibleLogicalRangeChange(range => {
+        if (range) sub.timeScale().setVisibleLogicalRange(range);
+      });
+      sub.timeScale().subscribeVisibleLogicalRangeChange(range => {
+        if (range) main.timeScale().setVisibleLogicalRange(range);
+      });
+    }
+
+    updateSubChart(bars);
+
+    const ro = new ResizeObserver(entries => {
+      for (const entry of entries) sub.resize(entry.contentRect.width, SUB_HEIGHT);
+    });
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      sub.remove();
+      subChartRef.current = null;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeInd]);
+
+  function updateSubChart(b: OHLCVBar[]) {
+    const sub = subChartRef.current;
+    if (!sub || !activeInd || b.length === 0) return;
+    const closes = b.map(x => x.close);
+    const times  = b.map(x => parseTime(x.date));
+
+    if (activeInd === "RSI") {
+      const rsi = calcRSI(closes);
+      // 70 / 30 levels
+      const rsiSeries = sub.addSeries(LineSeries, { color: "#f59e0b", lineWidth: 1 as never, priceLineVisible: false, lastValueVisible: true, crosshairMarkerVisible: false });
+      rsiSeries.setData(rsi.flatMap((v, i) => v != null ? [{ time: times[i], value: v }] : []));
+      sub.priceScale("right").applyOptions({ scaleMargins: { top: 0.05, bottom: 0.05 } });
+      // overbought / oversold lines
+      const ob = rsiSeries.createPriceLine({ price: 70, color: "#ef4444", lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: false, title: "70" });
+      const os = rsiSeries.createPriceLine({ price: 30, color: "#3b82f6", lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: false, title: "30" });
+      void ob; void os;
+
+    } else if (activeInd === "MACD") {
+      const { macd, signal, histogram } = calcMACD(closes);
+      const slow = 26;
+      const histSeries = sub.addSeries(HistogramSeries, { priceLineVisible: false, lastValueVisible: false });
+      histSeries.setData(histogram.flatMap((v, i) => v != null ? [{ time: times[i], value: v, color: v >= 0 ? "rgba(239,68,68,0.6)" : "rgba(59,130,246,0.6)" }] : []));
+      const macdSeries   = sub.addSeries(LineSeries, { color: "#a855f7", lineWidth: 1 as never, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+      const signalSeries = sub.addSeries(LineSeries, { color: "#f59e0b", lineWidth: 1,   priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+      macdSeries.setData(macd.flatMap((v, i) => v != null && i >= slow - 1 ? [{ time: times[i], value: v }] : []));
+      signalSeries.setData(signal.flatMap((v, i) => i >= slow + 8 ? [{ time: times[i], value: v }] : []));
+    }
+
+    sub.timeScale().fitContent();
+  }
 
   // ── Actions ──────────────────────────────────────────────────────────────────
   function removeHLine(id: string) {
@@ -311,6 +493,14 @@ export function TradingViewChart({ bars, height = 340, isKRW = false, showMA = t
     hLines.forEach(hl => candle.removePriceLine(hl.ref));
     trendLines.forEach(tl => candle.detachPrimitive(tl.primitive));
     setHLines([]); setTrendLines([]); setTrendP1(null); setDrawTool("none");
+  }
+
+  function toggleIndicator(ind: Indicator) {
+    if (ind === "BB") {
+      setBbVisible(v => !v);
+    } else {
+      setActiveInd(prev => prev === ind ? null : ind);
+    }
   }
 
   const totalDrawings = hLines.length + trendLines.length;
@@ -360,6 +550,23 @@ export function TradingViewChart({ bars, height = 340, isKRW = false, showMA = t
           </div>
         )}
 
+        {/* Indicator toggles */}
+        <div className="flex gap-1">
+          {(["BB", "RSI", "MACD"] as Indicator[]).map(ind => {
+            const active = ind === "BB" ? bbVisible : activeInd === ind;
+            return (
+              <button key={ind}
+                onClick={() => toggleIndicator(ind)}
+                className={`text-[10px] px-2 py-0.5 rounded-full font-medium transition-all ${
+                  active ? "bg-sky-500/15 text-sky-500" : "text-muted-foreground opacity-50 hover:opacity-80"
+                }`}
+              >
+                {ind}
+              </button>
+            );
+          })}
+        </div>
+
         {/* Drawing status */}
         {drawTool !== "none" && (
           <span className="text-[10px] text-orange-500 font-medium ml-1">
@@ -380,14 +587,24 @@ export function TradingViewChart({ bars, height = 340, isKRW = false, showMA = t
         )}
       </div>
 
-      {/* Chart */}
+      {/* Main chart */}
       <div
         ref={containerRef}
         className={`w-full rounded-xl overflow-hidden ${drawTool !== "none" ? "cursor-crosshair" : ""}`}
         style={{ height: `${height}px` }}
       />
 
-      {/* Drawn elements list (클릭하면 개별 삭제) */}
+      {/* Sub chart (RSI / MACD) */}
+      {activeInd && (
+        <div className="space-y-0.5">
+          <p className="text-[10px] text-muted-foreground px-1 font-medium">
+            {activeInd === "RSI" ? "RSI (14)" : "MACD (12, 26, 9)"}
+          </p>
+          <div ref={subRef} className="w-full rounded-xl overflow-hidden" style={{ height: `${SUB_HEIGHT}px` }} />
+        </div>
+      )}
+
+      {/* Drawn elements list */}
       {totalDrawings > 0 && (
         <div className="flex flex-wrap gap-1">
           {hLines.map(hl => (

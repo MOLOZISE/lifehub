@@ -970,9 +970,9 @@ export default function RestaurantPage() {
               <p className="text-xs mb-1">한줄 소개</p>
               <Input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="이 맛집의 특징은..." />
             </div>
-            {userLists.length > 0 && (
-              <div>
-                <p className="text-xs mb-1.5 font-medium">리스트 선택 *</p>
+            <div>
+              <p className="text-xs mb-1.5 font-medium">리스트 선택 *</p>
+              {userLists.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
                   {userLists.map(l => (
                     <button
@@ -991,8 +991,12 @@ export default function RestaurantPage() {
                     </button>
                   ))}
                 </div>
-              </div>
-            )}
+              ) : (
+                <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">
+                  리스트가 없습니다. 먼저 맛집 탭 좌측에서 리스트를 만들어주세요.
+                </p>
+              )}
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>취소</Button>

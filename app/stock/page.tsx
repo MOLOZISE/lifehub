@@ -1061,7 +1061,9 @@ export default function StockPage() {
   // Prices for popular stocks
   const [krPrices, setKrPrices] = useState<Record<string, StockPrice>>({});
   const [usPrices, setUsPrices] = useState<Record<string, StockPrice>>({});
-  const [priceLoading, setPriceLoading] = useState(false);
+  const [krLoading, setKrLoading] = useState(false);
+  const [usLoading, setUsLoading] = useState(false);
+  const priceLoading = krLoading || usLoading;
   const [priceLastUpdate, setPriceLastUpdate] = useState<Date | null>(null);
   const [marketRefreshKey, setMarketRefreshKey] = useState(0);
 
@@ -1150,80 +1152,44 @@ export default function StockPage() {
       ...ALL_POPULAR_KR.filter(s => kr.includes(s.ticker)),
       ...ALL_POPULAR_US.filter(s => us.includes(s.ticker)),
     ];
-    // 초기 상태: 전부 로딩 중
-    setStockAiData(Object.fromEntries(allStocks.map(s => [s.ticker, "loading"])));
 
-    // 1. 배치 캐시 조회
+    // 캐시 조회만 (자동 POST 없음 — Groq 토큰 낭비 방지)
     const tickers = allStocks.map(s => s.ticker).join(",");
-    let cached: Record<string, AiData> = {};
     try {
       const res = await fetch(`/api/stock/ai-analysis?names=${encodeURIComponent(tickers)}`);
-      if (res.ok) cached = await res.json();
+      if (res.ok) {
+        const cached: Record<string, AiData> = await res.json();
+        setStockAiData(Object.fromEntries(
+          allStocks.map(s => [s.ticker, cached[s.ticker] ?? null])
+        ));
+      }
     } catch { /* 무시 */ }
+  }
 
-    // 2. 캐시 있는 것 즉시 표시
-    const toFetch: typeof allStocks = [];
-    const initial: Record<string, AiData | "loading"> = {};
-    for (const s of allStocks) {
-      if (cached[s.ticker]) {
-        initial[s.ticker] = cached[s.ticker];
-        if (cached[s.ticker].stale) toFetch.push(s);
-      } else {
-        initial[s.ticker] = "loading";
-        toFetch.push(s);
-      }
-    }
-    setStockAiData(initial);
+  async function loadKrPrices(selectedKr?: string[]) {
+    setKrLoading(true);
+    const kr = selectedKr ?? popularKrTickers;
+    try {
+      const tickers = ALL_POPULAR_KR.filter(s => kr.includes(s.ticker)).map(s => `${s.ticker}.KS`).join(",");
+      const res = await fetch(`/api/stock/price?tickers=${encodeURIComponent(tickers)}`);
+      if (res.ok) { const d = await res.json(); setKrPrices(d.prices ?? {}); }
+      setPriceLastUpdate(new Date());
+    } finally { setKrLoading(false); }
+  }
 
-    // 3. 누락/만료 종목을 백그라운드에서 순차 조회 (Groq 레이트리밋 대비)
-    (async () => {
-      const CONCURRENCY = 3;
-      for (let i = 0; i < toFetch.length; i += CONCURRENCY) {
-        const chunk = toFetch.slice(i, i + CONCURRENCY);
-        await Promise.allSettled(chunk.map(async s => {
-          try {
-            const r = await fetch("/api/stock/ai-analysis", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ name: s.name, ticker: s.ticker }),
-            });
-            if (r.ok) {
-              const data = await r.json();
-              setStockAiData(prev => ({ ...prev, [s.ticker]: { opinion: data.opinion, risk: data.risk, summary: data.summary, stale: false } }));
-            } else {
-              setStockAiData(prev => ({ ...prev, [s.ticker]: { opinion: null, risk: null, summary: null, stale: false } }));
-            }
-          } catch {
-            setStockAiData(prev => ({ ...prev, [s.ticker]: { opinion: null, risk: null, summary: null, stale: false } }));
-          }
-        }));
-      }
-    })();
+  async function loadUsPrices(selectedUs?: string[]) {
+    setUsLoading(true);
+    const us = selectedUs ?? popularUsTickers;
+    try {
+      const tickers = ALL_POPULAR_US.filter(s => us.includes(s.ticker)).map(s => s.ticker).join(",");
+      const res = await fetch(`/api/stock/price?tickers=${encodeURIComponent(tickers)}`);
+      if (res.ok) { const d = await res.json(); setUsPrices(d.prices ?? {}); }
+      setPriceLastUpdate(new Date());
+    } finally { setUsLoading(false); }
   }
 
   async function loadPopularPrices(selectedKr?: string[], selectedUs?: string[]) {
-    setPriceLoading(true);
-    const kr = selectedKr ?? popularKrTickers;
-    const us = selectedUs ?? popularUsTickers;
-    try {
-      const krTickers = ALL_POPULAR_KR.filter(s => kr.includes(s.ticker)).map(s => `${s.ticker}.KS`).join(",");
-      const usTickers = ALL_POPULAR_US.filter(s => us.includes(s.ticker)).map(s => s.ticker).join(",");
-      const [krRes, usRes] = await Promise.all([
-        fetch(`/api/stock/price?tickers=${encodeURIComponent(krTickers)}`),
-        fetch(`/api/stock/price?tickers=${encodeURIComponent(usTickers)}`),
-      ]);
-      if (krRes.ok) {
-        const d = await krRes.json();
-        setKrPrices(d.prices ?? {});
-      }
-      if (usRes.ok) {
-        const d = await usRes.json();
-        setUsPrices(d.prices ?? {});
-      }
-      setPriceLastUpdate(new Date());
-    } finally {
-      setPriceLoading(false);
-    }
+    await Promise.all([loadKrPrices(selectedKr), loadUsPrices(selectedUs)]);
   }
 
   function refreshAll() {
@@ -1586,12 +1552,12 @@ export default function StockPage() {
               <h2 className="text-sm font-semibold">국내 인기 종목</h2>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => loadPopularPrices()}
-                  disabled={priceLoading}
+                  onClick={() => loadKrPrices()}
+                  disabled={krLoading}
                   className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
-                  title="새로고침"
+                  title="국내 새로고침"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 ${priceLoading ? "animate-spin" : ""}`} />
+                  <RefreshCw className={`w-3.5 h-3.5 ${krLoading ? "animate-spin" : ""}`} />
                 </button>
                 <button
                   onClick={() => { setDraftKr(popularKrTickers); setDraftUs(popularUsTickers); setPopularSettingsOpen(true); }}
@@ -1625,12 +1591,12 @@ export default function StockPage() {
             <div className="flex items-center justify-between pt-2">
               <h2 className="text-sm font-semibold">해외 인기 종목</h2>
               <button
-                onClick={() => loadPopularPrices()}
-                disabled={priceLoading}
+                onClick={() => loadUsPrices()}
+                disabled={usLoading}
                 className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
-                title="새로고침"
+                title="해외 새로고침"
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${priceLoading ? "animate-spin" : ""}`} />
+                <RefreshCw className={`w-3.5 h-3.5 ${usLoading ? "animate-spin" : ""}`} />
               </button>
             </div>
             <div className="grid grid-cols-3 gap-2">

@@ -291,27 +291,41 @@ export default function SessionsPage() {
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>학습 세션 기록</DialogTitle></DialogHeader>
           <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-1">
-            <div className="grid grid-cols-2 gap-2">
-              <div><p className="text-xs mb-1 font-medium">날짜 *</p><Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
-              <div><p className="text-xs mb-1 font-medium">과목 *</p>
-                <Select value={form.subjectId} onValueChange={v => v && setForm(f => ({ ...f, subjectId: v }))}>
-                  <SelectTrigger>
-                    <span className="truncate">
-                      {(() => { const s = subjects.find(x => x.id === form.subjectId); return s ? `${s.emoji ?? ""} ${s.name}`.trim() : "선택"; })()}
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent>{subjects.map(s => <SelectItem key={s.id} value={s.id}>{s.emoji} {s.name}</SelectItem>)}</SelectContent>
-                </Select>
+            <div className="space-y-2">
+              {/* 날짜 + 과목 */}
+              <div className="grid grid-cols-[1fr_1.5fr] gap-2">
+                <div>
+                  <p className="text-xs mb-1 font-medium">날짜 *</p>
+                  <Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} className="h-8 text-xs px-2" />
+                </div>
+                <div>
+                  <p className="text-xs mb-1 font-medium">과목 *</p>
+                  <Select value={form.subjectId} onValueChange={v => v && setForm(f => ({ ...f, subjectId: v }))}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <span className="truncate">
+                        {(() => { const s = subjects.find(x => x.id === form.subjectId); return s ? `${s.emoji ?? ""} ${s.name}`.trim() : "선택"; })()}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent>{subjects.map(s => <SelectItem key={s.id} value={s.id}>{s.emoji} {s.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
               </div>
-              <div><p className="text-xs mb-1 font-medium">학습 유형</p>
-                <Select value={form.activityType} onValueChange={v => setForm(f => ({ ...f, activityType: v as SessionActivityType }))}>
-                  <SelectTrigger>
-                    <span className="truncate">{ACTIVITY_LABELS[form.activityType] ?? form.activityType}</span>
-                  </SelectTrigger>
-                  <SelectContent>{(Object.entries(ACTIVITY_LABELS) as [SessionActivityType, string][]).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
-                </Select>
+              {/* 학습 유형 + 학습 시간 */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-xs mb-1 font-medium">학습 유형</p>
+                  <Select value={form.activityType} onValueChange={v => setForm(f => ({ ...f, activityType: v as SessionActivityType }))}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <span className="truncate">{ACTIVITY_LABELS[form.activityType] ?? form.activityType}</span>
+                    </SelectTrigger>
+                    <SelectContent>{(Object.entries(ACTIVITY_LABELS) as [SessionActivityType, string][]).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <p className="text-xs mb-1 font-medium">학습 시간 (분)</p>
+                  <Input type="number" value={form.durationMinutes} onChange={e => setForm(f => ({ ...f, durationMinutes: e.target.value }))} className="h-8 text-sm" />
+                </div>
               </div>
-              <div><p className="text-xs mb-1 font-medium">학습 시간 (분)</p><Input type="number" value={form.durationMinutes} onChange={e => setForm(f => ({ ...f, durationMinutes: e.target.value }))} /></div>
 <div className="col-span-2"><p className="text-xs mb-1 font-medium">사용 자료</p><Input value={form.materialName} onChange={e => setForm(f => ({ ...f, materialName: e.target.value }))} placeholder="예: 시나공 필기" /></div>
               {exams.length > 0 && (
                 <div className="col-span-2"><p className="text-xs mb-1 font-medium">연결 시험 (선택)</p>

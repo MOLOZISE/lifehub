@@ -643,6 +643,22 @@ model StockAiAnalysis {
   @@map("stock_ai_analysis")
 }
 
+// ─── Stock Chart Cache (차트 데이터 DB 캐시) ─────────────────────────────────
+
+model StockChartCache {
+  id        String   @id @default(cuid())
+  ticker    String   // Yahoo Finance ticker (예: AAPL, 005930.KS)
+  interval  String   // 1d, 1wk, 5m, 30m …
+  range     String   // 1d, 5d, 1mo, 3mo, 6mo, 1y
+  bars      Json     // OHLCVBar[]
+  meta      Json?    // { ticker, currency, regularMarketPrice, previousClose, longName }
+  fetchedAt DateTime @default(now())
+
+  @@unique([ticker, interval, range])
+  @@index([ticker])
+  @@map("stock_chart_cache")
+}
+
 // ─── Restaurant Lists (사용자 맞춤 맛집 리스트) ────────────────────────────────
 
 model RestaurantList {
