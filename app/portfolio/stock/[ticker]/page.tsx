@@ -113,6 +113,21 @@ function NewsSectionCard({ section }: { section: NewsSection }) {
   );
 }
 
+// ── 분봉 인터벌 (드롭다운) ───────────────────────────────────
+type IntradayInterval = "1m" | "3m" | "5m" | "10m" | "15m" | "30m" | "60m" | "120m" | "240m";
+const INTRADAY_OPTIONS: { label: string; value: IntradayInterval; fetchInterval: string; resample: number }[] = [
+  { label: "1분",   value: "1m",   fetchInterval: "1m",  resample: 1 },
+  { label: "3분",   value: "3m",   fetchInterval: "1m",  resample: 3 },
+  { label: "5분",   value: "5m",   fetchInterval: "5m",  resample: 1 },
+  { label: "10분",  value: "10m",  fetchInterval: "5m",  resample: 2 },
+  { label: "15분",  value: "15m",  fetchInterval: "15m", resample: 1 },
+  { label: "30분",  value: "30m",  fetchInterval: "30m", resample: 1 },
+  { label: "60분",  value: "60m",  fetchInterval: "60m", resample: 1 },
+  { label: "120분", value: "120m", fetchInterval: "60m", resample: 2 },
+  { label: "240분", value: "240m", fetchInterval: "60m", resample: 4 },
+];
+
+// ── 기간 탭 ─────────────────────────────────────────────────
 type Period = "1D" | "1W" | "1M" | "3M" | "6M" | "1Y";
 const PERIOD_CONFIG: Record<Period, { range: string; interval: string }> = {
   "1D":  { range: "1d",  interval: "5m" },
@@ -125,6 +140,25 @@ const PERIOD_CONFIG: Record<Period, { range: string; interval: string }> = {
 const PERIOD_LABELS: Record<Period, string> = {
   "1D": "일", "1W": "주", "1M": "월", "3M": "3M", "6M": "6M", "1Y": "년",
 };
+
+// ── OHLCV 리샘플링 (Yahoo가 지원 안하는 분봉용) ─────────────
+function resampleBars(bars: OHLCVBar[], factor: number): OHLCVBar[] {
+  if (factor <= 1) return bars;
+  const result: OHLCVBar[] = [];
+  for (let i = 0; i < bars.length; i += factor) {
+    const chunk = bars.slice(i, Math.min(i + factor, bars.length));
+    if (!chunk.length) continue;
+    result.push({
+      date:   chunk[0].date,
+      open:   chunk[0].open,
+      high:   Math.max(...chunk.map(b => b.high)),
+      low:    Math.min(...chunk.map(b => b.low)),
+      close:  chunk[chunk.length - 1].close,
+      volume: chunk.reduce((s, b) => s + (b.volume ?? 0), 0),
+    });
+  }
+  return result;
+}
 
 
 function toYahooTicker(ticker: string, market: string) {
@@ -176,6 +210,8 @@ export default function StockDetailPage() {
   const [chartMeta, setChartMeta] = useState<ChartMeta | null>(null);
   const [chartLoading, setChartLoading] = useState(false);
   const [period, setPeriod] = useState<Period>("3M");
+  const [intradayInterval, setIntradayInterval] = useState<IntradayInterval>("5m");
+  const [showIntradayDropdown, setShowIntradayDropdown] = useState(false);
   const [news, setNews] = useState<NewsResult | null>(null);
   const [newsLoading, setNewsLoading] = useState(false);
   const [newsError, setNewsError] = useState<string | null>(null);
@@ -206,12 +242,31 @@ export default function StockDetailPage() {
   }
 
 
-  async function loadChart(p: Period) {
+  async function loadChart(p: Period, iv?: IntradayInterval) {
     setChartLoading(true);
     try {
       const cfg = PERIOD_CONFIG[p];
-      const res = await fetch(`/api/chart?ticker=${encodeURIComponent(yahooTicker)}&range=${cfg.range}&interval=${cfg.interval}`);
-      if (res.ok) setChartMeta(await res.json());
+      const useInterval = (p === "1D" || p === "1W") && iv;
+      let range = cfg.range;
+      let fetchInterval = cfg.interval;
+      let resample = 1;
+
+      if (useInterval) {
+        const opt = INTRADAY_OPTIONS.find(o => o.value === iv)!;
+        fetchInterval = opt.fetchInterval;
+        resample = opt.resample;
+        // 범위: 1m/3m/5m → 1d, 15m/30m → 5d, 60m이상 → 1mo
+        if (["1m","3m"].includes(iv!)) range = "1d";
+        else if (["5m","10m","15m","30m"].includes(iv!)) range = p === "1W" ? "5d" : "1d";
+        else range = "1mo";
+      }
+
+      const res = await fetch(`/api/chart?ticker=${encodeURIComponent(yahooTicker)}&range=${range}&interval=${fetchInterval}`);
+      if (res.ok) {
+        const data: ChartMeta = await res.json();
+        if (resample > 1 && data.bars) data.bars = resampleBars(data.bars, resample);
+        setChartMeta(data);
+      }
     } catch { /* ignore */ }
     setChartLoading(false);
   }
@@ -291,7 +346,14 @@ export default function StockDetailPage() {
   function onPeriodChange(p: Period) {
     setPeriod(p);
     setTechSummaryDismissed(false);
-    loadChart(p);
+    setShowIntradayDropdown(false);
+    loadChart(p, (p === "1D" || p === "1W") ? intradayInterval : undefined);
+  }
+
+  function onIntradayChange(iv: IntradayInterval) {
+    setIntradayInterval(iv);
+    setShowIntradayDropdown(false);
+    loadChart(period, iv);
   }
 
 
@@ -424,8 +486,40 @@ export default function StockDetailPage() {
 
         {/* ── 차트 탭 ── */}
         <TabsContent value="chart" className="mt-0 space-y-0">
-          {/* 기간 선택 — Toss 스타일 언더라인 */}
-          <div className="flex border-b overflow-x-auto">
+          {/* 기간 + 인터벌 선택 바 */}
+          <div className="flex items-stretch border-b overflow-x-auto">
+            {/* 분봉 드롭다운 (일/주 선택 시 표시) */}
+            {(period === "1D" || period === "1W") && (
+              <div className="relative shrink-0">
+                <button
+                  onClick={() => setShowIntradayDropdown(v => !v)}
+                  className="flex items-center gap-1 px-3 py-2.5 text-sm font-medium text-foreground border-b-2 border-foreground -mb-px h-full"
+                >
+                  {INTRADAY_OPTIONS.find(o => o.value === intradayInterval)?.label ?? "5분"}
+                  <svg className="w-3 h-3 opacity-60" viewBox="0 0 12 12" fill="currentColor">
+                    <path d="M6 8L1 3h10z"/>
+                  </svg>
+                </button>
+                {showIntradayDropdown && (
+                  <div className="absolute top-full left-0 z-50 mt-1 w-24 bg-popover border border-border rounded-xl shadow-lg overflow-hidden">
+                    {INTRADAY_OPTIONS.map(opt => (
+                      <button
+                        key={opt.value}
+                        onClick={() => onIntradayChange(opt.value)}
+                        className={`w-full text-left px-3 py-2 text-sm transition-colors hover:bg-muted ${
+                          intradayInterval === opt.value ? "font-semibold text-foreground" : "text-muted-foreground"
+                        }`}
+                      >
+                        {opt.label}
+                        {intradayInterval === opt.value && <span className="float-right text-primary">✓</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 기간 탭 */}
             {(Object.keys(PERIOD_CONFIG) as Period[]).map(p => (
               <button key={p} onClick={() => onPeriodChange(p)}
                 className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 -mb-px transition-all shrink-0 ${
@@ -438,6 +532,11 @@ export default function StockDetailPage() {
               </button>
             ))}
           </div>
+
+          {/* 드롭다운 닫기 오버레이 */}
+          {showIntradayDropdown && (
+            <div className="fixed inset-0 z-40" onClick={() => setShowIntradayDropdown(false)} />
+          )}
 
           {/* 기술적 분석 요약 배너 */}
           {chartMeta?.techSummary && !techSummaryDismissed && (
