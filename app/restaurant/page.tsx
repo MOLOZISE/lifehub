@@ -695,13 +695,15 @@ export default function RestaurantPage() {
                     >
                       {list.emoji} {list.name} {list.itemCount > 0 && `(${list.itemCount})`}
                     </button>
-                    <button
-                      onClick={e => { e.stopPropagation(); deleteList(list.id, list.name); }}
-                      className={`text-[10px] px-1.5 py-1 rounded-r-full border transition-colors ${
-                        activeListId === list.id ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:bg-muted"
-                      }`}
-                      title="리스트 삭제"
-                    >✕</button>
+                    {!list.isDefault && (
+                      <button
+                        onClick={e => { e.stopPropagation(); deleteList(list.id, list.name); }}
+                        className={`text-[10px] px-1.5 py-1 rounded-r-full border transition-colors ${
+                          activeListId === list.id ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:bg-muted"
+                        }`}
+                        title="리스트 삭제"
+                      >✕</button>
+                    )}
                   </div>
                 ))}
                 {activeListId && (
