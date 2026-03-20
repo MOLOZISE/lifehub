@@ -20,6 +20,7 @@ model User {
   image         String?
   username      String?   @unique  // 커뮤니티 닉네임
   bio           String?
+  role          String    @default("USER") // "USER" | "ADMIN"
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -254,27 +255,55 @@ model DailyGoalItem {
 }
 
 model Exam {
-  id          String    @id @default(cuid())
-  userId      String
-  subjectId   String?
-  name        String
-  category    String
-  examDate    String    // YYYY-MM-DD
-  targetScore Float?
-  passScore   Float?
-  memo        String?
-  status      String    @default("preparing") // ExamStatus
-  actualScore Float?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id             String    @id @default(cuid())
+  userId         String
+  subjectId      String?
+  officialExamId String?   // 공식 시험 일정에서 추가한 경우
+  name           String
+  category       String
+  examDate       String    // YYYY-MM-DD
+  targetScore    Float?
+  passScore      Float?
+  memo           String?
+  status         String    @default("preparing") // ExamStatus
+  actualScore    Float?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   subject      Subject?          @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  officialExam OfficialExam?     @relation(fields: [officialExamId], references: [id], onDelete: SetNull)
   examSubjects ExamSubject[]
   studySessions StudySession[]
   wrongAnswers  WrongAnswerNote[]
 
   @@map("exams")
+}
+
+// ─── Official Exams (관리자가 등록하는 공식 시험 일정) ──────────────────────────
+
+model OfficialExam {
+  id                String   @id @default(cuid())
+  name              String   // 빅데이터분석기사
+  organization      String   // 한국데이터산업진흥원
+  category          String   // 자격증 | 어학 | 공무원 | 대학시험 | 기타
+  examDate          String   // YYYY-MM-DD (시험일)
+  registrationStart String?  // 접수 시작일
+  registrationEnd   String?  // 접수 마감일
+  resultDate        String?  // 결과 발표일
+  fee               Int?     // 응시료(원)
+  location          String?  // 시험 장소
+  description       String?
+  url               String?  // 공식 페이지
+  year              Int      // 연도
+  session           Int?     // 회차
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  userExams Exam[]
+
+  @@map("official_exams")
 }
 
 model ExamSubject {
