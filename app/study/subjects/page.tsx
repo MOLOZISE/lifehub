@@ -314,7 +314,7 @@ export default function SubjectsPage() {
               <div>
                 <p className="text-xs font-medium mb-1">활동 유형</p>
                 <Select value={quickForm.activityType} onValueChange={v => v && setQuickForm(f => ({ ...f, activityType: v }))}>
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-9"><span className="truncate">{ACTIVITY_LABELS[quickForm.activityType] ?? quickForm.activityType}</span></SelectTrigger>
                   <SelectContent>
                     {Object.entries(ACTIVITY_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
                   </SelectContent>
