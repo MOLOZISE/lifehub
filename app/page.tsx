@@ -183,7 +183,7 @@ export default function DashboardPage() {
       if (subRes.status === "fulfilled" && Array.isArray(subRes.value)) setSubjects(subRes.value);
       if (holdRes.status === "fulfilled" && Array.isArray(holdRes.value)) setHoldings(holdRes.value);
       if (examRes.status === "fulfilled" && Array.isArray(examRes.value)) {
-        const upcoming = examRes.value.filter((e: Exam) => e.status === "upcoming" && e.examDate >= today);
+        const upcoming = examRes.value.filter((e: Exam) => e.status !== "completed" && e.status !== "passed" && e.examDate >= today);
         setExams(upcoming);
       }
       if (postsRes.status === "fulfilled" && postsRes.value?.posts) setRecentPosts(postsRes.value.posts);
@@ -261,49 +261,49 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Quick stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <CalendarDays className="w-4 h-4 text-indigo-500" />
-              <span className="text-xs text-muted-foreground">오늘 학습</span>
+      {/* Quick stats — 4열 컴팩트 */}
+      <div className="grid grid-cols-4 gap-2">
+        <Card className="overflow-hidden">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-1.5 mb-1">
+              <CalendarDays className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+              <span className="text-[11px] text-muted-foreground truncate">오늘 학습</span>
             </div>
-            <p className="text-2xl font-bold">
+            <p className="text-xl font-bold leading-none">
               {todayMinutes}
-              <span className="text-sm font-normal text-muted-foreground ml-1">분</span>
+              <span className="text-xs font-normal text-muted-foreground ml-0.5">분</span>
             </p>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Flame className="w-4 h-4 text-orange-500" />
-              <span className="text-xs text-muted-foreground">연속 학습</span>
+        <Card className="overflow-hidden">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-1.5 mb-1">
+              <Flame className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+              <span className="text-[11px] text-muted-foreground truncate">연속 학습</span>
             </div>
-            <p className="text-2xl font-bold">
+            <p className="text-xl font-bold leading-none">
               {streak}
-              <span className="text-sm font-normal text-muted-foreground ml-1">일</span>
-              {streak >= 3 && <span className="ml-1 text-orange-500">🔥</span>}
+              <span className="text-xs font-normal text-muted-foreground ml-0.5">일</span>
+              {streak >= 3 && <span className="text-sm ml-0.5">🔥</span>}
             </p>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <BookOpen className="w-4 h-4 text-blue-500" />
-              <span className="text-xs text-muted-foreground">준비 시험</span>
+        <Card className="overflow-hidden">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-1.5 mb-1">
+              <BookOpen className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+              <span className="text-[11px] text-muted-foreground truncate">준비 시험</span>
             </div>
-            <p className="text-2xl font-bold">{exams.length}</p>
+            <p className="text-xl font-bold leading-none">{exams.length}</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <TrendingUp className="w-4 h-4 text-green-500" />
-              <span className="text-xs text-muted-foreground">포트폴리오</span>
+        <Card className="overflow-hidden">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-1.5 mb-1">
+              <TrendingUp className="w-3.5 h-3.5 text-green-500 shrink-0" />
+              <span className="text-[11px] text-muted-foreground truncate">포트폴리오</span>
             </div>
-            <p className={`text-2xl font-bold ${holdings.length > 0 ? getProfitColor(totalProfitPct) : "text-muted-foreground"}`}>
+            <p className={`text-xl font-bold leading-none ${holdings.length > 0 ? getProfitColor(totalProfitPct) : "text-muted-foreground"}`}>
               {holdings.length > 0 ? `${totalProfitPct >= 0 ? "+" : ""}${totalProfitPct.toFixed(1)}%` : "-"}
             </p>
           </CardContent>

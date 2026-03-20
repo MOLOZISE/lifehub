@@ -412,10 +412,7 @@ export default function SubjectsPage() {
               <p className="text-sm font-medium mb-1">과목명 *</p>
               <Input value={formData.name} onChange={e => setFormData(f => ({ ...f, name: e.target.value }))} placeholder="예: 정보처리기사" />
             </div>
-            <div>
-              <p className="text-sm font-medium mb-1">시험 날짜</p>
-              <Input type="date" value={formData.examDate} onChange={e => setFormData(f => ({ ...f, examDate: e.target.value }))} />
-            </div>
+            <p className="text-xs text-muted-foreground">💡 시험 날짜·결과는 과목 상세 → 시험 탭에서 관리하세요</p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setFormOpen(false)}>취소</Button>

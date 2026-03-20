@@ -6,6 +6,12 @@ export interface MarketItem {
   changeRate: number;
   currency: string;
   type: "index" | "fx" | "commodity" | "stock" | "bond";
+  // 프리장 / 시간외 데이터 (미국 주식/지수)
+  preMarketPrice?: number;
+  preMarketChangeRate?: number;
+  postMarketPrice?: number;
+  postMarketChangeRate?: number;
+  marketState?: "PRE" | "REGULAR" | "POST" | "CLOSED";
 }
 
 export const ALL_SYMBOLS: {

@@ -144,8 +144,13 @@ export default function SubjectDetailPage() {
     .filter(s => s.date.slice(0, 7) === new Date().toISOString().slice(0, 7))
     .reduce((s, sess) => s + sess.durationMinutes, 0);
 
-  const dDay = subject.examDate
-    ? Math.ceil((new Date(subject.examDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+  // D-day: 시험 기록 우선, 없으면 subject.examDate 폴백
+  const nearestUpcomingExam = [...exams]
+    .filter(e => new Date(e.examDate) >= new Date())
+    .sort((a, b) => a.examDate.localeCompare(b.examDate))[0];
+  const dDayBase = nearestUpcomingExam?.examDate ?? subject.examDate;
+  const dDay = dDayBase
+    ? Math.ceil((new Date(dDayBase).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
     : null;
 
   return (
@@ -160,10 +165,10 @@ export default function SubjectDetailPage() {
             <Badge className={`${colors.bg} text-white border-0`}>{subject.color}</Badge>
           </div>
           {subject.description && <p className="text-muted-foreground mt-1">{subject.description}</p>}
-          {subject.examDate && (
+          {dDayBase && (
             <p className="text-sm mt-1 flex items-center gap-1.5 font-medium">
               <CalendarClock className="w-4 h-4 text-orange-500" />
-              시험일: {formatDate(subject.examDate)}
+              {nearestUpcomingExam ? nearestUpcomingExam.name : "시험일"}: {formatDate(dDayBase)}
               {dDay !== null && (
                 <Badge variant={dDay <= 7 ? "destructive" : dDay <= 30 ? "secondary" : "outline"} className="ml-1">
                   {dDay > 0 ? `D-${dDay}` : dDay === 0 ? "D-Day" : "종료"}
@@ -404,32 +409,32 @@ export default function SubjectDetailPage() {
       {/* 시험 추가 다이얼로그 */}
       <Dialog open={examDialog} onOpenChange={setExamDialog}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>시험 기록 추가</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>시험 일정 추가</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div>
               <p className="text-xs mb-1 font-medium">시험명 *</p>
               <Input value={examForm.name} onChange={e => setExamForm(f => ({ ...f, name: e.target.value }))} placeholder="예: 정보처리기사 필기" />
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <p className="text-xs mb-1 font-medium">시험일 *</p>
-                <Input type="date" value={examForm.examDate} onChange={e => setExamForm(f => ({ ...f, examDate: e.target.value }))} />
-              </div>
-              <div>
-                <p className="text-xs mb-1 font-medium">실제 점수</p>
-                <Input type="number" value={examForm.actualScore} placeholder="미응시 시 빈칸"
-                  onChange={e => setExamForm(f => ({ ...f, actualScore: e.target.value }))} />
-              </div>
+            <div>
+              <p className="text-xs mb-1 font-medium">시험일 *</p>
+              <Input type="date" value={examForm.examDate} onChange={e => setExamForm(f => ({ ...f, examDate: e.target.value }))} />
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <p className="text-xs mb-1 font-medium">목표 점수</p>
-                <Input type="number" value={examForm.targetScore} onChange={e => setExamForm(f => ({ ...f, targetScore: e.target.value }))} />
+                <Input type="number" value={examForm.targetScore} placeholder="선택"
+                  onChange={e => setExamForm(f => ({ ...f, targetScore: e.target.value }))} />
               </div>
               <div>
-                <p className="text-xs mb-1 font-medium">메모</p>
-                <Input value={examForm.memo} onChange={e => setExamForm(f => ({ ...f, memo: e.target.value }))} />
+                <p className="text-xs mb-1 font-medium">실제 점수</p>
+                <Input type="number" value={examForm.actualScore} placeholder="응시 후 입력"
+                  onChange={e => setExamForm(f => ({ ...f, actualScore: e.target.value }))} />
               </div>
+            </div>
+            <div>
+              <p className="text-xs mb-1 font-medium">메모 (선택)</p>
+              <Input value={examForm.memo} placeholder="시험장, 준비 사항 등..."
+                onChange={e => setExamForm(f => ({ ...f, memo: e.target.value }))} />
             </div>
           </div>
           <DialogFooter>

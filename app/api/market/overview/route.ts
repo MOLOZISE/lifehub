@@ -27,9 +27,9 @@ const KIS_STOCK_MAP: Record<string, { market: "KR" | "US" }> = {
 };
 
 // Yahoo Finance chart API 폴백 (FX, 원자재, 채권용)
-async function fetchYahooOne(sym: typeof ALL_SYMBOLS[number]): Promise<MarketItem | null> {
+async function fetchYahooOne(sym: { symbol: string; label: string; currency: string; type: MarketItem["type"] }): Promise<MarketItem | null> {
   try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym.symbol)}?range=1d&interval=1d&includePrePost=false`;
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym.symbol)}?range=1d&interval=1d&includePrePost=true`;
     const res = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
       next: { revalidate: 0 },
@@ -43,6 +43,21 @@ async function fetchYahooOne(sym: typeof ALL_SYMBOLS[number]): Promise<MarketIte
     const prevClose = meta.chartPreviousClose ?? meta.previousClose ?? price;
     const change = price - prevClose;
     const changeRate = prevClose > 0 ? (change / prevClose) * 100 : 0;
+
+    // 프리장 / 시간외 데이터
+    let preMarketPrice: number | undefined;
+    let preMarketChangeRate: number | undefined;
+    let postMarketPrice: number | undefined;
+    let postMarketChangeRate: number | undefined;
+    if (meta.preMarketPrice && prevClose > 0) {
+      preMarketPrice = meta.preMarketPrice;
+      preMarketChangeRate = Math.round(((meta.preMarketPrice - prevClose) / prevClose) * 10000) / 100;
+    }
+    if (meta.postMarketPrice && prevClose > 0) {
+      postMarketPrice = meta.postMarketPrice;
+      postMarketChangeRate = Math.round(((meta.postMarketPrice - prevClose) / prevClose) * 10000) / 100;
+    }
+
     return {
       symbol: sym.symbol,
       label: sym.label,
@@ -51,6 +66,9 @@ async function fetchYahooOne(sym: typeof ALL_SYMBOLS[number]): Promise<MarketIte
       changeRate: Math.round(changeRate * 100) / 100,
       currency: sym.currency,
       type: sym.type,
+      ...(preMarketPrice !== undefined && { preMarketPrice, preMarketChangeRate }),
+      ...(postMarketPrice !== undefined && { postMarketPrice, postMarketChangeRate }),
+      marketState: meta.marketState ?? undefined,
     };
   } catch {
     return null;
@@ -62,8 +80,9 @@ async function fetchAllSymbols(symbols: string[] = ALL_SYMBOLS.map(s => s.symbol
   const data: Record<string, MarketItem> = {};
 
   const tasks = symbols.map(async (symbol) => {
-    const meta = ALL_SYMBOLS.find(s => s.symbol === symbol);
-    if (!meta) return;
+    const meta = ALL_SYMBOLS.find(s => s.symbol === symbol) ?? {
+      symbol, label: symbol, currency: "USD", type: "stock" as const, category: "주식", defaultOn: false,
+    };
 
     // KIS 지수
     if (KIS_INDEX_MAP[symbol]) {
