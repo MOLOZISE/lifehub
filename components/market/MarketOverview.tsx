@@ -301,8 +301,8 @@ export function MarketOverview({ compact = false, refreshKey }: Props) {
 
       {/* 헤더 */}
       <div className="flex items-center justify-between">
-        {!compact && <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">글로벌 시황</h3>}
-        <div className={`flex items-center gap-2 ${compact ? "w-full justify-end" : ""}`}>
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">글로벌 시황</h3>
+        <div className="flex items-center gap-2">
           {lastUpdate && (
             <span className="text-[10px] text-muted-foreground">
               {new Date(lastUpdate).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 기준
