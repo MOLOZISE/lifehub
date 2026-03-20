@@ -2,14 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
-function isAdmin(session: Awaited<ReturnType<typeof auth>>) {
-  return session?.user?.id && (session.user as { role?: string }).role === "ADMIN";
+async function checkAdmin() {
+  const session = await auth();
+  const user = session?.user as { id?: string; role?: string } | undefined;
+  return user?.id && user?.role === "ADMIN" ? user.id : null;
 }
 
 // PATCH /api/official-exams/[id] — 관리자 수정
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!isAdmin(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!await checkAdmin()) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { id } = await params;
   const body = await req.json();
@@ -39,8 +40,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
 // DELETE /api/official-exams/[id] — 관리자 삭제
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!isAdmin(session)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!await checkAdmin()) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { id } = await params;
   await prisma.officialExam.delete({ where: { id } });
