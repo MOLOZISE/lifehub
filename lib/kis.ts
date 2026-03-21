@@ -228,8 +228,17 @@ export async function getPrice(ticker: string, market?: string): Promise<StockPr
   if (isKr) {
     return getKrPrice(ticker);
   }
-  // 미국 거래소 구분: 간단히 NAS 시도 후 NYS fallback은 호출 비용이 있으므로
-  // market 필드에 NYS/NAS 등을 직접 받거나 기본 NAS 사용
-  const excd = market === "NYS" ? "NYS" : market === "AMS" ? "AMS" : "NAS";
-  return getUsPrice(ticker, excd);
+  // 명시적 거래소 코드 전달 시 그대로 사용
+  if (market === "NYS" || market === "AMS" || market === "NAS" || market === "HKS") {
+    return getUsPrice(ticker, market);
+  }
+  // market=US 또는 기타: NAS → NYS → AMS 순으로 fallback
+  for (const excd of ["NAS", "NYS", "AMS"] as const) {
+    try {
+      return await getUsPrice(ticker, excd);
+    } catch {
+      // 다음 거래소 시도
+    }
+  }
+  throw new Error(`KIS 해외 가격 조회 실패: ${ticker} (NAS/NYS/AMS 모두 실패)`);
 }
