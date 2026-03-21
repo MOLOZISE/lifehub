@@ -317,7 +317,7 @@ function TickerDialog({
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {(Object.entries(SECTOR_LABELS) as [PortfolioSector, string][]).map(([k, v]) => (
-                    <SelectItem key={k} value={k}>{v}</SelectItem>
+                    <SelectItem key={k} value={k} textValue={v}>{v}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -330,7 +330,7 @@ function TickerDialog({
                 <SelectTrigger><SelectValue placeholder="그룹 선택" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">그룹 없음</SelectItem>
-                  {groups.map(g => <SelectItem key={g.id} value={g.id}>{g.emoji} {g.name}</SelectItem>)}
+                  {groups.map(g => <SelectItem key={g.id} value={g.id} textValue={`${g.emoji} ${g.name}`}>{g.emoji} {g.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -367,7 +367,7 @@ function TickerCard({ item, onEdit, onDelete }: {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <Link
-            href={`/portfolio/stock/${encodeURIComponent(item.ticker)}?market=${item.market}`}
+            href={`/stock/${encodeURIComponent(item.ticker)}`}
             className="font-mono text-sm font-semibold hover:underline"
           >
             {item.ticker}

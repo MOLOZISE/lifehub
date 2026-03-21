@@ -484,7 +484,7 @@ export default function PortfolioPage() {
                   <tr key={h.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                     <td className="px-3 py-1.5">
                       <Link
-                        href={`/portfolio/stock/${encodeURIComponent(h.ticker)}?market=${h.market}`}
+                        href={`/stock/${encodeURIComponent(h.ticker)}`}
                         className="hover:underline"
                       >
                         <div>
