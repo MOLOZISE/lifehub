@@ -547,26 +547,26 @@ export default function RestaurantPage() {
         {/* 탭 바 */}
         <div className="flex items-center border-b shrink-0">
           <button
-            className={`flex-1 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px ${
+            className={`flex-1 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px truncate px-2 ${
               activeTab === "search"
                 ? "text-primary border-primary"
                 : "text-muted-foreground border-transparent hover:text-foreground"
             }`}
             onClick={() => setActiveTab("search")}
           >
-            🔍 검색 결과 {kakaoResults.length > 0 ? `(${kakaoResults.length})` : ""}
+            🔍 검색 결과{kakaoResults.length > 0 ? ` (${kakaoResults.length})` : ""}
           </button>
           <button
-            className={`flex-1 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px ${
+            className={`flex-1 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px truncate px-2 ${
               activeTab === "mylist"
                 ? "text-primary border-primary"
                 : "text-muted-foreground border-transparent hover:text-foreground"
             }`}
             onClick={switchToMylist}
           >
-            ⭐ 내 맛집 {total > 0 ? `(${total})` : ""}
+            ⭐ 내 맛집{total > 0 ? ` (${total})` : ""}
           </button>
-          <Button size="sm" className="h-7 text-xs mx-2 shrink-0" onClick={() => setDialogOpen(true)}>
+          <Button size="sm" className="h-7 text-xs mx-2 shrink-0 whitespace-nowrap" onClick={() => setDialogOpen(true)}>
             <Plus className="w-3.5 h-3.5 mr-1" />등록
           </Button>
         </div>

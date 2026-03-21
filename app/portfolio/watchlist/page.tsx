@@ -51,6 +51,41 @@ function getColorStyle(colorKey: string) {
 
 const emptyGroupForm = { name: "", emoji: "⭐", description: "", color: "blue" };
 
+const PRESET_EMOJIS = [
+  "⭐","📈","📉","💰","🏦","🔥","💎","🚀","⚡","🌙",
+  "🍀","🎯","💡","🏆","📊","🌍","🤖","🔋","💊","🏠",
+  "✈️","🎮","🛢️","⚙️","🧪","🌱","🦾","🧲","💻","📱",
+];
+
+function EmojiPicker({ value, onChange }: { value: string; onChange: (e: string) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        className="w-16 h-10 rounded-lg border bg-muted/50 hover:bg-muted text-xl flex items-center justify-center transition-colors"
+      >
+        {value || "⭐"}
+      </button>
+      {open && (
+        <div className="absolute z-50 top-11 left-0 bg-popover border rounded-xl shadow-lg p-2 grid grid-cols-6 gap-1 w-48">
+          {PRESET_EMOJIS.map(e => (
+            <button
+              key={e}
+              type="button"
+              onMouseDown={() => { onChange(e); setOpen(false); }}
+              className={`text-xl w-7 h-7 flex items-center justify-center rounded-lg hover:bg-muted transition-colors ${value === e ? "bg-primary/15 ring-1 ring-primary" : ""}`}
+            >
+              {e}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function GroupDialog({
   open, onClose, initial, onSave,
 }: {
@@ -87,7 +122,7 @@ function GroupDialog({
           <div className="flex gap-2">
             <div className="w-20">
               <p className="text-xs mb-1 font-medium">이모지</p>
-              <Input value={form.emoji} onChange={e => setForm(f => ({ ...f, emoji: e.target.value }))} className="text-center text-lg" maxLength={2} />
+              <EmojiPicker value={form.emoji} onChange={e => setForm(f => ({ ...f, emoji: e }))} />
             </div>
             <div className="flex-1">
               <p className="text-xs mb-1 font-medium">그룹 이름 *</p>
