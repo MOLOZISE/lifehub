@@ -31,7 +31,18 @@ interface RankItem {
   volume: number;
   currency: string;
 }
-type Period = "1W" | "1M" | "3M" | "1Y";
+type Period = "1m" | "5m" | "15m" | "30m" | "60m" | "D" | "W" | "M";
+
+const PERIOD_CONFIG: Record<Period, { range: string; interval: string; label: string; intraday: boolean }> = {
+  "1m":  { range: "2d",  interval: "1m",  label: "1분",  intraday: true  },
+  "5m":  { range: "5d",  interval: "5m",  label: "5분",  intraday: true  },
+  "15m": { range: "5d",  interval: "15m", label: "15분", intraday: true  },
+  "30m": { range: "1mo", interval: "30m", label: "30분", intraday: true  },
+  "60m": { range: "1mo", interval: "60m", label: "60분", intraday: true  },
+  "D":   { range: "3mo", interval: "1d",  label: "일",   intraday: false },
+  "W":   { range: "1y",  interval: "1wk", label: "주",   intraday: false },
+  "M":   { range: "5y",  interval: "1mo", label: "월",   intraday: false },
+};
 
 interface StockPrice {
   price: number;
@@ -125,7 +136,6 @@ function toYahooTicker(ticker: string, market?: "KR" | "US"): string {
   return ticker.toUpperCase();
 }
 
-const PERIOD_RANGE: Record<Period, string> = { "1W": "5d", "1M": "1mo", "3M": "3mo", "1Y": "1y" };
 
 // AI 투자의견 배지 스타일
 const OPINION_BADGE: Record<string, { bg: string; text: string }> = {
@@ -594,6 +604,7 @@ function ChartTab({
   chartInputTicker, setChartInputTicker,
   showChartSugg, setShowChartSugg, chartSuggestions,
   holdings, fetchChart, handlePeriodChange,
+  showIntradayMenu, setShowIntradayMenu,
   isKRW, lastBar, prevBar, priceChange, priceChangePct,
 }: {
   watchlistItems: WatchlistItem[];
@@ -615,6 +626,8 @@ function ChartTab({
   holdings: { id: string; name: string; ticker: string; market: "KR" | "US"; currency: string }[];
   fetchChart: (yahoo: string, label: string, currency: string, p?: Period) => void;
   handlePeriodChange: (p: Period) => void;
+  showIntradayMenu: boolean;
+  setShowIntradayMenu: (v: boolean | ((prev: boolean) => boolean)) => void;
   isKRW: boolean;
   lastBar: OHLCVBar | undefined;
   prevBar: OHLCVBar | undefined;
@@ -831,19 +844,51 @@ function ChartTab({
               </div>
             )}
 
-            {/* 기간 선택 pill */}
-            <div className="flex gap-1 bg-muted/50 rounded-xl p-1">
-              {(["1W", "1M", "3M", "1Y"] as Period[]).map(p => (
-                <button key={p}
-                  onClick={() => handlePeriodChange(p)}
-                  className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                    period === p
-                      ? "bg-background shadow-sm text-foreground"
-                      : "text-muted-foreground hover:text-foreground"
+            {/* 기간 선택 — 토스 스타일 */}
+            <div className="flex items-center gap-1">
+              {/* 분봉 드롭다운 */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowIntradayMenu(v => !v)}
+                  onBlur={() => setTimeout(() => setShowIntradayMenu(false), 150)}
+                  className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg transition-all border ${
+                    PERIOD_CONFIG[period].intraday
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-muted/50 text-muted-foreground border-transparent hover:text-foreground"
                   }`}>
-                  {p === "1W" ? "1주" : p === "1M" ? "1달" : p === "3M" ? "3달" : "1년"}
+                  {PERIOD_CONFIG[period].intraday ? PERIOD_CONFIG[period].label : "분봉"}
+                  <svg className="w-3 h-3" viewBox="0 0 12 12" fill="none">
+                    <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                  </svg>
                 </button>
-              ))}
+                {showIntradayMenu && (
+                  <div className="absolute top-8 left-0 z-50 bg-popover border rounded-xl shadow-lg py-1 min-w-[80px]">
+                    {(["1m", "5m", "15m", "30m", "60m"] as Period[]).map(p => (
+                      <button key={p}
+                        onMouseDown={() => { handlePeriodChange(p); setShowIntradayMenu(false); }}
+                        className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
+                          period === p ? "text-primary font-semibold" : "text-foreground hover:bg-muted"
+                        }`}>
+                        {PERIOD_CONFIG[p].label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {/* 일/주/월 버튼 */}
+              <div className="flex gap-0.5 bg-muted/50 rounded-xl p-1 flex-1">
+                {(["D", "W", "M"] as Period[]).map(p => (
+                  <button key={p}
+                    onClick={() => handlePeriodChange(p)}
+                    className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
+                      period === p
+                        ? "bg-background shadow-sm text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}>
+                    {PERIOD_CONFIG[p].label}
+                  </button>
+                ))}
+              </div>
             </div>
           </>
         )}
@@ -865,6 +910,7 @@ function ChartTab({
             bars={chartMeta.bars}
             height={380}
             isKRW={isKRW}
+            showMA={!PERIOD_CONFIG[period].intraday}
           />
         )}
       </div>
@@ -1104,7 +1150,8 @@ export default function StockPage() {
   const [chartSuggestions, setChartSuggestions] = useState<{ ticker: string; name: string; market: "KR" | "US" }[]>([]);
   const [showChartSugg, setShowChartSugg] = useState(false);
   const [activeTicker, setActiveTicker] = useState<{ yahoo: string; label: string; currency: string } | null>(null);
-  const [period, setPeriod] = useState<Period>("3M");
+  const [period, setPeriod] = useState<Period>("D");
+  const [showIntradayMenu, setShowIntradayMenu] = useState(false);
   const [chartLoading, setChartLoading] = useState(false);
   const [chartError, setChartError] = useState("");
   const [chartMeta, setChartMeta] = useState<{ ticker: string; currency: string; regularMarketPrice?: number; longName: string; bars: OHLCVBar[] } | null>(null);
@@ -1318,13 +1365,14 @@ export default function StockPage() {
 
   async function fetchChart(yahooTicker: string, label: string, currency: string, p?: Period) {
     const usePeriod = p ?? period;
+    const { range, interval } = PERIOD_CONFIG[usePeriod];
     setChartLoading(true);
     setChartError("");
     setChartMeta(null);
     setActiveTicker({ yahoo: yahooTicker, label, currency });
     setTab("차트");
     try {
-      const res = await fetch(`/api/chart?ticker=${encodeURIComponent(yahooTicker)}&range=${PERIOD_RANGE[usePeriod]}&interval=1d`);
+      const res = await fetch(`/api/chart?ticker=${encodeURIComponent(yahooTicker)}&range=${range}&interval=${interval}`);
       const data = await res.json();
       if (data.error) { setChartError(data.error); return; }
       setChartMeta(data);
@@ -1679,6 +1727,8 @@ export default function StockPage() {
           holdings={holdings}
           fetchChart={fetchChart}
           handlePeriodChange={handlePeriodChange}
+          showIntradayMenu={showIntradayMenu}
+          setShowIntradayMenu={setShowIntradayMenu}
           isKRW={isKRW}
           lastBar={lastBar}
           prevBar={prevBar}
