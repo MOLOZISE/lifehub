@@ -9,6 +9,18 @@ export const authConfig: NextAuthConfig = {
   },
   session: { strategy: "jwt" },
   callbacks: {
+    // JWT → session 매핑 (Edge에서도 role이 auth.user에 반영되도록)
+    async jwt({ token, user }) {
+      if (user) token.id = user.id;
+      return token;
+    },
+    async session({ session, token }) {
+      if (token && session.user) {
+        session.user.id = token.id as string;
+        (session.user as { role?: string }).role = token.role as string | undefined;
+      }
+      return session;
+    },
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
       const role = (auth?.user as { role?: string } | undefined)?.role ?? "USER";
