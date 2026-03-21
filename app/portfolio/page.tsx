@@ -687,10 +687,13 @@ export default function PortfolioPage() {
                 <span className="font-medium">{form.name}</span>
                 <span className="text-muted-foreground font-mono text-xs">{form.ticker}</span>
                 {fetchingPrice && <span className="ml-auto text-xs text-muted-foreground">가격 조회 중...</span>}
-                {form.currentPrice > 0 && !fetchingPrice && (
+                {!fetchingPrice && form.currentPrice > 0 && (
                   <span className="ml-auto text-xs font-semibold text-green-600">
                     {form.currency === "KRW" ? `₩${(form.currentPrice ?? 0).toLocaleString()}` : `$${(form.currentPrice ?? 0).toLocaleString()}`}
                   </span>
+                )}
+                {!fetchingPrice && form.currentPrice === 0 && !editing && (
+                  <span className="ml-auto text-[11px] text-amber-500">현재가 조회 실패 — 직접 입력해주세요</span>
                 )}
               </div>
             )}

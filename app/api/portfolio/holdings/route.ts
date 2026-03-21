@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { ticker, name, market, sector, quantity, avgPrice, currentPrice, currency, memo } = body;
 
-  if (!ticker || !name || !market || !quantity || !avgPrice || !currentPrice || !currency) {
+  if (!ticker || !name || !market || quantity == null || avgPrice == null || currentPrice == null || !currency) {
     return NextResponse.json({ error: "필수 항목 누락" }, { status: 400 });
   }
 
