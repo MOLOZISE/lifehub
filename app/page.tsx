@@ -587,8 +587,8 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {holdings.slice(0, 4).map(h => {
+                <div className="grid grid-cols-3 gap-2">
+                  {holdings.slice(0, 6).map(h => {
                     const rate = h.avgPrice > 0 ? ((h.currentPrice - h.avgPrice) / h.avgPrice) * 100 : 0;
                     const dayPct = dayChangePct[h.ticker];
                     return (
@@ -609,8 +609,8 @@ export default function DashboardPage() {
                     );
                   })}
                 </div>
-                {holdings.length > 4 && (
-                  <p className="text-xs text-muted-foreground text-center mt-2">외 {holdings.length - 4}개 종목</p>
+                {holdings.length > 6 && (
+                  <p className="text-xs text-muted-foreground text-center mt-2">외 {holdings.length - 6}개 종목</p>
                 )}
               </>
             )}
