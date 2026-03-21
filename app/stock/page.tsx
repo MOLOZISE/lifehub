@@ -1669,9 +1669,9 @@ export default function StockPage() {
                     price={price}
                     inWatchlist={isInWatchlist(s.ticker)}
                     aiData={stockAiData[s.ticker]}
-                    onChart={() => fetchChart(toYahooTicker(s.ticker, s.market), s.name, "KRW")}
+                    onChart={() => router.push(`/stock/${encodeURIComponent(toYahooTicker(s.ticker, s.market))}`)}
                     onWatchlist={() => toggleWatchlist(s.ticker, s.name, s.market)}
-                    onAnalyze={() => openAiAnalysis(s.name, s.ticker)}
+                    onAnalyze={() => router.push(`/stock/${encodeURIComponent(toYahooTicker(s.ticker, s.market))}`)}
                   />
                 );
               })}
@@ -1700,9 +1700,9 @@ export default function StockPage() {
                     price={price}
                     inWatchlist={isInWatchlist(s.ticker)}
                     aiData={stockAiData[s.ticker]}
-                    onChart={() => fetchChart(toYahooTicker(s.ticker, s.market), s.name, "USD")}
+                    onChart={() => router.push(`/stock/${encodeURIComponent(toYahooTicker(s.ticker, s.market))}`)}
                     onWatchlist={() => toggleWatchlist(s.ticker, s.name, s.market)}
-                    onAnalyze={() => openAiAnalysis(s.name, s.ticker)}
+                    onAnalyze={() => router.push(`/stock/${encodeURIComponent(toYahooTicker(s.ticker, s.market))}`)}
                   />
                 );
               })}
@@ -2012,8 +2012,8 @@ export default function StockPage() {
                             key={w.id}
                             item={w}
                             price={price}
-                            onChart={() => fetchChart(yt, w.name, w.market === "KR" ? "KRW" : "USD")}
-                            onAnalyze={() => openAiAnalysis(w.name, w.ticker)}
+                            onChart={() => router.push(`/stock/${encodeURIComponent(yt)}`)}
+                            onAnalyze={() => router.push(`/stock/${encodeURIComponent(yt)}`)}
                             onDelete={() => deleteWatchlistItem(w.id, w.name)}
                           />
                         );
