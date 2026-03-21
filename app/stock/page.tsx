@@ -914,6 +914,7 @@ function ChartTab({
             height={380}
             isKRW={isKRW}
             showMA={!PERIOD_CONFIG[period].intraday}
+            intraday={PERIOD_CONFIG[period].intraday}
           />
         )}
       </div>

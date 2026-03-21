@@ -202,13 +202,14 @@ interface TradingViewChartProps {
   height?: number;
   isKRW?: boolean;
   showMA?: boolean;
+  intraday?: boolean;  // 분봉 여부
 }
 
 const SUB_HEIGHT = 100;
 
 // ── Component ────────────────────────────────────────────────────────────────────
 
-export function TradingViewChart({ bars, height = 340, isKRW = false, showMA = true }: TradingViewChartProps) {
+export function TradingViewChart({ bars, height = 340, isKRW = false, showMA = true, intraday = false }: TradingViewChartProps) {
   const containerRef  = useRef<HTMLDivElement>(null);
   const subRef        = useRef<HTMLDivElement>(null);
   const chartRef      = useRef<IChartApi | null>(null);
@@ -252,7 +253,21 @@ export function TradingViewChart({ bars, height = 340, isKRW = false, showMA = t
       },
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.08, bottom: 0.22 } },
-      timeScale: { borderVisible: false, rightOffset: 5 },
+      timeScale: {
+        borderVisible: false,
+        rightOffset: 5,
+        timeVisible: intraday,
+        secondsVisible: false,
+      },
+      localization: {
+        timeFormatter: (t: number) => {
+          const d = new Date(t * 1000);
+          if (intraday) {
+            return d.toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+          }
+          return d.toLocaleDateString("ko-KR", { year: "numeric", month: "numeric", day: "numeric" });
+        },
+      },
       handleScale: true,
       handleScroll: true,
     });
