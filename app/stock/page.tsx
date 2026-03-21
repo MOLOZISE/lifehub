@@ -895,14 +895,14 @@ function AiAnalysisTab({
   aiAnalyzedAt: string | null;
   aiSources: string[];
   cachedTickers: string[];
-  handleAiAnalyze: (target?: string, forceRefresh?: boolean) => void;
+  handleAiAnalyze: (target?: string, tickerOverride?: string | boolean, forceRefresh?: boolean) => void;
   loadFromAiCache: (t: string) => void;
   holdings: { id: string; name: string; ticker: string; market: "KR" | "US"; currency: string }[];
 }) {
   const aiViewRef = useRef<HTMLDivElement>(null);
 
-  function handleSelectAi(name: string) {
-    handleAiAnalyze(name);
+  function handleSelectAi(name: string, ticker?: string) {
+    handleAiAnalyze(name, ticker);
     setTimeout(() => {
       aiViewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 100);
@@ -939,7 +939,7 @@ function AiAnalysisTab({
                   market={w.market}
                   aiData={stockAiData[w.ticker]}
                   isActive={aiAnalyzed === w.name}
-                  onClick={() => handleSelectAi(w.name)}
+                  onClick={() => handleSelectAi(w.name, w.ticker)}
                 />
               ))}
             </div>
@@ -957,7 +957,7 @@ function AiAnalysisTab({
                 market={s.market}
                 aiData={stockAiData[s.ticker]}
                 isActive={aiAnalyzed === s.name}
-                onClick={() => handleSelectAi(s.name)}
+                onClick={() => handleSelectAi(s.name, s.ticker)}
               />
             ))}
           </div>
@@ -974,7 +974,7 @@ function AiAnalysisTab({
                 market={s.market}
                 aiData={stockAiData[s.ticker]}
                 isActive={aiAnalyzed === s.name}
-                onClick={() => handleSelectAi(s.name)}
+                onClick={() => handleSelectAi(s.name, s.ticker)}
               />
             ))}
           </div>
@@ -1369,40 +1369,40 @@ export default function StockPage() {
     }
   }
 
-  function openAiAnalysis(name: string) {
+  function openAiAnalysis(name: string, ticker?: string) {
     setTab("AI분석");
     setAiTicker(name);
-    handleAiAnalyze(name);
+    handleAiAnalyze(name, ticker);
   }
 
-  async function handleAiAnalyze(target?: string, forceRefresh = false) {
+  async function handleAiAnalyze(target?: string, tickerOverride?: string | boolean, forceRefresh = false) {
+    // 하위 호환: 2번째 인자가 boolean이면 forceRefresh로 취급
+    const isForce = typeof tickerOverride === "boolean" ? tickerOverride : forceRefresh;
+    const ticker  = typeof tickerOverride === "string"  ? tickerOverride : undefined;
     const t = (target ?? aiTicker).trim();
     if (!t) return;
-    if (!forceRefresh) {
-      const cached = loadCache(t);
-      if (cached) { loadFromAiCache(t); return; }
-    }
     setAiLoading(true); setAiError(""); setAiSections([]); setAiAnalyzedAt(null); setAiSources([]);
     try {
-      const res = await fetch("/api/ai", {
+      const res = await fetch("/api/stock/ai-analysis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          systemPrompt: SYSTEM_PROMPT,
-          userMessage: `${t} 종목의 최신 뉴스, 시장 동향, 재무 지표를 검색하여 종합 분석해주세요. 가능하면 최근 애널리스트 목표주가 및 투자의견도 포함하세요.`,
-          useSearch: true,
-        }),
+        body: JSON.stringify({ name: t, ticker: ticker ?? t, force: isForce }),
       });
       const data = await res.json();
       if (data.error) { setAiError(data.error); return; }
-      const parsed = parseNewsResponse(data.text);
+      const sections: NewsSection[] = Array.isArray(data.sections) ? data.sections : [];
       const now = new Date().toLocaleString("ko-KR");
-      setAiSections(parsed);
+      setAiSections(sections);
       setAiAnalyzed(t);
       setAiAnalyzedAt(now);
       setAiSources(data.sources ?? []);
-      saveCache(t, { sections: parsed, sources: data.sources ?? [], cachedAt: now });
-      setCachedTickers(getCachedTickers());
+      // 뱃지 즉시 업데이트
+      if (ticker) {
+        setStockAiData(prev => ({
+          ...prev,
+          [ticker]: { opinion: data.opinion, risk: data.risk, summary: data.summary, analyzedAt: now, stale: false },
+        }));
+      }
     } catch {
       setAiError("분석 실패. GROQ_API_KEY 및 TAVILY_API_KEY 환경변수를 확인해주세요.");
     } finally {
@@ -1957,7 +1957,7 @@ export default function StockPage() {
                             item={w}
                             price={price}
                             onChart={() => fetchChart(yt, w.name, w.market === "KR" ? "KRW" : "USD")}
-                            onAnalyze={() => openAiAnalysis(w.name)}
+                            onAnalyze={() => openAiAnalysis(w.name, w.ticker)}
                             onDelete={() => deleteWatchlistItem(w.id, w.name)}
                           />
                         );
@@ -1987,7 +1987,7 @@ export default function StockPage() {
                           item={w}
                           price={price}
                           onChart={() => fetchChart(yt, w.name, w.market === "KR" ? "KRW" : "USD")}
-                          onAnalyze={() => openAiAnalysis(w.name)}
+                          onAnalyze={() => openAiAnalysis(w.name, w.ticker)}
                           onDelete={() => deleteWatchlistItem(w.id, w.name)}
                         />
                       );
