@@ -12,7 +12,7 @@ import type { OHLCVBar } from "@/lib/types";
 
 interface StockPrice { price: number; change: number; changePercent: number; currency: string; name: string; }
 interface AiSection { type: string; title: string; items?: string[]; text?: string; }
-interface AiData { opinion?: string; risk?: string; summary?: string; sections?: AiSection[]; sources?: string[]; analyzedAt?: string; cached?: boolean; }
+interface AiData { opinion?: string; risk?: string; summary?: string; sections?: AiSection[]; sources?: string[]; analyzedAt?: string; cached?: boolean; stale?: boolean; }
 
 // ── Timeframe config ─────────────────────────────────────────────────────────────
 
@@ -100,7 +100,7 @@ export default function StockDetailPage() {
   useEffect(() => {
     fetch(`/api/stock/ai-analysis?ticker=${encodeURIComponent(ticker)}`)
       .then(r => r.json())
-      .then(d => { if (d.cached) setAi(d); });
+      .then(d => { if (d.cached) setAi(d); }); // stale도 일단 표시
   }, [ticker]);
 
   async function runAnalysis(force = false) {
@@ -219,16 +219,23 @@ export default function StockDetailPage() {
         {/* AI Analysis */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-sm flex items-center gap-1.5">
-              🤖 AI 분석
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="font-semibold text-sm">🤖 AI 분석</h2>
               {ai?.analyzedAt && (
-                <span className="text-[10px] text-muted-foreground font-normal">{new Date(ai.analyzedAt).toLocaleString("ko-KR", { month:"numeric", day:"numeric", hour:"2-digit", minute:"2-digit" })}</span>
+                <span className="text-[10px] text-muted-foreground">
+                  {new Date(ai.analyzedAt).toLocaleString("ko-KR", { month:"numeric", day:"numeric", hour:"2-digit", minute:"2-digit" })} 기준
+                </span>
               )}
-            </h2>
+              {ai?.stale && (
+                <span className="text-[10px] bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 px-1.5 py-0.5 rounded-md">
+                  오래된 분석
+                </span>
+              )}
+            </div>
             <Button size="sm" variant="outline" className="h-7 text-xs gap-1"
-              onClick={() => runAnalysis(!!ai)} disabled={aiLoading}>
-              {aiLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : "📊"}
-              {aiLoading ? "분석 중..." : ai ? "새로 분석" : "분석하기"}
+              onClick={() => runAnalysis(true)} disabled={aiLoading}>
+              {aiLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+              {aiLoading ? "분석 중..." : "새로고침"}
             </Button>
           </div>
 
@@ -268,9 +275,12 @@ export default function StockDetailPage() {
               ))}
             </div>
           ) : !aiLoading && (
-            <div className="text-center py-6 text-muted-foreground">
+            <div className="text-center py-8 text-muted-foreground">
               <p className="text-3xl mb-2">📊</p>
-              <p className="text-sm">분석하기를 눌러 AI 분석을 시작하세요</p>
+              <p className="text-sm mb-3">아직 분석된 데이터가 없어요</p>
+              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => runAnalysis(false)} disabled={aiLoading}>
+                <RefreshCw className="w-3.5 h-3.5" />분석 시작
+              </Button>
             </div>
           )}
         </div>
