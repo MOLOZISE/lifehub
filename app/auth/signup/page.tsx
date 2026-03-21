@@ -31,8 +31,8 @@ export default function SignUpPage() {
         toast.error(data.error ?? "회원가입에 실패했습니다.");
         return;
       }
-      toast.success("회원가입이 완료됐습니다! 로그인해주세요.");
-      router.push("/auth/signin");
+      // 인증 이메일 발송 안내 페이지로 이동
+      router.push("/auth/verify-email");
     } finally {
       setLoading(false);
     }

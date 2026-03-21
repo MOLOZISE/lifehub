@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { sendVerificationEmail } from "@/lib/email";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 
 export async function POST(req: NextRequest) {
   try {
@@ -21,24 +23,30 @@ export async function POST(req: NextRequest) {
 
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    const user = await prisma.user.create({
+    await prisma.user.create({
       data: {
         name,
         email,
-        // password는 별도 Account 레코드로 저장 (NextAuth credentials 패턴)
         accounts: {
           create: {
             type: "credentials",
             provider: "credentials",
             providerAccountId: email,
-            access_token: hashedPassword, // 해시된 비밀번호 저장
+            access_token: hashedPassword,
           },
         },
       },
-      select: { id: true, name: true, email: true },
     });
 
-    return NextResponse.json({ user }, { status: 201 });
+    const token = crypto.randomBytes(32).toString("hex");
+    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    await prisma.verificationToken.create({ data: { identifier: email, token, expires } });
+
+    if (process.env.RESEND_API_KEY) {
+      await sendVerificationEmail(email, token);
+    }
+
+    return NextResponse.json({ message: "인증 이메일을 발송했습니다." }, { status: 201 });
   } catch (error) {
     console.error("[register]", error);
     return NextResponse.json({ error: "서버 오류가 발생했습니다." }, { status: 500 });

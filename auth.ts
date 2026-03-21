@@ -35,6 +35,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         if (!isValid) return null;
 
+        // 이메일 미인증 계정 차단
+        if (!user.emailVerified) return null;
+
         return { id: user.id, name: user.name, email: user.email, image: user.image };
       },
     }),
