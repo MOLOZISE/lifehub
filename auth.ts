@@ -51,6 +51,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       : []),
   ],
 
+  events: {
+    // 신규 유저 생성 시 기본 맛집 리스트 자동 생성
+    async createUser({ user }) {
+      if (!user.id) return;
+      const existing = await prisma.restaurantList.findFirst({
+        where: { userId: user.id, isDefault: true },
+      });
+      if (!existing) {
+        await prisma.restaurantList.create({
+          data: {
+            userId: user.id,
+            name: "내 맛집",
+            emoji: "🍽️",
+            color: "#6366f1",
+            sortOrder: 0,
+            isDefault: true,
+          },
+        });
+      }
+    },
+  },
+
   callbacks: {
     ...authConfig.callbacks,
     async jwt({ token, user }) {
