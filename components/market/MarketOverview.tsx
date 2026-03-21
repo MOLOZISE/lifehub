@@ -340,8 +340,8 @@ export function MarketOverview({ compact = false, refreshKey }: Props) {
       </div>
 
       {compact ? (
-        /* compact 모드: 2열 그리드 */
-        <div className="grid grid-cols-2 gap-1.5">
+        /* compact 모드: 3열 그리드 */
+        <div className="grid grid-cols-3 gap-1.5">
           {sortedItems.map(i => <MarketChip key={i.symbol} item={i} />)}
         </div>
       ) : (

@@ -138,11 +138,11 @@ function getThisWeekMonday(): Date {
 }
 
 function getHeatmapColor(minutes: number): string {
-  if (minutes === 0) return "bg-muted";
-  if (minutes < 30) return "bg-green-200 dark:bg-green-900";
-  if (minutes < 60) return "bg-green-400 dark:bg-green-700";
-  if (minutes < 120) return "bg-green-600 dark:bg-green-500";
-  return "bg-green-800 dark:bg-green-300";
+  if (minutes === 0) return "bg-muted/60";
+  if (minutes < 30) return "bg-green-100 dark:bg-green-900/50";
+  if (minutes < 60) return "bg-green-300 dark:bg-green-700/60";
+  if (minutes < 120) return "bg-green-500/70 dark:bg-green-600/70";
+  return "bg-green-600 dark:bg-green-500";
 }
 
 export default function DashboardPage() {
@@ -452,12 +452,13 @@ export default function DashboardPage() {
                   if (!day) return <div key={`empty-${i}`} />;
                   const mins = sessionDateMap[day] ?? 0;
                   const isToday = day === today;
+                  const intensity = mins === 0 ? 0 : mins < 30 ? 1 : mins < 60 ? 2 : mins < 120 ? 3 : 4;
                   return (
                     <div key={day} title={mins > 0 ? `${mins}분` : undefined}
-                      className={`aspect-square flex flex-col items-center justify-center rounded-lg text-[10px] transition-colors hover:bg-accent/30 cursor-default
+                      className={`aspect-square flex flex-col items-center justify-center rounded-lg transition-colors hover:bg-accent/30 cursor-default
                         ${isToday ? "ring-2 ring-primary ring-offset-1" : ""}
                         ${getHeatmapColor(mins)}`}>
-                      <span className={`font-bold text-xs ${isToday ? "text-primary" : mins > 0 ? "text-foreground" : "text-muted-foreground/70"}`}>
+                      <span className={`font-bold text-[10px] ${isToday ? "text-primary" : intensity > 2 ? "text-white dark:text-white" : mins > 0 ? "text-foreground" : "text-muted-foreground/70"}`}>
                         {day.slice(8).replace(/^0/, "")}
                       </span>
                     </div>
@@ -467,11 +468,41 @@ export default function DashboardPage() {
               <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground">
                 <span>적음</span>
                 <div className="flex gap-0.5">
-                  {["bg-muted","bg-green-200 dark:bg-green-900","bg-green-400 dark:bg-green-700","bg-green-600 dark:bg-green-500","bg-green-800 dark:bg-green-300"].map((cls, i) => (
+                  {["bg-muted/60","bg-green-100 dark:bg-green-900/50","bg-green-300 dark:bg-green-700/60","bg-green-500/70 dark:bg-green-600/70","bg-green-600 dark:bg-green-500"].map((cls, i) => (
                     <div key={i} className={`w-3 h-3 rounded-sm ${cls}`} />
                   ))}
                 </div>
                 <span>많음</span>
+              </div>
+            </div>
+          )}
+
+          {/* 과목별 학습 시간 */}
+          {effectiveSubjects.length > 0 && (
+            <div className="mt-4 pt-3 border-t">
+              <p className="text-xs font-semibold text-muted-foreground mb-2">이번 주 과목별</p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                {effectiveSubjects.map(s => {
+                  const wMin = subjectWeekMinutes[s.id] ?? 0;
+                  const maxMin = Math.max(...effectiveSubjects.map(x => subjectWeekMinutes[x.id] ?? 0), 1);
+                  const pct = Math.round((wMin / maxMin) * 100);
+                  return (
+                    <div key={s.id} className="flex items-center gap-2 min-w-0">
+                      <span className="text-sm shrink-0">{s.emoji}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="text-xs truncate text-foreground/80">{s.name}</span>
+                          <span className="text-[10px] text-muted-foreground shrink-0 ml-1">
+                            {wMin > 0 ? (wMin >= 60 ? `${Math.floor(wMin/60)}h${wMin%60>0?`${wMin%60}m`:""}` : `${wMin}m`) : "·"}
+                          </span>
+                        </div>
+                        <div className="h-1 bg-muted rounded-full overflow-hidden">
+                          <div className="h-full bg-primary/60 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -515,98 +546,8 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Study section */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base flex items-center gap-2">
-                <BookOpen className="w-4 h-4" />학습 현황
-              </CardTitle>
-              <Link href="/study/subjects" className="text-xs flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
-                전체 보기<ArrowRight className="w-3 h-3" />
-              </Link>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {/* 오늘/이번주 요약 + 시험 */}
-            {!loading && (
-              <div className="flex gap-2 mb-1">
-                <div className="flex-1 rounded-lg bg-muted/60 px-3 py-2 text-center">
-                  <p className="text-[10px] text-muted-foreground">오늘</p>
-                  <p className="text-sm font-bold">{todayMinutes}분</p>
-                </div>
-                <div className="flex-1 rounded-lg bg-muted/60 px-3 py-2 text-center">
-                  <p className="text-[10px] text-muted-foreground">이번 주</p>
-                  <p className="text-sm font-bold">{weeklyMinutes >= 60 ? `${Math.floor(weeklyMinutes/60)}h` : `${weeklyMinutes}m`}</p>
-                </div>
-                {nearestExam && (
-                  <div className={`flex-1 rounded-lg px-3 py-2 text-center ${daysUntil(nearestExam.examDate) <= 7 ? "bg-red-50 dark:bg-red-950/30" : "bg-amber-50 dark:bg-amber-950/30"}`}>
-                    <p className="text-[10px] text-muted-foreground truncate">{nearestExam.name}</p>
-                    <p className={`text-sm font-bold ${daysUntil(nearestExam.examDate) <= 7 ? "text-red-500" : "text-amber-600"}`}>
-                      D-{Math.max(0, daysUntil(nearestExam.examDate))}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-            {loading ? (
-              <p className="text-sm text-muted-foreground text-center py-4">로딩 중...</p>
-            ) : effectiveSubjects.length === 0 ? (
-              <div className="text-center py-6 text-muted-foreground">
-                <p className="text-2xl mb-1">📚</p>
-                <p className="text-sm">과목을 추가해보세요</p>
-                <Link href="/study/subjects" className="text-xs text-primary mt-1 inline-block">과목 추가 →</Link>
-              </div>
-            ) : (
-              effectiveSubjects.slice(0, 4).map(s => {
-                const wMin = subjectWeekMinutes[s.id] ?? 0;
-                const maxMin = Math.max(...effectiveSubjects.map(x => subjectWeekMinutes[x.id] ?? 0), 1);
-                const pct = Math.round((wMin / maxMin) * 100);
-                return (
-                  <Link key={s.id} href="/study/subjects" className="block">
-                    <div className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-accent transition-colors">
-                      <span className="text-lg shrink-0">{s.emoji}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-0.5">
-                          <p className="text-sm font-medium truncate">{s.name}</p>
-                          {wMin > 0 && (
-                            <span className="text-xs text-muted-foreground shrink-0 ml-2">
-                              {wMin >= 60 ? `${Math.floor(wMin/60)}h${wMin%60>0?` ${wMin%60}m`:""}` : `${wMin}m`}
-                            </span>
-                          )}
-                        </div>
-                        {wMin > 0 && (
-                          <div className="h-1 bg-muted rounded-full overflow-hidden">
-                            <div className="h-full bg-primary/60 rounded-full transition-all" style={{ width: `${pct}%` }} />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </Link>
-                );
-              })
-            )}
-            {todaySessions.length > 0 && (
-              <div className="rounded-lg bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900 p-3">
-                <p className="text-xs font-medium text-indigo-700 dark:text-indigo-400 mb-1.5">오늘 기록</p>
-                <div className="space-y-1">
-                  {todaySessions.slice(0, 3).map(s => (
-                    <div key={s.id} className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground truncate max-w-[140px]">
-                        {s.subject?.emoji} {s.subject?.name ?? s.activityType}
-                      </span>
-                      <span className="font-medium">{s.durationMinutes}분</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Portfolio section */}
-        <Card>
+      {/* 포트폴리오 */}
+      <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base flex items-center gap-2">
@@ -617,7 +558,7 @@ export default function DashboardPage() {
               </Link>
             </div>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent>
             {loading ? (
               <p className="text-sm text-muted-foreground text-center py-4">로딩 중...</p>
             ) : holdings.length === 0 ? (
@@ -646,39 +587,35 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                {holdings.slice(0, 3).map(h => {
-                  const rate = h.avgPrice > 0 ? ((h.currentPrice - h.avgPrice) / h.avgPrice) * 100 : 0;
-                  const dayPct = dayChangePct[h.ticker];
-                  return (
-                    <Link key={h.id} href={`/portfolio/stock/${encodeURIComponent(h.ticker)}?market=${h.market}`} className="block">
-                      <div className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-accent transition-colors border-b last:border-0">
-                        <div>
-                          <span className="text-sm font-medium">{h.name}</span>
-                          <span className="text-xs text-muted-foreground ml-1.5">{h.ticker}</span>
-                        </div>
-                        <div className="text-right">
-                          <p className={`text-sm font-medium ${getProfitColor(rate)}`}>
-                            {rate >= 0 ? "+" : ""}{rate.toFixed(2)}%
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {holdings.slice(0, 4).map(h => {
+                    const rate = h.avgPrice > 0 ? ((h.currentPrice - h.avgPrice) / h.avgPrice) * 100 : 0;
+                    const dayPct = dayChangePct[h.ticker];
+                    return (
+                      <Link key={h.id} href={`/stock/${encodeURIComponent(h.ticker)}`} className="block">
+                        <div className="rounded-lg border p-2.5 hover:bg-accent transition-colors">
+                          <p className="text-xs text-muted-foreground font-mono truncate">{h.ticker}</p>
+                          <p className="text-xs font-medium truncate mt-0.5">{h.name}</p>
+                          <p className={`text-sm font-bold mt-1 ${getProfitColor(rate)}`}>
+                            {rate >= 0 ? "+" : ""}{rate.toFixed(1)}%
                           </p>
                           {dayPct !== undefined && (
-                            <p className={`text-[11px] ${getProfitColor(dayPct)}`}>
-                              일일 {dayPct >= 0 ? "+" : ""}{dayPct.toFixed(2)}%
+                            <p className={`text-[10px] ${getProfitColor(dayPct)}`}>
+                              일일 {dayPct >= 0 ? "+" : ""}{dayPct.toFixed(1)}%
                             </p>
                           )}
                         </div>
-                      </div>
-                    </Link>
-                  );
-                })}
-
-                {holdings.length > 3 && (
-                  <p className="text-xs text-muted-foreground text-center">외 {holdings.length - 3}개 종목</p>
+                      </Link>
+                    );
+                  })}
+                </div>
+                {holdings.length > 4 && (
+                  <p className="text-xs text-muted-foreground text-center mt-2">외 {holdings.length - 4}개 종목</p>
                 )}
               </>
             )}
           </CardContent>
         </Card>
-      </div>
 
       {/* Community + Restaurant widgets */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
