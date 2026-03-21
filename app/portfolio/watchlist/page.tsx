@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Plus, Trash2, Pencil, BarChart2, Newspaper, ExternalLink, ChevronDown, ChevronUp, Star } from "lucide-react";
+import { Plus, Trash2, Pencil, ChevronDown, ChevronUp, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -355,10 +355,30 @@ function TickerDialog({
   );
 }
 
+// ─── AI Opinion Badge ──────────────────────────────────────────────────────────
+
+const OPINION_STYLE: Record<string, string> = {
+  "매수": "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400",
+  "매도": "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400",
+  "중립": "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400",
+};
+
+function OpinionBadge({ opinion }: { opinion?: string | null }) {
+  if (!opinion) return (
+    <span className="text-xs px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground">미분석</span>
+  );
+  return (
+    <span className={`text-xs px-1.5 py-0.5 rounded-md font-medium ${OPINION_STYLE[opinion] ?? "bg-muted text-muted-foreground"}`}>
+      {opinion}
+    </span>
+  );
+}
+
 // ─── Ticker Card ───────────────────────────────────────────────────────────────
 
-function TickerCard({ item, onEdit, onDelete }: {
+function TickerCard({ item, aiOpinion, onEdit, onDelete }: {
   item: WatchlistItem;
+  aiOpinion?: string | null;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -369,52 +389,40 @@ function TickerCard({ item, onEdit, onDelete }: {
     : null;
 
   return (
-    <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg border bg-background hover:bg-accent/30 transition-colors group">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <Link
-            href={`/stock/${encodeURIComponent(item.ticker)}`}
-            className="font-mono text-sm font-semibold hover:underline"
-          >
-            {item.ticker}
-          </Link>
-          <span className="text-xs text-muted-foreground truncate">{item.name}</span>
-          <Badge variant="outline" className="text-xs h-4 px-1.5">{item.market}</Badge>
-          {item.sector && item.sector !== "other" && (
-            <span className="text-xs text-muted-foreground">{SECTOR_LABELS[item.sector]}</span>
-          )}
+    <Link href={`/stock/${encodeURIComponent(item.ticker)}`} className="block">
+      <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg border bg-background hover:bg-accent/30 transition-colors group">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-mono text-sm font-semibold">{item.ticker}</span>
+            <span className="text-xs text-muted-foreground truncate">{item.name}</span>
+            <Badge variant="outline" className="text-xs h-4 px-1.5">{item.market}</Badge>
+            {item.sector && item.sector !== "other" && (
+              <span className="text-xs text-muted-foreground">{SECTOR_LABELS[item.sector]}</span>
+            )}
+            <OpinionBadge opinion={aiOpinion} />
+          </div>
+          <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
+            {(item.currentPrice ?? 0) > 0 && (
+              <span>{(item.currentPrice ?? 0).toLocaleString()} {item.currency === "KRW" ? "원" : "USD"}</span>
+            )}
+            {hasTarget && upside !== null && (
+              <span className={upside >= 0 ? "text-green-600 font-medium" : "text-red-500 font-medium"}>
+                목표 {(item.targetPrice ?? 0).toLocaleString()} ({upside >= 0 ? "+" : ""}{upside.toFixed(1)}%)
+              </span>
+            )}
+            {item.memo && <span className="truncate max-w-40">{item.memo}</span>}
+          </div>
         </div>
-        <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
-          {(item.currentPrice ?? 0) > 0 && (
-            <span>{(item.currentPrice ?? 0).toLocaleString()} {item.currency === "KRW" ? "원" : "USD"}</span>
-          )}
-          {hasTarget && upside !== null && (
-            <span className={upside >= 0 ? "text-green-600 font-medium" : "text-red-500 font-medium"}>
-              목표 {(item.targetPrice ?? 0).toLocaleString()} ({upside >= 0 ? "+" : ""}{upside.toFixed(1)}%)
-            </span>
-          )}
-          {item.memo && <span className="truncate max-w-40">{item.memo}</span>}
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" onClick={e => e.preventDefault()}>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onEdit}>
+            <Pencil className="w-3.5 h-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={onDelete}>
+            <Trash2 className="w-3.5 h-3.5" />
+          </Button>
         </div>
       </div>
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-        <Link href={`/portfolio/chart?ticker=${item.ticker}&market=${item.market}`}>
-          <Button variant="ghost" size="icon" className="h-7 w-7" title="차트 보기">
-            <BarChart2 className="w-3.5 h-3.5" />
-          </Button>
-        </Link>
-        <Link href={`/portfolio/news?ticker=${item.ticker}`}>
-          <Button variant="ghost" size="icon" className="h-7 w-7" title="뉴스 분석">
-            <Newspaper className="w-3.5 h-3.5" />
-          </Button>
-        </Link>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onEdit}>
-          <Pencil className="w-3.5 h-3.5" />
-        </Button>
-        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={onDelete}>
-          <Trash2 className="w-3.5 h-3.5" />
-        </Button>
-      </div>
-    </div>
+    </Link>
   );
 }
 
@@ -424,6 +432,7 @@ export default function WatchlistPage() {
   const [items, setItems] = useState<WatchlistItem[]>([]);
   const [groups, setGroups] = useState<WatchlistGroup[]>([]);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [aiOpinions, setAiOpinions] = useState<Record<string, string | null>>({});
 
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
   const [editingGroup, setEditingGroup] = useState<WatchlistGroup | undefined>();
@@ -445,6 +454,19 @@ export default function WatchlistPage() {
       ];
       setGroups(allGroups);
       setItems(allItems);
+
+      // AI 의견 벌크 조회 (캐시된 것만)
+      const tickers = allItems.map(i => i.ticker).filter(Boolean);
+      if (tickers.length > 0) {
+        fetch(`/api/stock/ai-analysis?names=${tickers.join(",")}`)
+          .then(r => r.ok ? r.json() : {})
+          .then((data: Record<string, { opinion?: string }>) => {
+            const opinions: Record<string, string | null> = {};
+            for (const t of tickers) opinions[t] = data[t]?.opinion ?? null;
+            setAiOpinions(opinions);
+          })
+          .catch(() => {});
+      }
     }
   }
 
@@ -512,14 +534,9 @@ export default function WatchlistPage() {
           <h1 className="text-xl font-bold">관심 종목</h1>
           <p className="text-sm text-muted-foreground mt-0.5">테마별로 관심 종목을 관리하세요</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => { setEditingGroup(undefined); setGroupDialogOpen(true); }}>
-            <Plus className="w-3.5 h-3.5 mr-1" />그룹 추가
-          </Button>
-          <Button size="sm" onClick={() => openAddTicker()}>
-            <Plus className="w-3.5 h-3.5 mr-1" />종목 추가
-          </Button>
-        </div>
+        <Button variant="outline" size="sm" onClick={() => { setEditingGroup(undefined); setGroupDialogOpen(true); }}>
+          <Plus className="w-3.5 h-3.5 mr-1" />그룹 추가
+        </Button>
       </div>
 
       {/* Stats */}
@@ -536,14 +553,9 @@ export default function WatchlistPage() {
             <Star className="w-8 h-8 mx-auto mb-3 text-muted-foreground/50" />
             <p className="text-sm text-muted-foreground mb-1">관심 종목이 없습니다</p>
             <p className="text-xs text-muted-foreground mb-4">그룹을 만들어 테마별로 정리해보세요<br />예: 코인주, 양자주, 2차전지, AI 관련주</p>
-            <div className="flex gap-2 justify-center">
-              <Button variant="outline" size="sm" onClick={() => { setEditingGroup(undefined); setGroupDialogOpen(true); }}>
-                <Plus className="w-3.5 h-3.5 mr-1" />그룹 만들기
-              </Button>
-              <Button size="sm" onClick={() => openAddTicker()}>
-                <Plus className="w-3.5 h-3.5 mr-1" />종목 추가
-              </Button>
-            </div>
+            <Button variant="outline" size="sm" onClick={() => { setEditingGroup(undefined); setGroupDialogOpen(true); }}>
+              <Plus className="w-3.5 h-3.5 mr-1" />그룹 만들기
+            </Button>
           </CardContent>
         </Card>
       ) : (
@@ -608,6 +620,7 @@ export default function WatchlistPage() {
                         <TickerCard
                           key={item.id}
                           item={item}
+                          aiOpinion={aiOpinions[item.ticker]}
                           onEdit={() => openEditTicker(item)}
                           onDelete={() => handleDeleteItem(item.id)}
                         />
@@ -648,6 +661,7 @@ export default function WatchlistPage() {
                     <TickerCard
                       key={item.id}
                       item={item}
+                      aiOpinion={aiOpinions[item.ticker]}
                       onEdit={() => openEditTicker(item)}
                       onDelete={() => handleDeleteItem(item.id)}
                     />
