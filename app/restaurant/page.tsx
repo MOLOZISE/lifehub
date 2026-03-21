@@ -493,10 +493,11 @@ export default function RestaurantPage() {
           <button
             onClick={handleMyLocation}
             disabled={locating}
-            className="bg-white/95 dark:bg-zinc-900/95 shadow-md rounded-lg p-2.5 backdrop-blur hover:bg-accent"
+            className="bg-white/95 dark:bg-zinc-900/95 shadow-md rounded-lg px-3 py-2 backdrop-blur hover:bg-accent flex items-center gap-1.5"
             title="현재 위치 근처 검색"
           >
             {locating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
+            <span className="text-xs font-medium">내 지역 검색</span>
           </button>
         </div>
 
@@ -626,10 +627,11 @@ export default function RestaurantPage() {
               <button
                 onClick={handleMyLocation}
                 disabled={locating}
-                className="bg-muted rounded-lg px-2.5 hover:bg-accent"
+                className="bg-muted rounded-lg px-2.5 py-1.5 hover:bg-accent flex items-center gap-1.5"
                 title="현재 위치 근처 검색"
               >
                 {locating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
+                <span className="text-xs font-medium">내 지역 검색</span>
               </button>
             </div>
 
