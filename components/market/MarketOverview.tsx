@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { RefreshCw, Settings2, Check, Plus, X } from "lucide-react";
+import { RefreshCw, Settings2, Check, Plus, X, Search } from "lucide-react";
 import type { MarketItem } from "@/lib/market-symbols";
 import { ALL_SYMBOLS, DEFAULT_SYMBOLS } from "@/lib/market-symbols";
+import { searchStocks, MARKET_LABELS, type StockItem } from "@/lib/stock-list";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -137,6 +138,9 @@ export function MarketOverview({ compact = false, refreshKey }: Props) {
   const [draftSelected, setDraftSelected] = useState<string[]>([]);
   const [draftCustoms, setDraftCustoms] = useState<CustomSymbol[]>([]);
   const [customInput, setCustomInput] = useState("");
+  const [suggestions, setSuggestions] = useState<StockItem[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestRef = useRef<HTMLDivElement>(null);
   const staleTimerRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
@@ -221,17 +225,35 @@ export function MarketOverview({ compact = false, refreshKey }: Props) {
     );
   }
 
-  function addCustomDraft() {
-    const sym = customInput.trim().toUpperCase();
+  function addCustomDraft(overrideTicker?: string, overrideName?: string) {
+    const sym = (overrideTicker ?? customInput).trim().toUpperCase();
     if (!sym) return;
-    // 이미 있으면 선택만 추가
+    const label = overrideName ?? sym;
     if (!draftCustoms.find(c => c.symbol === sym)) {
-      setDraftCustoms(prev => [...prev, { symbol: sym, label: sym }]);
+      setDraftCustoms(prev => [...prev, { symbol: sym, label }]);
     }
     if (!draftSelected.includes(sym)) {
       setDraftSelected(prev => [...prev, sym]);
     }
     setCustomInput("");
+    setSuggestions([]);
+    setShowSuggestions(false);
+  }
+
+  function handleCustomInput(value: string) {
+    setCustomInput(value);
+    if (value.trim().length >= 1) {
+      const results = searchStocks(value);
+      setSuggestions(results);
+      setShowSuggestions(results.length > 0);
+    } else {
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+  }
+
+  function pickSuggestion(item: StockItem) {
+    addCustomDraft(item.ticker, item.name);
   }
 
   function removeCustomDraft(symbol: string) {
@@ -351,17 +373,38 @@ export function MarketOverview({ compact = false, refreshKey }: Props) {
             {/* 커스텀 종목 추가 입력 */}
             <div>
               <p className="text-xs font-semibold text-muted-foreground mb-2">종목 직접 추가 (Yahoo Finance 티커)</p>
-              <div className="flex gap-2">
-                <Input
-                  value={customInput}
-                  onChange={e => setCustomInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addCustomDraft(); } }}
-                  placeholder="예: MSFT, 005930.KS, ^N225"
-                  className="h-8 text-xs"
-                />
-                <Button size="sm" variant="outline" onClick={addCustomDraft} className="h-8 px-2">
-                  <Plus className="w-3.5 h-3.5" />
-                </Button>
+              <div className="relative">
+                <div className="flex gap-2">
+                  <Input
+                    value={customInput}
+                    onChange={e => handleCustomInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addCustomDraft(); setShowSuggestions(false); } }}
+                    onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                    onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+                    placeholder="종목명 또는 티커 검색..."
+                    className="h-8 text-xs"
+                  />
+                  <Button size="sm" variant="outline" onClick={() => { addCustomDraft(); setShowSuggestions(false); }} className="h-8 px-2">
+                    <Plus className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+                {showSuggestions && suggestions.length > 0 && (
+                  <div className="absolute z-50 top-9 left-0 right-8 bg-popover border rounded-lg shadow-lg overflow-hidden">
+                    {suggestions.map(item => (
+                      <button
+                        key={item.ticker}
+                        onMouseDown={() => pickSuggestion(item)}
+                        className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-accent transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-primary">{item.ticker}</span>
+                          <span>{item.name}</span>
+                        </div>
+                        <span className="text-muted-foreground text-[10px]">{MARKET_LABELS[item.market]}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               {/* 커스텀 종목 목록 */}
               {draftCustoms.length > 0 && (
@@ -377,7 +420,7 @@ export function MarketOverview({ compact = false, refreshKey }: Props) {
                 </div>
               )}
               <p className="text-[10px] text-muted-foreground mt-1.5">
-                한국 주식: 005930.KS / 미국 선물: NQ=F (나스닥100 선물), ES=F (S&P500 선물)
+                티커 직접 입력도 가능: 005930.KS (삼성전자) / NQ=F (나스닥100 선물)
               </p>
             </div>
 
