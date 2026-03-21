@@ -159,7 +159,8 @@ function calcMACD(closes: number[], fast = 12, slow = 26, signal = 9) {
 
 function parseTime(date: string): Time {
   if (/^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
-  return Math.floor(new Date(date.replace(" ", "T") + "Z").getTime() / 1000) as UTCTimestamp;
+  const normalized = date.endsWith("Z") ? date : date.replace(" ", "T") + "Z";
+  return Math.floor(new Date(normalized).getTime() / 1000) as UTCTimestamp;
 }
 
 function calcMA(bars: OHLCVBar[], period: number): (number | null)[] {
