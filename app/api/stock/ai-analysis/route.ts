@@ -80,16 +80,23 @@ async function fetchHeadlines(name: string): Promise<string[]> {
   if (!process.env.TAVILY_API_KEY) return [];
   try {
     const client = tavily({ apiKey: process.env.TAVILY_API_KEY });
+    // topic:"news"로 실제 뉴스 기사만 필터링, days:3으로 최신 뉴스 집중
     const result = await Promise.race([
-      client.search(`${name} 주식 뉴스`, {
-        searchDepth: "basic", maxResults: 5, includeAnswer: false, days: 7,
-      }),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 3000)),
+      client.search(`${name} 주가 전망 실적 뉴스`, {
+        searchDepth: "basic",
+        maxResults: 6,
+        includeAnswer: false,
+        days: 3,
+        topic: "news",
+      } as Parameters<typeof client.search>[1]),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 4000)),
     ]);
-    return (result.results ?? []).map(r => {
-      const pub = (r as { published_date?: string }).published_date?.slice(0, 10) ?? "";
-      return `${r.title}${pub ? ` (${pub})` : ""}`;
-    });
+    return (result.results ?? [])
+      .filter(r => r.title && r.title.length > 10)  // 짧은 제목(홈페이지 등) 제외
+      .map(r => {
+        const pub = (r as { published_date?: string }).published_date?.slice(0, 10) ?? "";
+        return `${r.title}${pub ? ` (${pub})` : ""}`;
+      });
   } catch { return []; }
 }
 
