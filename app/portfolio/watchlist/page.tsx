@@ -314,10 +314,10 @@ function TickerDialog({
             <div>
               <p className="text-xs mb-1 font-medium">섹터</p>
               <Select value={form.sector} onValueChange={v => v && setForm(f => ({ ...f, sector: v as PortfolioSector }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger><SelectValue>{SECTOR_LABELS[form.sector as PortfolioSector] ?? "섹터 선택"}</SelectValue></SelectTrigger>
                 <SelectContent>
                   {(Object.entries(SECTOR_LABELS) as [PortfolioSector, string][]).map(([k, v]) => (
-                    <SelectItem key={k} value={k} textValue={v}>{v}</SelectItem>
+                    <SelectItem key={k} value={k}>{v}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -327,10 +327,16 @@ function TickerDialog({
             <div>
               <p className="text-xs mb-1 font-medium">그룹</p>
               <Select value={form.groupId || "none"} onValueChange={v => v && setForm(f => ({ ...f, groupId: v === "none" ? "" : v }))}>
-                <SelectTrigger><SelectValue placeholder="그룹 선택" /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue>
+                    {form.groupId && form.groupId !== "none"
+                      ? (() => { const g = groups.find(g => g.id === form.groupId); return g ? `${g.emoji} ${g.name}` : "그룹 선택"; })()
+                      : "그룹 없음"}
+                  </SelectValue>
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">그룹 없음</SelectItem>
-                  {groups.map(g => <SelectItem key={g.id} value={g.id} textValue={`${g.emoji} ${g.name}`}>{g.emoji} {g.name}</SelectItem>)}
+                  {groups.map(g => <SelectItem key={g.id} value={g.id}>{g.emoji} {g.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
