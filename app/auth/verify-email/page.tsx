@@ -5,7 +5,6 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { CheckCircle2, XCircle, Mail } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 
 function VerifyContent() {
   const params = useSearchParams();
@@ -20,9 +19,9 @@ function VerifyContent() {
         </div>
         <h2 className="text-lg font-bold">이메일 인증 완료!</h2>
         <p className="text-sm text-muted-foreground">이제 로그인하여 LifeHub를 이용할 수 있습니다.</p>
-        <Button asChild className="mt-2">
-          <Link href="/auth/signin">로그인하기</Link>
-        </Button>
+        <Link href="/auth/signin" className="inline-flex items-center justify-center px-4 py-2 mt-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
+          로그인하기
+        </Link>
       </div>
     );
   }
@@ -35,9 +34,9 @@ function VerifyContent() {
         </div>
         <h2 className="text-lg font-bold">링크가 만료되었습니다</h2>
         <p className="text-sm text-muted-foreground">인증 링크는 24시간 후 만료됩니다.<br />다시 회원가입해주세요.</p>
-        <Button variant="outline" asChild className="mt-2">
-          <Link href="/auth/signup">다시 회원가입</Link>
-        </Button>
+        <Link href="/auth/signup" className="inline-flex items-center justify-center px-4 py-2 mt-2 rounded-md border border-input bg-background text-sm font-medium hover:bg-accent transition-colors">
+          다시 회원가입
+        </Link>
       </div>
     );
   }
@@ -50,9 +49,9 @@ function VerifyContent() {
         </div>
         <h2 className="text-lg font-bold">유효하지 않은 링크입니다</h2>
         <p className="text-sm text-muted-foreground">링크가 올바르지 않거나 이미 사용되었습니다.</p>
-        <Button variant="outline" asChild className="mt-2">
-          <Link href="/auth/signin">로그인 페이지로</Link>
-        </Button>
+        <Link href="/auth/signin" className="inline-flex items-center justify-center px-4 py-2 mt-2 rounded-md border border-input bg-background text-sm font-medium hover:bg-accent transition-colors">
+          로그인 페이지로
+        </Link>
       </div>
     );
   }
@@ -69,9 +68,9 @@ function VerifyContent() {
         링크를 클릭하면 가입이 완료됩니다.
       </p>
       <p className="text-xs text-muted-foreground">메일이 오지 않으면 스팸 폴더를 확인하세요.</p>
-      <Button variant="ghost" asChild className="mt-2">
-        <Link href="/auth/signin">로그인 페이지로</Link>
-      </Button>
+      <Link href="/auth/signin" className="inline-flex items-center justify-center px-4 py-2 mt-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+        로그인 페이지로
+      </Link>
     </div>
   );
 }
