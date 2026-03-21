@@ -3,7 +3,7 @@
 import { useState, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { ArrowLeft, Loader2, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, Loader2, Eye, EyeOff, ImageIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,7 +69,9 @@ function NewPostForm() {
   const [tags, setTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [preview, setPreview] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const contentRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   function insertAtCursor(marker: string) {
     const el = contentRef.current;
@@ -84,13 +86,40 @@ function NewPostForm() {
     }, 0);
   }
 
-  function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+  async function uploadImageFile(file: File) {
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error ?? "업로드 실패"); return; }
+      insertAtCursor(`\n[IMG:${data.url}]\n`);
+      toast.success("이미지가 삽입되었습니다.");
+    } catch {
+      toast.error("이미지 업로드에 실패했습니다.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    // 1. 이미지 파일 붙여넣기 (PC 우클릭 복사, 스크린샷 등)
+    const imageItem = Array.from(e.clipboardData.items).find(
+      item => item.kind === "file" && item.type.startsWith("image/")
+    );
+    if (imageItem) {
+      e.preventDefault();
+      const file = imageItem.getAsFile();
+      if (file) await uploadImageFile(file);
+      return;
+    }
+
     const text = e.clipboardData.getData("text");
     if (!text) return;
-
     const trimmed = text.trim();
 
-    // 유튜브 URL → 자동 임베딩
+    // 2. 유튜브 URL → 자동 임베딩
     const ytId = extractYoutubeId(trimmed);
     if (ytId) {
       e.preventDefault();
@@ -99,15 +128,21 @@ function NewPostForm() {
       return;
     }
 
-    // 이미지 URL → 자동 이미지
+    // 3. 이미지 URL → 자동 이미지
     if (isImageUrl(trimmed)) {
       e.preventDefault();
       insertAtCursor(`\n[IMG:${trimmed}]\n`);
       toast.success("이미지가 삽입되었습니다.");
       return;
     }
-
     // 그 외: 기본 붙여넣기
+  }
+
+  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await uploadImageFile(file);
+    e.target.value = "";
   }
 
   function addTag() {
@@ -174,10 +209,22 @@ function NewPostForm() {
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className="text-sm font-medium">내용</label>
-                <Button type="button" variant="ghost" size="sm"
-                  className="gap-1.5 text-xs h-7" onClick={() => setPreview(p => !p)}>
-                  {preview ? <><EyeOff className="w-3.5 h-3.5" /> 편집</> : <><Eye className="w-3.5 h-3.5" /> 미리보기</>}
-                </Button>
+                <div className="flex items-center gap-1">
+                  {/* 이미지 직접 첨부 버튼 */}
+                  <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
+                  <Button type="button" variant="ghost" size="sm"
+                    className="gap-1.5 text-xs h-7" disabled={uploading}
+                    onClick={() => fileInputRef.current?.click()}>
+                    {uploading
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : <ImageIcon className="w-3.5 h-3.5" />}
+                    {uploading ? "업로드 중..." : "이미지"}
+                  </Button>
+                  <Button type="button" variant="ghost" size="sm"
+                    className="gap-1.5 text-xs h-7" onClick={() => setPreview(p => !p)}>
+                    {preview ? <><EyeOff className="w-3.5 h-3.5" /> 편집</> : <><Eye className="w-3.5 h-3.5" /> 미리보기</>}
+                  </Button>
+                </div>
               </div>
 
               {preview ? (
@@ -187,7 +234,7 @@ function NewPostForm() {
               ) : (
                 <>
                   <p className="text-xs text-muted-foreground">
-                    💡 유튜브/이미지 URL을 <strong>붙여넣기</strong>하면 자동으로 삽입됩니다.
+                    💡 이미지를 <strong>복사 후 붙여넣기</strong>하거나 <strong>이미지 버튼</strong>으로 첨부하세요. 유튜브/이미지 URL 붙여넣기도 지원합니다.
                   </p>
                   <Textarea
                     ref={contentRef}
