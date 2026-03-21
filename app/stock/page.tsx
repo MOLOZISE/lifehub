@@ -294,7 +294,7 @@ function NewsSectionCard({ section }: { section: NewsSection }) {
 
 function PopularStockCard({
   ticker, name, market, price, inWatchlist, aiData,
-  onChart, onWatchlist,
+  onChart, onWatchlist, onAnalyze,
 }: {
   ticker: string; name: string; market: "KR" | "US";
   price: StockPrice | null;
@@ -302,6 +302,7 @@ function PopularStockCard({
   aiData: AiData | "loading" | undefined;
   onChart: () => void;
   onWatchlist: () => void;
+  onAnalyze: () => void;
 }) {
   const up = price ? price.changePercent >= 0 : null;
   const pct = price
@@ -354,16 +355,18 @@ function PopularStockCard({
           {price ? fmtPrice(price) : <span className="opacity-40">로딩 중</span>}
         </span>
         <div>
-          {aiData === "loading" || aiData === undefined ? (
+          {aiData === "loading" ? (
             <span className="text-[10px] text-muted-foreground/60 flex items-center gap-0.5">
               <Loader2 className="w-2.5 h-2.5 animate-spin" />분석중
             </span>
-          ) : aiData.opinion && badge ? (
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${badge.bg} ${badge.text}`}>
+          ) : aiData?.opinion && badge ? (
+            <button onClick={onAnalyze} className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${badge.bg} ${badge.text}`}>
               {aiData.opinion}
-            </span>
+            </button>
           ) : (
-            <span className="text-[10px] text-muted-foreground/40">—</span>
+            <button onClick={onAnalyze} className="text-[10px] text-muted-foreground/40 hover:text-primary transition-colors">
+              미분석
+            </button>
           )}
         </div>
       </div>
@@ -1667,6 +1670,7 @@ export default function StockPage() {
                     aiData={stockAiData[s.ticker]}
                     onChart={() => fetchChart(toYahooTicker(s.ticker, s.market), s.name, "KRW")}
                     onWatchlist={() => toggleWatchlist(s.ticker, s.name, s.market)}
+                    onAnalyze={() => openAiAnalysis(s.name, s.ticker)}
                   />
                 );
               })}
@@ -1697,6 +1701,7 @@ export default function StockPage() {
                     aiData={stockAiData[s.ticker]}
                     onChart={() => fetchChart(toYahooTicker(s.ticker, s.market), s.name, "USD")}
                     onWatchlist={() => toggleWatchlist(s.ticker, s.name, s.market)}
+                    onAnalyze={() => openAiAnalysis(s.name, s.ticker)}
                   />
                 );
               })}
