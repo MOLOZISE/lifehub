@@ -52,24 +52,25 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
 
   events: {
-    // 신규 유저 생성 시 기본 맛집 리스트 자동 생성
+    // 신규 유저 생성 시 기본 리스트 자동 생성 (맛집 + 관심 종목)
     async createUser({ user }) {
-      if (!user.id) return;
-      const existing = await prisma.restaurantList.findFirst({
-        where: { userId: user.id, isDefault: true },
-      });
-      if (!existing) {
-        await prisma.restaurantList.create({
-          data: {
-            userId: user.id,
-            name: "내 맛집",
-            emoji: "🍽️",
-            color: "#6366f1",
-            sortOrder: 0,
-            isDefault: true,
-          },
-        });
-      }
+      const uid = user.id;
+      if (!uid) return;
+
+      await Promise.allSettled([
+        // 기본 맛집 리스트
+        prisma.restaurantList.findFirst({ where: { userId: uid } }).then(existing => {
+          if (!existing) return prisma.restaurantList.create({
+            data: { userId: uid, name: "내 맛집", emoji: "🍽️", color: "#6366f1", sortOrder: 0, isDefault: true },
+          });
+        }),
+        // 기본 관심 종목 그룹
+        prisma.watchlistGroup.findFirst({ where: { userId: uid } }).then(existing => {
+          if (!existing) return prisma.watchlistGroup.create({
+            data: { userId: uid, name: "My 종목", emoji: "⭐", color: "#f59e0b" },
+          });
+        }),
+      ]);
     },
   },
 

@@ -19,7 +19,7 @@ import type { OHLCVBar } from "@/lib/types";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-type Tab = "시황" | "차트" | "AI분석" | "관심 종목" | "랭킹";
+type Tab = "시황" | "관심 종목" | "랭킹";
 type RankSort = "volume" | "change_up" | "change_down";
 
 interface RankItem {
@@ -1374,7 +1374,6 @@ export default function StockPage() {
     setChartError("");
     setChartMeta(null);
     setActiveTicker({ yahoo: yahooTicker, label, currency });
-    setTab("차트");
     try {
       const res = await fetch(`/api/chart?ticker=${encodeURIComponent(yahooTicker)}&range=${range}&interval=${interval}`);
       const data = await res.json();
@@ -1422,7 +1421,6 @@ export default function StockPage() {
   }
 
   function openAiAnalysis(name: string, ticker?: string) {
-    setTab("AI분석");
     setAiTicker(name);
     handleAiAnalyze(name, ticker);
   }
@@ -1513,7 +1511,7 @@ export default function StockPage() {
 
   // ── Render ─────────────────────────────────────────────────────────────────────
 
-  const TABS: Tab[] = ["시황", "랭킹", "차트", "AI분석", "관심 종목"];
+  const TABS: Tab[] = ["시황", "관심 종목", "랭킹"];
 
   return (
     <div className="max-w-5xl mx-auto space-y-4">
@@ -1619,8 +1617,8 @@ export default function StockPage() {
                 </div>
                 <div className="flex gap-2">
                   <Button size="sm" variant="outline" className="text-xs h-8"
-                    onClick={() => fetchChart(searchedStock.yahooTicker, searchedStock.name, searchedStock.market === "KR" ? "KRW" : "USD")}>
-                    차트
+                    onClick={() => router.push(`/stock/${encodeURIComponent(searchedStock.yahooTicker)}`)}>
+                    차트 · AI분석
                   </Button>
                   <Button size="sm" variant="ghost" className="text-xs h-8"
                     onClick={() => setSearchedStock(null)}>
@@ -1708,11 +1706,74 @@ export default function StockPage() {
               })}
             </div>
           </div>
+
+          {/* ── My 관심 종목 ──────────────────────────────────────────────── */}
+          {watchlistItems.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold flex items-center gap-1.5">
+                  <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" /> My 관심 종목
+                </h2>
+                <button onClick={() => setTab("관심 종목")}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+                  전체보기 →
+                </button>
+              </div>
+              <div className="rounded-2xl bg-muted/30 overflow-hidden divide-y divide-border/40">
+                {watchlistItems.slice(0, 6).map(item => {
+                  const price = watchlistPrices[item.ticker];
+                  const up = price ? price.changePercent >= 0 : null;
+                  return (
+                    <button key={item.id}
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/60 transition-colors"
+                      onClick={() => router.push(`/stock/${encodeURIComponent(toYahooTicker(item.ticker, item.market as "KR" | "US"))}`)}>
+                      <span className="text-xs">{item.market === "KR" ? "🇰🇷" : "🇺🇸"}</span>
+                      <div className="flex-1 min-w-0 text-left">
+                        <p className="text-sm font-semibold truncate">{item.name}</p>
+                        <p className="text-[10px] text-muted-foreground font-mono">{item.ticker}</p>
+                      </div>
+                      {price ? (
+                        <div className="text-right">
+                          <p className="text-sm font-bold tabular-nums">
+                            {price.currency === "KRW"
+                              ? "₩" + Math.round(price.price).toLocaleString("ko-KR")
+                              : "$" + price.price.toFixed(2)}
+                          </p>
+                          <p className={`text-xs tabular-nums ${up ? "text-red-500" : "text-blue-500"}`}>
+                            {price.changePercent >= 0 ? "+" : ""}{price.changePercent.toFixed(2)}%
+                          </p>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </button>
+                  );
+                })}
+                {watchlistItems.length > 6 && (
+                  <button className="w-full py-2.5 text-xs text-muted-foreground hover:text-foreground text-center transition-colors"
+                    onClick={() => setTab("관심 종목")}>
+                    +{watchlistItems.length - 6}개 더보기
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {watchlistItems.length === 0 && (
+            <div className="rounded-2xl border border-dashed p-6 text-center space-y-1.5">
+              <Star className="w-6 h-6 text-amber-400/60 mx-auto" />
+              <p className="text-sm font-medium text-muted-foreground">아직 관심 종목이 없어요</p>
+              <button onClick={() => setTab("관심 종목")}
+                className="text-xs text-primary hover:underline">
+                관심 종목 추가하기
+              </button>
+            </div>
+          )}
         </div>
       )}
 
-      {/* ── 차트 Tab ─────────────────────────────────────────────────────────────── */}
-      {tab === "차트" && (
+      {/* ── 차트 Tab (비활성 — 개별 종목 페이지 /stock/[ticker]로 통합) ── */}
+      {false && (
         <ChartTab
           watchlistItems={watchlistItems}
           watchlistPrices={watchlistPrices}
@@ -1743,8 +1804,8 @@ export default function StockPage() {
         />
       )}
 
-      {/* ── AI분석 Tab ────────────────────────────────────────────────────────────── */}
-      {tab === "AI분석" && (
+      {/* ── AI분석 Tab (비활성 — 개별 종목 페이지 /stock/[ticker]로 통합) ── */}
+      {false && (
         <AiAnalysisTab
           watchlistItems={watchlistItems}
           stockAiData={stockAiData}
