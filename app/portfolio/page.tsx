@@ -128,11 +128,30 @@ export default function PortfolioPage() {
   // refreshPrices를 ref에 저장해 stale closure 방지
   const refreshPricesRef = useRef<(silent: boolean) => Promise<void>>(async () => {});
 
-  // 1분마다 자동 갱신 (장중 실시간 반영)
+  // 장중 여부 판별 (클라이언트)
+  function isAnyMarketOpen() {
+    const now = new Date();
+    const day = now.getUTCDay();
+    if (day === 0 || day === 6) return false;
+    const mins = now.getUTCHours() * 60 + now.getUTCMinutes();
+    return (mins < 390) || (mins >= 870 && mins < 1260); // KR 00:00-06:30 | US 14:30-21:00 UTC
+  }
+
+  // 장중엔 1분, 장외엔 10분마다 자동 갱신 (불필요한 KIS 호출 최소화)
   useEffect(() => {
-    const id = setInterval(() => {
-      if (document.visibilityState === "visible") refreshPricesRef.current(true);
-    }, 60 * 1000);
+    const INTERVAL_OPEN  = 60 * 1000;       // 장중: 1분
+    const INTERVAL_CLOSE = 10 * 60 * 1000;  // 장외: 10분
+
+    let id: ReturnType<typeof setInterval>;
+    function schedule() {
+      const delay = isAnyMarketOpen() ? INTERVAL_OPEN : INTERVAL_CLOSE;
+      id = setInterval(() => {
+        if (document.visibilityState === "visible") refreshPricesRef.current(true);
+        clearInterval(id);
+        schedule(); // 다음 주기 재스케줄 (장중↔장외 전환 감지)
+      }, delay);
+    }
+    schedule();
     return () => clearInterval(id);
   }, []);
 

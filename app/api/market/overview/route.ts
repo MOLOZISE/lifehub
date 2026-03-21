@@ -3,13 +3,12 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import type { MarketItem } from "@/lib/market-symbols";
 import { ALL_SYMBOLS, DEFAULT_SYMBOLS } from "@/lib/market-symbols";
-import { getKrIndex, getUsIndex, getUsPrice, getKrPrice } from "@/lib/kis";
+import { getKrIndex, getUsIndex, getUsPrice, getKrPrice, getMarketCacheTTL, isMarketOpen } from "@/lib/kis";
 export type { MarketItem } from "@/lib/market-symbols";
 export { ALL_SYMBOLS, DEFAULT_SYMBOLS };
 
 // In-memory cache
 let memCache: { data: Record<string, MarketItem>; ts: number } | null = null;
-const MEM_CACHE_TTL = 5 * 60 * 1000; // 5분
 
 // KIS 커버 심볼 매핑
 const KIS_INDEX_MAP: Record<string, { type: "kr" | "us"; code: string }> = {
@@ -187,22 +186,25 @@ export async function GET(req: NextRequest) {
     : DEFAULT_SYMBOLS;
 
   // 1. 캐시 확인 (force 아닌 경우) — 캐시 있으면 바로 반환
+  const cacheTTL = getMarketCacheTTL(); // 장중 5분 / 장외 2시간 / 주말 6시간
+  const marketOpen = isMarketOpen("any");
+
   if (!force) {
     // in-memory 캐시
-    if (memCache && Date.now() - memCache.ts < MEM_CACHE_TTL) {
+    if (memCache && Date.now() - memCache.ts < cacheTTL) {
       const filtered = Object.fromEntries(
         Object.entries(memCache.data).filter(([k]) => requestedSymbols.includes(k))
       );
-      return NextResponse.json({ data: filtered, cached: true, cachedAt: memCache.ts });
+      return NextResponse.json({ data: filtered, cached: true, cachedAt: memCache.ts, marketOpen });
     }
     // DB 캐시
     const dbCache = await loadFromDb();
-    if (dbCache && Date.now() - dbCache.ts < MEM_CACHE_TTL) {
+    if (dbCache && Date.now() - dbCache.ts < cacheTTL) {
       memCache = dbCache;
       const filtered = Object.fromEntries(
         Object.entries(dbCache.data).filter(([k]) => requestedSymbols.includes(k))
       );
-      return NextResponse.json({ data: filtered, cached: true, cachedAt: dbCache.ts });
+      return NextResponse.json({ data: filtered, cached: true, cachedAt: dbCache.ts, marketOpen });
     }
 
     // 캐시가 만료됐어도 DB에 이전 데이터 있으면 반환하면서 백그라운드 갱신
@@ -223,6 +225,7 @@ export async function GET(req: NextRequest) {
         cached: true,
         stale: true,
         cachedAt: dbCache.ts,
+        marketOpen,
       });
     }
   }
@@ -253,6 +256,8 @@ export async function GET(req: NextRequest) {
       data: filtered,
       cached: false,
       cachedAt: memCache?.ts ?? Date.now(),
+      marketOpen,
+      cacheTTL,
       errors: errors.length > 0 ? errors : undefined,
     });
   } catch (e) {

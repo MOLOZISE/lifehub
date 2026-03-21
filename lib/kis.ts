@@ -1,9 +1,48 @@
 /**
  * KIS (Korea Investment Securities) Open Trading API client
  * Docs: https://apiportal.koreainvestment.com
+ *
+ * 최적화 전략:
+ *  1. 장중/장외 시간 판별 → 장외엔 캐시 TTL을 2~6시간으로 늘려 API 호출 최소화
+ *  2. 해외 거래소 캐시 → NAS→NYS→AMS 순차 재시도 횟수 1/3로 감소
+ *  3. 토큰 발급 중복 방지 (Promise 공유)
  */
 
 const BASE_URL = "https://openapi.koreainvestment.com:9443";
+
+// ── 장중 시간 판별 ────────────────────────────────────────────────────────────
+
+/**
+ * 현재 시각이 특정 시장의 장중인지 판별
+ * KR: 월-금 09:00-15:30 KST (= 00:00-06:30 UTC)
+ * US: 월-금 09:30-16:00 EST (= 14:30-21:00 UTC, 서머타임 미적용)
+ */
+export function isMarketOpen(market: "KR" | "US" | "any" = "any"): boolean {
+  const now = new Date();
+  const day = now.getUTCDay(); // 0=일, 6=토
+  if (day === 0 || day === 6) return false;
+
+  const utcMins = now.getUTCHours() * 60 + now.getUTCMinutes();
+  const krOpen = utcMins >= 0 && utcMins < 390;     // 00:00-06:30 UTC
+  const usOpen = utcMins >= 870 && utcMins < 1260;  // 14:30-21:00 UTC
+
+  if (market === "KR") return krOpen;
+  if (market === "US") return usOpen;
+  return krOpen || usOpen;
+}
+
+/**
+ * 장중/장외/주말에 따른 시황 캐시 TTL 반환
+ *  - 장중:  5분 (실시간성 유지)
+ *  - 장외:  2시간 (불필요한 요청 차단)
+ *  - 주말:  6시간 (하루 4회 정도만 갱신)
+ */
+export function getMarketCacheTTL(): number {
+  if (isMarketOpen("any")) return 5 * 60 * 1000;
+  const day = new Date().getUTCDay();
+  if (day === 0 || day === 6) return 6 * 60 * 60 * 1000;
+  return 2 * 60 * 60 * 1000;
+}
 
 const APP_KEY = process.env.KIS_APP_KEY ?? "";
 const APP_SECRET = process.env.KIS_APP_SECRET ?? "";
@@ -106,17 +145,12 @@ export async function getKrPrice(ticker: string): Promise<StockPrice> {
   };
 }
 
-// 해외 주식 현재가 조회 (NASDAQ/NYSE)
-// EXCD: NAS(나스닥), NYS(뉴욕), AMS(아멕스), HKS(홍콩), SHS(상해), SZS(심천)
-export async function getUsPrice(ticker: string, excd = "NAS"): Promise<StockPrice> {
-  const token = await getAccessToken();
+// 해외 거래소 캐시: ticker → 성공한 거래소 코드 (NAS→NYS→AMS 순차 재시도 비용 절감)
+const exchangeCache: Record<string, string> = {};
 
-  const params = new URLSearchParams({
-    AUTH: "",
-    EXCD: excd,
-    SYMB: ticker,
-  });
-
+// 해외 주식 현재가 단건 조회 (거래소 지정)
+async function fetchUsPriceOnce(ticker: string, excd: string, token: string): Promise<StockPrice> {
+  const params = new URLSearchParams({ AUTH: "", EXCD: excd, SYMB: ticker });
   const res = await fetch(
     `${BASE_URL}/uapi/overseas-price/v1/quotations/price?${params}`,
     {
@@ -127,14 +161,13 @@ export async function getUsPrice(ticker: string, excd = "NAS"): Promise<StockPri
         tr_id: "HHDFS00000300",
         custtype: "P",
       },
+      signal: AbortSignal.timeout(8000),
     }
   );
-
-  if (!res.ok) throw new Error(`KIS 해외 가격 조회 실패: ${ticker}`);
-
+  if (!res.ok) throw new Error(`KIS 해외 가격 조회 실패: ${ticker} (${excd})`);
   const data = await res.json();
   const output = data.output;
-
+  if (!output?.last || Number(output.last) === 0) throw new Error(`빈 응답: ${ticker} (${excd})`);
   return {
     ticker,
     name: output.rsym ?? ticker,
@@ -146,6 +179,36 @@ export async function getUsPrice(ticker: string, excd = "NAS"): Promise<StockPri
     low: Number(output.low),
     open: Number(output.open),
   };
+}
+
+// 해외 주식 현재가 조회 (NASDAQ/NYSE)
+// EXCD: NAS(나스닥), NYS(뉴욕), AMS(아멕스), HKS(홍콩), SHS(상해), SZS(심천)
+// 최적화: 거래소 캐시로 중복 재시도 방지
+export async function getUsPrice(ticker: string, excd?: string): Promise<StockPrice> {
+  const token = await getAccessToken();
+
+  // 명시적 거래소 지정 → 바로 조회
+  if (excd) return fetchUsPriceOnce(ticker, excd, token);
+
+  // 캐시된 거래소 있으면 우선 시도
+  const cached = exchangeCache[ticker];
+  if (cached) {
+    try {
+      return await fetchUsPriceOnce(ticker, cached, token);
+    } catch {
+      delete exchangeCache[ticker]; // 캐시 무효화 후 재탐색
+    }
+  }
+
+  // NAS → NYS → AMS 순차 탐색
+  for (const ex of ["NAS", "NYS", "AMS"] as const) {
+    try {
+      const result = await fetchUsPriceOnce(ticker, ex, token);
+      exchangeCache[ticker] = ex; // 성공 거래소 캐시
+      return result;
+    } catch { /* 다음 거래소 시도 */ }
+  }
+  throw new Error(`KIS 해외 가격 조회 실패: ${ticker} (NAS/NYS/AMS 모두 실패)`);
 }
 
 // 국내 지수 현재가 (코스피: "0001", 코스닥: "1001")
@@ -232,13 +295,6 @@ export async function getPrice(ticker: string, market?: string): Promise<StockPr
   if (market === "NYS" || market === "AMS" || market === "NAS" || market === "HKS") {
     return getUsPrice(ticker, market);
   }
-  // market=US 또는 기타: NAS → NYS → AMS 순으로 fallback
-  for (const excd of ["NAS", "NYS", "AMS"] as const) {
-    try {
-      return await getUsPrice(ticker, excd);
-    } catch {
-      // 다음 거래소 시도
-    }
-  }
-  throw new Error(`KIS 해외 가격 조회 실패: ${ticker} (NAS/NYS/AMS 모두 실패)`);
+  // market=US 또는 기타: exchangeCache 활용해 자동 탐색
+  return getUsPrice(ticker);
 }
