@@ -49,7 +49,7 @@ const emptyForm = {
   name: "", category: "자격증", examDate: "",
   targetScore: "", passScore: "", memo: "",
   status: "upcoming" as ExamStatus, actualScore: "",
-  subjectId: "",
+  subjectId: "", officialExamId: "",
 };
 
 export default function ExamsPage() {
@@ -62,7 +62,7 @@ export default function ExamsPage() {
   const [form, setForm] = useState(emptyForm);
   const [filterSubjectId, setFilterSubjectId] = useState<string>("all");
 
-  // 공식 시험
+  // 공식 시험 탭
   const [officialExams, setOfficialExams] = useState<OfficialExam[]>([]);
   const [officialLoading, setOfficialLoading] = useState(false);
   const [officialCat, setOfficialCat] = useState("전체");
@@ -70,6 +70,34 @@ export default function ExamsPage() {
   const [addingId, setAddingId] = useState<string | null>(null);
   // 이미 내 일정에 추가된 officialExamId 세트
   const addedIds = new Set(exams.map(e => e.officialExamId).filter(Boolean));
+
+  // 다이얼로그 내 공식 시험 검색
+  const [dialogOfficialQ, setDialogOfficialQ] = useState("");
+  const [dialogOfficials, setDialogOfficials] = useState<OfficialExam[]>([]);
+  const [dialogOfficialLoading, setDialogOfficialLoading] = useState(false);
+  const [showOfficialSugg, setShowOfficialSugg] = useState(false);
+
+  async function searchDialogOfficials(q: string) {
+    setDialogOfficialQ(q);
+    if (!q.trim()) { setDialogOfficials([]); setShowOfficialSugg(false); return; }
+    setDialogOfficialLoading(true);
+    try {
+      const res = await fetch(`/api/official-exams?q=${encodeURIComponent(q)}`);
+      if (res.ok) { setDialogOfficials(await res.json()); setShowOfficialSugg(true); }
+    } finally { setDialogOfficialLoading(false); }
+  }
+
+  function applyOfficialToForm(o: OfficialExam) {
+    setForm(f => ({
+      ...f,
+      name: o.name,
+      examDate: o.examDate,
+      category: o.category,
+      officialExamId: o.id,
+    }));
+    setDialogOfficialQ(o.name);
+    setShowOfficialSugg(false);
+  }
 
   const today = todayString();
 
@@ -101,7 +129,7 @@ export default function ExamsPage() {
     return Math.ceil(diff / (1000 * 60 * 60 * 24));
   }
 
-  function openAdd() { setEditing(null); setForm(emptyForm); setDialogOpen(true); }
+  function openAdd() { setEditing(null); setForm(emptyForm); setDialogOfficialQ(""); setShowOfficialSugg(false); setDialogOpen(true); }
   function openEdit(exam: Exam) {
     setEditing(exam);
     setForm({
@@ -112,6 +140,7 @@ export default function ExamsPage() {
       memo: exam.memo ?? "", status: exam.status,
       actualScore: exam.actualScore?.toString() ?? "",
       subjectId: exam.subjectId ?? "",
+      officialExamId: exam.officialExamId ?? "",
     });
     setDialogOpen(true);
   }
@@ -124,6 +153,7 @@ export default function ExamsPage() {
       memo: form.memo || null, status: form.status,
       actualScore: form.actualScore || null,
       subjectId: form.subjectId || null,
+      officialExamId: form.officialExamId || null,
     };
     const url = editing ? `/api/study/exams/${editing.id}` : "/api/study/exams";
     const method = editing ? "PUT" : "POST";
@@ -405,6 +435,49 @@ export default function ExamsPage() {
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>{editing ? "시험 수정" : "시험 추가"}</DialogTitle></DialogHeader>
           <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+            {/* 공식 시험 선택 */}
+            {!editing && (
+              <div>
+                <p className="text-xs mb-1 font-medium">공식 시험에서 선택 <span className="text-muted-foreground font-normal">(선택사항)</span></p>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                  <Input
+                    className="pl-8 text-sm"
+                    placeholder="시험명 검색 (빅데이터, 정보처리기사...)"
+                    value={dialogOfficialQ}
+                    onChange={e => searchDialogOfficials(e.target.value)}
+                    onBlur={() => setTimeout(() => setShowOfficialSugg(false), 150)}
+                    onFocus={() => dialogOfficials.length > 0 && setShowOfficialSugg(true)}
+                  />
+                  {dialogOfficialLoading && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 animate-spin text-muted-foreground" />}
+                  {showOfficialSugg && dialogOfficials.length > 0 && (
+                    <div className="absolute z-50 w-full mt-1 bg-popover border rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                      {dialogOfficials.map(o => (
+                        <button key={o.id} onMouseDown={() => applyOfficialToForm(o)}
+                          className="w-full flex items-start gap-2 px-3 py-2.5 hover:bg-muted text-left">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{o.name}</p>
+                            <p className="text-[10px] text-muted-foreground">{o.organization} · {o.examDate} · {o.category}</p>
+                          </div>
+                          {addedIds.has(o.id) && <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0 mt-0.5" />}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {showOfficialSugg && dialogOfficials.length === 0 && !dialogOfficialLoading && dialogOfficialQ && (
+                    <div className="absolute z-50 w-full mt-1 bg-popover border rounded-xl shadow-sm px-3 py-2.5 text-xs text-muted-foreground">
+                      검색 결과 없음 — 아래에 직접 입력하세요
+                    </div>
+                  )}
+                </div>
+                {form.officialExamId && (
+                  <p className="text-[10px] text-indigo-500 mt-1 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" /> 공식 시험 연결됨 — 아래 정보를 직접 수정할 수 있어요
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-2">
               <div className="col-span-2"><p className="text-xs mb-1 font-medium">시험명 *</p><Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="예: 정보처리기사 필기" /></div>
               {subjects.length > 0 && (
