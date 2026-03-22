@@ -4,18 +4,16 @@ import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import {
   ChevronLeft, ChevronRight, Plus, X, Loader2,
-  Edit2, Trash2, MapPin, Clock, Sparkles,
+  Edit2, Trash2, MapPin, Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-type Tab = "캘린더" | "기록" | "운세";
 
 interface CalendarEvent {
   id: string; title: string; date: string;
@@ -25,11 +23,6 @@ interface CalendarEvent {
 }
 interface DiaryEntry { date: string; content: string; mood?: string; tags: string[]; }
 interface GoalItem  { id: string; title: string; done: boolean; }
-interface Plan      { period: string; type: string; goals: GoalItem[]; reflection?: string; }
-interface MiniFortuneData {
-  overall?: string; score?: number; luckyColor?: string; luckyNumber?: number;
-  advice?: string; cached?: boolean;
-}
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -49,13 +42,6 @@ const EVENT_COLOR: Record<string, string> = {
   health:"bg-red-500", social:"bg-amber-500", etc:"bg-gray-400",
 };
 
-const MOODS = [
-  { key:"great",   emoji:"😄", label:"최고", color:"text-green-500"  },
-  { key:"good",    emoji:"🙂", label:"좋음", color:"text-lime-500"   },
-  { key:"neutral", emoji:"😐", label:"보통", color:"text-gray-500"   },
-  { key:"bad",     emoji:"😕", label:"나쁨", color:"text-orange-500" },
-  { key:"terrible",emoji:"😢", label:"최악", color:"text-red-500"    },
-];
 
 function localToday() {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
@@ -98,7 +84,6 @@ const EMPTY_FORM: EventForm = {
 
 export default function PlannerPage() {
   const today = localToday();
-  const [tab, setTab] = useState<Tab>("캘린더");
 
   // ── Calendar state ──────────────────────────────────────────────────────────
   const [calMonth, setCalMonth]       = useState(today.slice(0,7));
@@ -114,17 +99,8 @@ export default function PlannerPage() {
   const [editingEventId, setEditingEventId] = useState<string|null>(null);
   // Inline diary from calendar tab
   const [inlineDiaryOpen, setInlineDiaryOpen] = useState(false);
-
-  // ── Diary/record state ──────────────────────────────────────────────────────
-  const [recDate, setRecDate]         = useState(today);
   const [diary, setDiary]             = useState<DiaryEntry>({ date:today, content:"", tags:[] });
-  const [recPlan, setRecPlan]         = useState<Plan>({ period:today, type:"day", goals:[], reflection:"" });
-  const [newDayGoal, setNewDayGoal]   = useState("");
   const [diarySaving, setDiarySaving] = useState(false);
-  const [monthDiaries, setMonthDiaries] = useState<DiaryEntry[]>([]);
-
-  // ── Fortune mini state ──────────────────────────────────────────────────────
-  const [miniFortune, setMiniFortune] = useState<MiniFortuneData | null>(null);
   // ── Week/month memo state ────────────────────────────────────────────────────
   const [weekMemo, setWeekMemo]       = useState("");
   const [monthMemo, setMonthMemo]     = useState("");
@@ -166,21 +142,6 @@ export default function PlannerPage() {
     });
   }, [today]);
 
-  // ── Load diary + day plan ───────────────────────────────────────────────────
-  useEffect(() => {
-    if (tab !== "기록") return;
-    Promise.all([
-      fetch(`/api/planner/diary?date=${recDate}`).then(r=>r.json()),
-      fetch(`/api/planner/plans?type=day&period=${recDate}`).then(r=>r.json()),
-      fetch(`/api/planner/diary?month=${recDate.slice(0,7)}`).then(r=>r.json()),
-    ]).then(([dRes, pRes, mRes]) => {
-      if (dRes.entry) setDiary({ date:recDate, content:dRes.entry.content, mood:dRes.entry.mood, tags:dRes.entry.tags??[] });
-      else            setDiary({ date:recDate, content:"", tags:[] });
-      if (pRes.plan)  setRecPlan(pRes.plan);
-      else            setRecPlan({ period:recDate, type:"day", goals:[], reflection:"" });
-      setMonthDiaries(mRes.entries ?? []);
-    });
-  }, [recDate, tab]);
 
   // ── Calendar helpers ────────────────────────────────────────────────────────
   const monthDays = buildMonthDays(calMonth);
@@ -266,38 +227,7 @@ export default function PlannerPage() {
     setYearGoals(goals); saveYearPlan(goals, yearRefl);
   }
 
-  // ── Diary / record helpers ──────────────────────────────────────────────────
-  async function saveDiary() {
-    setDiarySaving(true);
-    try {
-      await fetch("/api/planner/diary", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(diary) });
-      toast.success("저장됨");
-    } finally { setDiarySaving(false); }
-  }
 
-  async function saveRecPlan(plan: Plan) {
-    setRecPlan(plan);
-    await fetch("/api/planner/plans", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(plan) });
-  }
-
-  function addDayGoal() {
-    if (!newDayGoal.trim()) return;
-    const goals = [...recPlan.goals, { id:cid(), title:newDayGoal.trim(), done:false }];
-    saveRecPlan({ ...recPlan, goals }); setNewDayGoal("");
-  }
-
-  function toggleDayGoal(id: string) {
-    const goals = recPlan.goals.map(g => g.id===id ? {...g, done:!g.done} : g);
-    saveRecPlan({ ...recPlan, goals });
-  }
-
-  // ── Fortune mini load (cache only) ──────────────────────────────────────────
-  useEffect(() => {
-    if (tab !== "운세") return;
-    fetch("/api/planner/fortune?type=daily").then(r => r.json()).then(d => {
-      if (d.cached) setMiniFortune(d);
-    }).catch(() => {});
-  }, [tab]);
 
   // ── Render helpers ──────────────────────────────────────────────────────────
   const studyBg = ["bg-muted","bg-green-200 dark:bg-green-900/50","bg-green-300 dark:bg-green-700","bg-green-500/70","bg-green-700 dark:bg-green-500"];
@@ -307,24 +237,11 @@ export default function PlannerPage() {
   return (
     <div className="max-w-2xl mx-auto space-y-4 pb-20">
 
-      {/* Title + Tabs */}
-      <div>
-        <h1 className="text-xl font-bold mb-3">📅 플래너</h1>
-        <div className="flex gap-1 bg-muted/50 rounded-xl p-1">
-          {(["캘린더","기록","운세"] as Tab[]).map(t => (
-            <button key={t} onClick={() => setTab(t)}
-              className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                tab===t ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
-              }`}>
-              {t==="캘린더"?"📅 캘린더":t==="기록"?"📓 기록":"🔮 운세"}
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* Title */}
+      <h1 className="text-xl font-bold">📅 플래너</h1>
 
-      {/* ── 캘린더 탭 ─────────────────────────────────────────────────── */}
-      {tab==="캘린더" && (
-        <div className="space-y-4">
+      {/* ── 캘린더 ──────────────────────────────────────────────────── */}
+      <div className="space-y-4">
 
           {/* 연간 목표 배너 */}
           <Card className="bg-gradient-to-r from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/30 border-violet-200 dark:border-violet-800">
@@ -591,156 +508,7 @@ export default function PlannerPage() {
               )}
             </CardContent>
           </Card>
-        </div>
-      )}
-
-      {/* ── 기록 탭 ──────────────────────────────────────────────────── */}
-      {tab==="기록" && (
-        <div className="space-y-4">
-          {/* Date selector */}
-          <div className="flex items-center gap-2">
-            <button onClick={() => { const d=new Date(recDate); d.setDate(d.getDate()-1); setRecDate(d.toLocaleDateString("sv-SE",{timeZone:"Asia/Seoul"})); }}
-              className="p-1.5 rounded-lg hover:bg-muted"><ChevronLeft className="w-4 h-4" /></button>
-            <Input type="date" value={recDate} onChange={e => setRecDate(e.target.value)} className="flex-1 h-9 text-sm text-center" />
-            <button onClick={() => { const d=new Date(recDate); d.setDate(d.getDate()+1); setRecDate(d.toLocaleDateString("sv-SE",{timeZone:"Asia/Seoul"})); }}
-              className="p-1.5 rounded-lg hover:bg-muted"><ChevronRight className="w-4 h-4" /></button>
-          </div>
-
-          {/* Today's events summary */}
-          {(eventsByDate[recDate]??[]).length>0 && (
-            <Card className="bg-muted/30">
-              <CardContent className="p-3 space-y-1">
-                <p className="text-xs font-semibold text-muted-foreground mb-1.5">📅 이날 일정</p>
-                {(eventsByDate[recDate]??[]).map(ev => (
-                  <div key={ev.id} className="flex items-center gap-2 text-xs">
-                    <div className={`w-1.5 h-1.5 rounded-full ${ev.color} shrink-0`} />
-                    <span className="font-medium">{ev.title}</span>
-                    {ev.location && <span className="text-muted-foreground flex items-center gap-0.5"><MapPin className="w-2.5 h-2.5"/>{ev.location}</span>}
-                    {!ev.isAllDay && ev.startTime && <span className="text-muted-foreground ml-auto">{ev.startTime}</span>}
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Day goals */}
-          <Card>
-            <CardHeader className="p-3 pb-1">
-              <CardTitle className="text-sm">✅ 오늘 할 일</CardTitle>
-            </CardHeader>
-            <CardContent className="p-3 pt-0 space-y-2">
-              {recPlan.goals.length===0 && <p className="text-xs text-muted-foreground text-center py-2">할 일을 추가해보세요</p>}
-              {recPlan.goals.map(g => (
-                <div key={g.id} className="flex items-center gap-2 group">
-                  <input type="checkbox" checked={g.done} onChange={() => toggleDayGoal(g.id)} className="rounded" />
-                  <span className={`flex-1 text-sm ${g.done?"line-through text-muted-foreground":""}`}>{g.title}</span>
-                  <button onClick={() => saveRecPlan({ ...recPlan, goals:recPlan.goals.filter(x=>x.id!==g.id) })}
-                    className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive">
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              ))}
-              <div className="flex gap-2 mt-1">
-                <Input placeholder="할 일 추가..." value={newDayGoal} onChange={e => setNewDayGoal(e.target.value)}
-                  onKeyDown={e => e.key==="Enter" && addDayGoal()} className="h-8 text-sm" />
-                <Button size="sm" className="h-8 px-3" onClick={addDayGoal} disabled={!newDayGoal.trim()}>+</Button>
-              </div>
-              {recPlan.goals.length>0 && (
-                <div className="h-1.5 bg-muted rounded-full overflow-hidden mt-1">
-                  <div className="h-full bg-green-500 rounded-full transition-all"
-                    style={{ width:`${(recPlan.goals.filter(g=>g.done).length/recPlan.goals.length)*100}%` }} />
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Mood */}
-          <div>
-            <p className="text-xs font-medium mb-2 text-muted-foreground">오늘의 기분</p>
-            <div className="flex gap-2">
-              {MOODS.map(m => (
-                <button key={m.key} onClick={() => setDiary(d=>({...d, mood:m.key}))}
-                  className={`flex flex-col items-center gap-0.5 flex-1 py-1.5 rounded-xl border transition-all ${
-                    diary.mood===m.key?"border-primary bg-primary/10":"border-muted hover:border-muted-foreground/30"
-                  }`}>
-                  <span className="text-lg">{m.emoji}</span>
-                  <span className={`text-[10px] font-medium ${m.color}`}>{m.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Diary */}
-          <div>
-            <p className="text-xs font-medium mb-1.5 text-muted-foreground">📝 오늘의 기록</p>
-            <Textarea placeholder="오늘 있었던 일, 생각, 감정을 기록해보세요..." value={diary.content}
-              onChange={e => setDiary(d=>({...d, content:e.target.value}))}
-              className="min-h-48 text-sm" />
-          </div>
-
-          <Button className="w-full" onClick={saveDiary} disabled={diarySaving||!diary.content.trim()}>
-            {diarySaving?<Loader2 className="w-4 h-4 animate-spin mr-1"/>:null}저장
-          </Button>
-
-          {/* Past diary list */}
-          {monthDiaries.filter(e=>e.date!==recDate).length>0 && (
-            <div>
-              <p className="text-xs font-semibold text-muted-foreground mb-2">이번 달 기록</p>
-              <div className="space-y-1.5">
-                {monthDiaries.filter(e=>e.date!==recDate).slice(0,5).map(e => {
-                  const mood = MOODS.find(m=>m.key===e.mood);
-                  return (
-                    <button key={e.date} onClick={() => setRecDate(e.date)}
-                      className="w-full flex items-center gap-3 p-2.5 rounded-xl border bg-background hover:bg-muted/40 text-left transition-colors">
-                      <span className="text-base">{mood?.emoji??"📓"}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium">{e.date}</p>
-                        <p className="text-xs text-muted-foreground truncate">{e.content.slice(0,50)}</p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── 운세 탭 ──────────────────────────────────────────────────── */}
-      {tab==="운세" && (
-        <div className="space-y-4">
-          {/* Mini fortune summary (cached only) */}
-          {miniFortune ? (
-            <Card className="bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/30 border-violet-200 dark:border-violet-800">
-              <CardContent className="p-4 space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-lg">🌅</span>
-                  <span className="font-semibold text-sm flex-1">오늘의 운세</span>
-                  {miniFortune.score && <Badge>{miniFortune.score}점</Badge>}
-                </div>
-                {miniFortune.overall && <p className="text-sm leading-relaxed">{miniFortune.overall}</p>}
-                {miniFortune.advice && <p className="text-xs text-muted-foreground italic border-l-4 border-violet-300 pl-3">{miniFortune.advice}</p>}
-                <div className="flex flex-wrap gap-1.5 text-xs">
-                  {miniFortune.luckyColor && <Badge variant="outline">🎨 {miniFortune.luckyColor}</Badge>}
-                  {miniFortune.luckyNumber != null && <Badge variant="outline">🔢 {miniFortune.luckyNumber}</Badge>}
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card className="border-dashed">
-              <CardContent className="p-6 text-center text-muted-foreground">
-                <Sparkles className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                <p className="text-sm">아직 오늘의 운세가 없어요</p>
-              </CardContent>
-            </Card>
-          )}
-          <Link href="/fortune">
-            <Button className="w-full gap-2">
-              <Sparkles className="w-4 h-4" />운세 페이지로 이동
-            </Button>
-          </Link>
-        </div>
-      )}
+      </div>
 
     </div>
   );
