@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, CalendarClock, Clock, Plus, Link2, BookOpen, Trophy, Play, CheckCircle, Pencil, Trash2 } from "lucide-react";
+import { ArrowLeft, CalendarClock, Clock, Plus, Link2, BookOpen, Trophy, Play, CheckCircle, Pencil, Trash2, Search, Loader2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,13 @@ interface StudySource {
 interface Exam {
   id: string; name: string; examDate: string; status: string; subjectId: string | null;
   actualScore: number | null; targetScore: number | null; passScore: number | null; memo: string | null;
+  officialExamId: string | null;
+}
+
+interface OfficialExam {
+  id: string; name: string; organization: string; category: string;
+  examDate: string; registrationStart: string | null; registrationEnd: string | null;
+  resultDate: string | null; year: number; session: number | null;
 }
 
 const ACTIVITY_LABELS: Record<string, string> = {
@@ -63,7 +70,29 @@ export default function SubjectDetailPage() {
   // 시험 결과 입력 다이얼로그
   const [examDialog, setExamDialog] = useState(false);
   const [editingExam, setEditingExam] = useState<Exam | null>(null);
-  const [examForm, setExamForm] = useState({ name: "", examDate: "", actualScore: "", targetScore: "", passScore: "", status: "upcoming", memo: "" });
+  const [examForm, setExamForm] = useState({ name: "", examDate: "", actualScore: "", targetScore: "", passScore: "", status: "upcoming", memo: "", officialExamId: "" });
+
+  // 공식 시험 검색
+  const [officialQ, setOfficialQ] = useState("");
+  const [officialSuggestions, setOfficialSuggestions] = useState<OfficialExam[]>([]);
+  const [officialLoading, setOfficialLoading] = useState(false);
+  const [showSugg, setShowSugg] = useState(false);
+
+  async function searchOfficials(q: string) {
+    setOfficialQ(q);
+    if (!q.trim()) { setOfficialSuggestions([]); setShowSugg(false); return; }
+    setOfficialLoading(true);
+    try {
+      const res = await fetch(`/api/official-exams?q=${encodeURIComponent(q)}`);
+      if (res.ok) { setOfficialSuggestions(await res.json()); setShowSugg(true); }
+    } finally { setOfficialLoading(false); }
+  }
+
+  function applyOfficial(o: OfficialExam) {
+    setExamForm(f => ({ ...f, name: o.name, examDate: o.examDate?.slice(0, 10) ?? "", officialExamId: o.id }));
+    setOfficialQ(o.name);
+    setShowSugg(false);
+  }
 
   useEffect(() => { load(); }, [id]);
 
@@ -116,7 +145,10 @@ export default function SubjectDetailPage() {
 
   function openAddExam() {
     setEditingExam(null);
-    setExamForm({ name: subject?.name ?? "", examDate: subject?.examDate?.slice(0, 10) ?? "", actualScore: "", targetScore: "", passScore: "", status: "upcoming", memo: "" });
+    setExamForm({ name: "", examDate: "", actualScore: "", targetScore: "", passScore: "", status: "upcoming", memo: "", officialExamId: "" });
+    setOfficialQ("");
+    setOfficialSuggestions([]);
+    setShowSugg(false);
     setExamDialog(true);
   }
 
@@ -130,7 +162,11 @@ export default function SubjectDetailPage() {
       passScore: exam.passScore?.toString() ?? "",
       status: exam.status,
       memo: exam.memo ?? "",
+      officialExamId: exam.officialExamId ?? "",
     });
+    setOfficialQ(exam.name);
+    setOfficialSuggestions([]);
+    setShowSugg(false);
     setExamDialog(true);
   }
 
@@ -145,6 +181,7 @@ export default function SubjectDetailPage() {
       passScore: examForm.passScore ? Number(examForm.passScore) : null,
       memo: examForm.memo || null,
       status: examForm.status,
+      officialExamId: examForm.officialExamId || null,
     };
     const url = editingExam ? `/api/study/exams/${editingExam.id}` : "/api/study/exams";
     const method = editingExam ? "PUT" : "POST";
@@ -452,6 +489,49 @@ export default function SubjectDetailPage() {
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>{editingExam ? "시험 수정" : "시험 일정 추가"}</DialogTitle></DialogHeader>
           <div className="space-y-3">
+            {/* 공식 시험 검색 */}
+            <div>
+              <p className="text-xs mb-1 font-medium">공식 시험 검색 <span className="text-muted-foreground font-normal">(선택)</span></p>
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-muted-foreground" />
+                <Input
+                  value={officialQ}
+                  onChange={e => searchOfficials(e.target.value)}
+                  onFocus={() => officialSuggestions.length > 0 && setShowSugg(true)}
+                  placeholder="시험 이름으로 검색..."
+                  className="pl-8 pr-8 text-sm"
+                />
+                {officialLoading && <Loader2 className="absolute right-2.5 top-2.5 w-3.5 h-3.5 animate-spin text-muted-foreground" />}
+              </div>
+              {showSugg && officialSuggestions.length > 0 && (
+                <div className="border rounded-md mt-1 max-h-40 overflow-y-auto bg-background shadow-sm z-10 relative">
+                  {officialSuggestions.map(o => (
+                    <button
+                      key={o.id}
+                      type="button"
+                      onClick={() => applyOfficial(o)}
+                      className="w-full text-left px-3 py-2 hover:bg-muted/50 transition-colors border-b last:border-b-0"
+                    >
+                      <p className="text-sm font-medium">{o.name}</p>
+                      <p className="text-xs text-muted-foreground">{o.organization} · {o.examDate?.slice(0, 10)}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {showSugg && officialSuggestions.length === 0 && !officialLoading && officialQ.trim() && (
+                <p className="text-xs text-muted-foreground mt-1 px-1">검색 결과가 없습니다. 직접 입력해주세요.</p>
+              )}
+              {examForm.officialExamId && (
+                <p className="text-xs text-blue-600 mt-1 px-1">✓ 공식 시험과 연결됨</p>
+              )}
+            </div>
+
+            <div className="relative flex items-center gap-2 text-xs text-muted-foreground">
+              <div className="flex-1 border-t" />
+              <span>직접 입력</span>
+              <div className="flex-1 border-t" />
+            </div>
+
             <div>
               <p className="text-xs mb-1 font-medium">시험명 *</p>
               <Input value={examForm.name} onChange={e => setExamForm(f => ({ ...f, name: e.target.value }))} placeholder="예: 정보처리기사 필기" />
