@@ -31,7 +31,10 @@ interface StudySource {
 interface Exam {
   id: string; name: string; examDate: string; status: string; subjectId: string | null;
   actualScore: number | null; targetScore: number | null; passScore: number | null; memo: string | null;
-  officialExamId: string | null;
+  officialExamId: string | null; category: string | null;
+  organization: string | null; registrationStart: string | null; registrationEnd: string | null;
+  resultDate: string | null; fee: number | null; location: string | null; url: string | null;
+  year: number | null; session: number | null; description: string | null;
 }
 
 interface OfficialExam {
@@ -70,7 +73,13 @@ export default function SubjectDetailPage() {
   // 시험 결과 입력 다이얼로그
   const [examDialog, setExamDialog] = useState(false);
   const [editingExam, setEditingExam] = useState<Exam | null>(null);
-  const [examForm, setExamForm] = useState({ name: "", examDate: "", actualScore: "", targetScore: "", passScore: "", status: "upcoming", memo: "", officialExamId: "" });
+  const [examForm, setExamForm] = useState({
+    name: "", examDate: "", actualScore: "", targetScore: "", passScore: "",
+    status: "upcoming", memo: "", officialExamId: "",
+    organization: "", category: "자격증", year: String(new Date().getFullYear()), session: "",
+    registrationStart: "", registrationEnd: "", resultDate: "",
+    fee: "", location: "", url: "", description: "",
+  });
 
   // 공식 시험 검색
   const [officialQ, setOfficialQ] = useState("");
@@ -89,7 +98,19 @@ export default function SubjectDetailPage() {
   }
 
   function applyOfficial(o: OfficialExam) {
-    setExamForm(f => ({ ...f, name: o.name, examDate: o.examDate?.slice(0, 10) ?? "", officialExamId: o.id }));
+    setExamForm(f => ({
+      ...f,
+      name: o.name,
+      examDate: o.examDate?.slice(0, 10) ?? "",
+      officialExamId: o.id,
+      organization: o.organization,
+      category: o.category,
+      year: o.year?.toString() ?? "",
+      session: o.session?.toString() ?? "",
+      registrationStart: o.registrationStart ?? "",
+      registrationEnd: o.registrationEnd ?? "",
+      resultDate: o.resultDate ?? "",
+    }));
     setOfficialQ(o.name);
     setShowSugg(false);
   }
@@ -145,7 +166,13 @@ export default function SubjectDetailPage() {
 
   function openAddExam() {
     setEditingExam(null);
-    setExamForm({ name: "", examDate: "", actualScore: "", targetScore: "", passScore: "", status: "upcoming", memo: "", officialExamId: "" });
+    setExamForm({
+      name: "", examDate: "", actualScore: "", targetScore: "", passScore: "",
+      status: "upcoming", memo: "", officialExamId: "",
+      organization: "", category: "자격증", year: String(new Date().getFullYear()), session: "",
+      registrationStart: "", registrationEnd: "", resultDate: "",
+      fee: "", location: "", url: "", description: "",
+    });
     setOfficialQ("");
     setOfficialSuggestions([]);
     setShowSugg(false);
@@ -163,6 +190,17 @@ export default function SubjectDetailPage() {
       status: exam.status,
       memo: exam.memo ?? "",
       officialExamId: exam.officialExamId ?? "",
+      organization: exam.organization ?? "",
+      category: exam.category ?? "자격증",
+      year: exam.year?.toString() ?? String(new Date().getFullYear()),
+      session: exam.session?.toString() ?? "",
+      registrationStart: exam.registrationStart ?? "",
+      registrationEnd: exam.registrationEnd ?? "",
+      resultDate: exam.resultDate ?? "",
+      fee: exam.fee?.toString() ?? "",
+      location: exam.location ?? "",
+      url: exam.url ?? "",
+      description: exam.description ?? "",
     });
     setOfficialQ(exam.name);
     setOfficialSuggestions([]);
@@ -173,8 +211,9 @@ export default function SubjectDetailPage() {
   async function saveExam() {
     if (!examForm.name || !examForm.examDate) return;
     const payload = {
-      name: examForm.name, examDate: examForm.examDate,
-      category: subject?.name ?? "",
+      name: examForm.name,
+      examDate: examForm.examDate,
+      category: examForm.category || null,
       subjectId: id,
       actualScore: examForm.actualScore ? Number(examForm.actualScore) : null,
       targetScore: examForm.targetScore ? Number(examForm.targetScore) : null,
@@ -182,6 +221,16 @@ export default function SubjectDetailPage() {
       memo: examForm.memo || null,
       status: examForm.status,
       officialExamId: examForm.officialExamId || null,
+      organization: examForm.organization || null,
+      registrationStart: examForm.registrationStart || null,
+      registrationEnd: examForm.registrationEnd || null,
+      resultDate: examForm.resultDate || null,
+      fee: examForm.fee ? Number(examForm.fee) : null,
+      location: examForm.location || null,
+      url: examForm.url || null,
+      year: examForm.year ? Number(examForm.year) : null,
+      session: examForm.session ? Number(examForm.session) : null,
+      description: examForm.description || null,
     };
     const url = editingExam ? `/api/study/exams/${editingExam.id}` : "/api/study/exams";
     const method = editingExam ? "PUT" : "POST";
@@ -486,7 +535,7 @@ export default function SubjectDetailPage() {
 
       {/* 시험 추가/수정 다이얼로그 */}
       <Dialog open={examDialog} onOpenChange={setExamDialog}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editingExam ? "시험 수정" : "시험 일정 추가"}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             {/* 공식 시험 검색 */}
@@ -528,19 +577,78 @@ export default function SubjectDetailPage() {
 
             <div className="relative flex items-center gap-2 text-xs text-muted-foreground">
               <div className="flex-1 border-t" />
-              <span>직접 입력</span>
+              <span>시험 정보 입력</span>
               <div className="flex-1 border-t" />
             </div>
 
-            <div>
-              <p className="text-xs mb-1 font-medium">시험명 *</p>
-              <Input value={examForm.name} onChange={e => setExamForm(f => ({ ...f, name: e.target.value }))} placeholder="예: 정보처리기사 필기" />
-            </div>
+            {/* 관리자 폼과 동일한 필드 */}
             <div className="grid grid-cols-2 gap-2">
+              <div className="col-span-2">
+                <p className="text-xs mb-1 font-medium">시험명 *</p>
+                <Input value={examForm.name} onChange={e => setExamForm(f => ({ ...f, name: e.target.value }))} placeholder="예: 정보처리기사 필기" />
+              </div>
+              <div>
+                <p className="text-xs mb-1 font-medium">주관기관</p>
+                <Input value={examForm.organization} onChange={e => setExamForm(f => ({ ...f, organization: e.target.value }))} placeholder="한국산업인력공단" />
+              </div>
+              <div>
+                <p className="text-xs mb-1 font-medium">카테고리</p>
+                <Select value={examForm.category} onValueChange={v => v && setExamForm(f => ({ ...f, category: v }))}>
+                  <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {["자격증","어학","TOPCIT","공무원","대학시험","기타"].map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <p className="text-xs mb-1 font-medium">연도</p>
+                <Input type="number" value={examForm.year} onChange={e => setExamForm(f => ({ ...f, year: e.target.value }))} />
+              </div>
+              <div>
+                <p className="text-xs mb-1 font-medium">회차</p>
+                <Input type="number" value={examForm.session} onChange={e => setExamForm(f => ({ ...f, session: e.target.value }))} placeholder="1" />
+              </div>
               <div>
                 <p className="text-xs mb-1 font-medium">시험일 *</p>
                 <Input type="date" value={examForm.examDate} onChange={e => setExamForm(f => ({ ...f, examDate: e.target.value }))} />
               </div>
+              <div>
+                <p className="text-xs mb-1 font-medium">결과 발표일</p>
+                <Input type="date" value={examForm.resultDate} onChange={e => setExamForm(f => ({ ...f, resultDate: e.target.value }))} />
+              </div>
+              <div>
+                <p className="text-xs mb-1 font-medium">접수 시작일</p>
+                <Input type="date" value={examForm.registrationStart} onChange={e => setExamForm(f => ({ ...f, registrationStart: e.target.value }))} />
+              </div>
+              <div>
+                <p className="text-xs mb-1 font-medium">접수 마감일</p>
+                <Input type="date" value={examForm.registrationEnd} onChange={e => setExamForm(f => ({ ...f, registrationEnd: e.target.value }))} />
+              </div>
+              <div>
+                <p className="text-xs mb-1 font-medium">응시료 (원)</p>
+                <Input type="number" value={examForm.fee} onChange={e => setExamForm(f => ({ ...f, fee: e.target.value }))} placeholder="20000" />
+              </div>
+              <div>
+                <p className="text-xs mb-1 font-medium">시험 장소</p>
+                <Input value={examForm.location} onChange={e => setExamForm(f => ({ ...f, location: e.target.value }))} placeholder="전국" />
+              </div>
+              <div className="col-span-2">
+                <p className="text-xs mb-1 font-medium">공식 URL</p>
+                <Input value={examForm.url} onChange={e => setExamForm(f => ({ ...f, url: e.target.value }))} placeholder="https://..." />
+              </div>
+              <div className="col-span-2">
+                <p className="text-xs mb-1 font-medium">설명</p>
+                <Input value={examForm.description} onChange={e => setExamForm(f => ({ ...f, description: e.target.value }))} placeholder="시험 관련 메모" />
+              </div>
+            </div>
+
+            <div className="relative flex items-center gap-2 text-xs text-muted-foreground">
+              <div className="flex-1 border-t" />
+              <span>내 시험 정보</span>
+              <div className="flex-1 border-t" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
               <div>
                 <p className="text-xs mb-1 font-medium">상태</p>
                 <Select value={examForm.status} onValueChange={v => v && setExamForm(f => ({ ...f, status: v }))}>
@@ -553,8 +661,6 @@ export default function SubjectDetailPage() {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
               <div>
                 <p className="text-xs mb-1 font-medium">목표 점수</p>
                 <Input type="number" value={examForm.targetScore} placeholder="선택"
@@ -570,11 +676,11 @@ export default function SubjectDetailPage() {
                 <Input type="number" value={examForm.actualScore} placeholder="선택"
                   onChange={e => setExamForm(f => ({ ...f, actualScore: e.target.value }))} />
               </div>
-            </div>
-            <div>
-              <p className="text-xs mb-1 font-medium">메모 (선택)</p>
-              <Input value={examForm.memo} placeholder="시험장, 준비 사항 등..."
-                onChange={e => setExamForm(f => ({ ...f, memo: e.target.value }))} />
+              <div className="col-span-2">
+                <p className="text-xs mb-1 font-medium">메모</p>
+                <Input value={examForm.memo} placeholder="시험장, 준비 사항 등..."
+                  onChange={e => setExamForm(f => ({ ...f, memo: e.target.value }))} />
+              </div>
             </div>
           </div>
           <DialogFooter>

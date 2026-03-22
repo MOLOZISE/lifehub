@@ -14,7 +14,10 @@ export async function PUT(
   if (!exam || exam.userId !== session.user.id) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const body = await req.json();
-  const { name, category, examDate, targetScore, passScore, actualScore, status, memo, subjectId } = body;
+  const {
+    name, category, examDate, targetScore, passScore, actualScore, status, memo, subjectId, officialExamId,
+    organization, registrationStart, registrationEnd, resultDate, fee, location, url, year, session: examSession, description,
+  } = body;
 
   const updated = await prisma.exam.update({
     where: { id },
@@ -28,6 +31,17 @@ export async function PUT(
       status: status ?? exam.status,
       memo: memo !== undefined ? (memo || null) : exam.memo,
       subjectId: subjectId !== undefined ? (subjectId || null) : exam.subjectId,
+      officialExamId: officialExamId !== undefined ? (officialExamId || null) : exam.officialExamId,
+      organization: organization !== undefined ? (organization || null) : exam.organization,
+      registrationStart: registrationStart !== undefined ? (registrationStart || null) : exam.registrationStart,
+      registrationEnd: registrationEnd !== undefined ? (registrationEnd || null) : exam.registrationEnd,
+      resultDate: resultDate !== undefined ? (resultDate || null) : exam.resultDate,
+      fee: fee !== undefined ? (fee ? Number(fee) : null) : exam.fee,
+      location: location !== undefined ? (location || null) : exam.location,
+      url: url !== undefined ? (url || null) : exam.url,
+      year: year !== undefined ? (year ? Number(year) : null) : exam.year,
+      session: examSession !== undefined ? (examSession ? Number(examSession) : null) : exam.session,
+      description: description !== undefined ? (description || null) : exam.description,
     },
     include: { subject: { select: { id: true, name: true, emoji: true, color: true } } },
   });
