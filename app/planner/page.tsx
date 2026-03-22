@@ -11,9 +11,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
-} from "@/components/ui/dialog";
 import { toast } from "sonner";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -97,125 +94,6 @@ const EMPTY_FORM: EventForm = {
   category:"personal", memo:"", location:"", travelTime:"", duration:"",
 };
 
-function EventDialog({ open, onClose, initial, defaultDate, onSave }: {
-  open:boolean; onClose:()=>void;
-  initial?: CalendarEvent; defaultDate?: string;
-  onSave:(e:CalendarEvent)=>void;
-}) {
-  const [form, setForm] = useState<EventForm>(EMPTY_FORM);
-  const sf = (k: keyof EventForm, v: string | boolean) =>
-    setForm(f => ({ ...f, [k]: v }));
-
-  useEffect(() => {
-    if (!open) return;
-    if (initial) {
-      setForm({
-        title:initial.title, date:initial.date,
-        startTime:initial.startTime??"", endTime:initial.endTime??"",
-        isAllDay:initial.isAllDay, category:initial.category,
-        memo:initial.memo??"", location:initial.location??"",
-        travelTime:initial.travelTime!=null?String(initial.travelTime):"",
-        duration:initial.duration!=null?String(initial.duration):"",
-      });
-    } else {
-      setForm({ ...EMPTY_FORM, date: defaultDate ?? localToday() });
-    }
-  }, [open, initial, defaultDate]);
-
-  function handleSave() {
-    if (!form.title.trim()) return;
-    onSave({
-      id: initial?.id ?? "",
-      title: form.title.trim(), date: form.date,
-      startTime: form.startTime || undefined, endTime: form.endTime || undefined,
-      isAllDay: form.isAllDay, category: form.category,
-      color: EVENT_COLOR[form.category] ?? "bg-gray-400",
-      memo: form.memo || undefined, location: form.location || undefined,
-      travelTime: form.travelTime ? Number(form.travelTime) : undefined,
-      duration: form.duration ? Number(form.duration) : undefined,
-    });
-    onClose();
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>{initial ? "일정 편집" : "일정 추가"}</DialogTitle></DialogHeader>
-        <div className="space-y-3">
-          {/* 제목 */}
-          <Input placeholder="제목 *" value={form.title} onChange={e => sf("title", e.target.value)} autoFocus />
-
-          {/* 날짜 */}
-          <Input type="date" value={form.date} onChange={e => sf("date", e.target.value)} />
-
-          {/* 하루종일 */}
-          <label className="flex items-center gap-2 text-sm cursor-pointer">
-            <input type="checkbox" checked={form.isAllDay} onChange={e => sf("isAllDay", e.target.checked)} className="rounded" />
-            하루 종일
-          </label>
-
-          {/* 시간 */}
-          {!form.isAllDay && (
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">시작</p>
-                <Input type="time" value={form.startTime} onChange={e => sf("startTime", e.target.value)} />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">종료</p>
-                <Input type="time" value={form.endTime} onChange={e => sf("endTime", e.target.value)} />
-              </div>
-            </div>
-          )}
-
-          {/* 카테고리 */}
-          <div>
-            <p className="text-xs font-medium mb-1.5">카테고리</p>
-            <div className="flex flex-wrap gap-1.5">
-              {EVENT_CATEGORIES.map(c => (
-                <button key={c.key} type="button"
-                  onClick={() => sf("category", c.key)}
-                  className={`text-xs px-2.5 py-1 rounded-full font-medium border transition-all ${
-                    form.category === c.key
-                      ? `${c.color} text-white border-transparent`
-                      : "border-muted-foreground/30 text-muted-foreground hover:border-muted-foreground/60"
-                  }`}>
-                  {c.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* 위치 */}
-          <div className="relative">
-            <MapPin className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-muted-foreground" />
-            <Input placeholder="위치 (선택)" value={form.location} onChange={e => sf("location", e.target.value)} className="pl-8" />
-          </div>
-
-          {/* 이동시간 / 소요시간 */}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><Clock className="w-3 h-3" />이동시간 (분)</p>
-              <Input type="number" min="0" placeholder="예: 30" value={form.travelTime} onChange={e => sf("travelTime", e.target.value)} />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><Clock className="w-3 h-3" />소요시간 (분)</p>
-              <Input type="number" min="0" placeholder="예: 60" value={form.duration} onChange={e => sf("duration", e.target.value)} />
-            </div>
-          </div>
-
-          {/* 메모 */}
-          <Textarea placeholder="메모 (선택)" value={form.memo} onChange={e => sf("memo", e.target.value)} className="h-16 text-sm resize-none" />
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>취소</Button>
-          <Button onClick={handleSave} disabled={!form.title.trim()}>저장</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 export default function PlannerPage() {
@@ -230,8 +108,12 @@ export default function PlannerPage() {
   const [yearGoals, setYearGoals]     = useState<GoalItem[]>([]);
   const [yearRefl, setYearRefl]       = useState("");
   const [newYearGoal, setNewYearGoal] = useState("");
-  const [eventDialog, setEventDialog] = useState(false);
-  const [editingEvent, setEditingEvent] = useState<CalendarEvent|undefined>();
+  // Inline event form state
+  const [inlineEventOpen, setInlineEventOpen] = useState(false);
+  const [inlineEventForm, setInlineEventForm] = useState<EventForm>(EMPTY_FORM);
+  const [editingEventId, setEditingEventId] = useState<string|null>(null);
+  // Inline diary from calendar tab
+  const [inlineDiaryOpen, setInlineDiaryOpen] = useState(false);
 
   // ── Diary/record state ──────────────────────────────────────────────────────
   const [recDate, setRecDate]         = useState(today);
@@ -325,6 +207,47 @@ export default function PlannerPage() {
     await fetch(`/api/planner/events/${id}`, { method:"DELETE" });
     setEvents(es => es.filter(e => e.id!==id));
     toast.success("삭제됨");
+  }
+
+  const sif = (k: keyof EventForm, v: string | boolean) =>
+    setInlineEventForm(f => ({ ...f, [k]: v }));
+
+  function openInlineAdd() {
+    setInlineEventForm({ ...EMPTY_FORM, date: selectedDate });
+    setEditingEventId(null);
+    setInlineEventOpen(true);
+  }
+
+  function openInlineEdit(ev: CalendarEvent) {
+    setInlineEventForm({
+      title: ev.title, date: ev.date,
+      startTime: ev.startTime ?? "", endTime: ev.endTime ?? "",
+      isAllDay: ev.isAllDay, category: ev.category,
+      memo: ev.memo ?? "", location: ev.location ?? "",
+      travelTime: ev.travelTime != null ? String(ev.travelTime) : "",
+      duration: ev.duration != null ? String(ev.duration) : "",
+    });
+    setEditingEventId(ev.id);
+    setInlineEventOpen(true);
+  }
+
+  async function submitInlineEvent() {
+    if (!inlineEventForm.title.trim()) return;
+    const ev: CalendarEvent = {
+      id: editingEventId ?? "",
+      title: inlineEventForm.title.trim(), date: inlineEventForm.date,
+      startTime: inlineEventForm.startTime || undefined,
+      endTime: inlineEventForm.endTime || undefined,
+      isAllDay: inlineEventForm.isAllDay, category: inlineEventForm.category,
+      color: EVENT_COLOR[inlineEventForm.category] ?? "bg-gray-400",
+      memo: inlineEventForm.memo || undefined,
+      location: inlineEventForm.location || undefined,
+      travelTime: inlineEventForm.travelTime ? Number(inlineEventForm.travelTime) : undefined,
+      duration: inlineEventForm.duration ? Number(inlineEventForm.duration) : undefined,
+    };
+    await saveEvent(ev);
+    setInlineEventOpen(false);
+    setEditingEventId(null);
   }
 
   async function saveYearPlan(goals: GoalItem[], reflection: string) {
@@ -523,23 +446,30 @@ export default function PlannerPage() {
             })}
           </div>
 
-          {/* Selected date detail */}
+          {/* Selected date detail + inline event form */}
           <Card>
             <CardHeader className="p-3 pb-1 flex flex-row items-center justify-between">
               <CardTitle className="text-sm">
                 {selectedDate.replace(/-/g,". ")}
                 {studyMap[selectedDate]?<span className="ml-2 text-xs text-green-600 font-normal">📚 {studyMap[selectedDate]}분</span>:null}
               </CardTitle>
-              <Button size="sm" variant="ghost" className="h-7 text-xs gap-1"
-                onClick={() => { setEditingEvent(undefined); setEventDialog(true); }}>
-                <Plus className="w-3 h-3" />일정
-              </Button>
+              <div className="flex gap-1">
+                <Button size="sm" variant="ghost" className="h-7 text-xs gap-1"
+                  onClick={() => { setInlineDiaryOpen(o => !o); }}>
+                  ✏️ 기록
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 text-xs gap-1"
+                  onClick={() => inlineEventOpen ? setInlineEventOpen(false) : openInlineAdd()}>
+                  <Plus className="w-3 h-3" />{inlineEventOpen && !editingEventId ? "닫기" : "일정"}
+                </Button>
+              </div>
             </CardHeader>
-            <CardContent className="p-3 pt-1 space-y-1">
-              {selectedEvents.length===0
-                ? <p className="text-xs text-muted-foreground text-center py-3">일정이 없습니다</p>
+            <CardContent className="p-3 pt-1 space-y-2">
+              {/* Event list */}
+              {selectedEvents.length===0 && !inlineEventOpen
+                ? <p className="text-xs text-muted-foreground text-center py-2">일정이 없습니다</p>
                 : selectedEvents.map(ev => (
-                  <div key={ev.id} className="flex items-center gap-2 p-2 rounded-lg bg-muted/40 group">
+                  <div key={ev.id} className={`flex items-center gap-2 p-2 rounded-lg bg-muted/40 group ${editingEventId===ev.id?"ring-1 ring-primary":""}`}>
                     <div className={`w-2 h-2 rounded-full ${ev.color} shrink-0`} />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium">{ev.title}</p>
@@ -554,40 +484,111 @@ export default function PlannerPage() {
                             <MapPin className="w-2.5 h-2.5" />{ev.location}
                           </span>
                         )}
-                        {ev.travelTime && (
-                          <span className="text-[10px] text-muted-foreground">🚇 {ev.travelTime}분</span>
-                        )}
+                        {ev.travelTime && <span className="text-[10px] text-muted-foreground">🚇 {ev.travelTime}분</span>}
                       </div>
                       {ev.memo && <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{ev.memo}</p>}
                     </div>
                     <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                      <button onClick={() => { setEditingEvent(ev); setEventDialog(true); }} className="p-1 hover:text-primary"><Edit2 className="w-3 h-3" /></button>
+                      <button onClick={() => openInlineEdit(ev)} className="p-1 hover:text-primary"><Edit2 className="w-3 h-3" /></button>
                       <button onClick={() => deleteEvent(ev.id)} className="p-1 hover:text-destructive"><Trash2 className="w-3 h-3" /></button>
                     </div>
                   </div>
                 ))
               }
-            </CardContent>
-          </Card>
 
-          {/* 종합 기록 - 선택 날짜 */}
-          <Card className="mt-2">
-            <CardHeader className="p-3 pb-1">
-              <CardTitle className="text-sm flex items-center justify-between">
-                <span>📊 {selectedDate} 종합</span>
-                <Link href="/planner?tab=기록" className="text-xs text-muted-foreground hover:text-foreground">기록 작성 →</Link>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-3 pt-0 space-y-2">
-              {studyMap[selectedDate] > 0 && (
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="text-green-600 font-medium">📚 학습 {studyMap[selectedDate]}분</span>
+              {/* ── 인라인 이벤트 폼 ── */}
+              {inlineEventOpen && (
+                <div className="border rounded-xl p-3 space-y-2.5 bg-muted/20 mt-1">
+                  <p className="text-xs font-semibold text-muted-foreground">{editingEventId ? "일정 편집" : "일정 추가"}</p>
+
+                  <Input placeholder="제목 *" value={inlineEventForm.title}
+                    onChange={e => sif("title", e.target.value)} autoFocus className="h-8 text-sm" />
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input type="date" value={inlineEventForm.date}
+                      onChange={e => sif("date", e.target.value)} className="h-8 text-sm" />
+                    <label className="flex items-center gap-1.5 text-xs cursor-pointer self-center">
+                      <input type="checkbox" checked={inlineEventForm.isAllDay}
+                        onChange={e => sif("isAllDay", e.target.checked)} className="rounded" />
+                      하루 종일
+                    </label>
+                  </div>
+
+                  {!inlineEventForm.isAllDay && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input type="time" value={inlineEventForm.startTime}
+                        onChange={e => sif("startTime", e.target.value)} className="h-8 text-sm" />
+                      <Input type="time" value={inlineEventForm.endTime}
+                        onChange={e => sif("endTime", e.target.value)} className="h-8 text-sm" />
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap gap-1">
+                    {EVENT_CATEGORIES.map(c => (
+                      <button key={c.key} type="button" onClick={() => sif("category", c.key)}
+                        className={`text-xs px-2 py-0.5 rounded-full font-medium border transition-all ${
+                          inlineEventForm.category === c.key
+                            ? `${c.color} text-white border-transparent`
+                            : "border-muted-foreground/30 text-muted-foreground"
+                        }`}>{c.label}</button>
+                    ))}
+                  </div>
+
+                  <div className="relative">
+                    <MapPin className="absolute left-2.5 top-2 w-3.5 h-3.5 text-muted-foreground" />
+                    <Input placeholder="위치 (선택)" value={inlineEventForm.location}
+                      onChange={e => sif("location", e.target.value)} className="h-8 text-sm pl-8" />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input type="number" min="0" placeholder="이동시간 (분)" value={inlineEventForm.travelTime}
+                      onChange={e => sif("travelTime", e.target.value)} className="h-8 text-sm" />
+                    <Input type="number" min="0" placeholder="소요시간 (분)" value={inlineEventForm.duration}
+                      onChange={e => sif("duration", e.target.value)} className="h-8 text-sm" />
+                  </div>
+
+                  <Textarea placeholder="메모 (선택)" value={inlineEventForm.memo}
+                    onChange={e => sif("memo", e.target.value)} className="h-16 text-sm resize-none" />
+
+                  <div className="flex gap-2">
+                    <Button size="sm" className="flex-1 h-8" onClick={submitInlineEvent}
+                      disabled={!inlineEventForm.title.trim()}>저장</Button>
+                    <Button size="sm" variant="outline" className="h-8 px-3"
+                      onClick={() => { setInlineEventOpen(false); setEditingEventId(null); }}>
+                      <X className="w-3 h-3" />
+                    </Button>
+                  </div>
                 </div>
               )}
-              <button onClick={() => { setTab("기록"); setRecDate(selectedDate); }}
-                className="w-full text-left text-xs text-muted-foreground border rounded-lg p-2 hover:bg-muted/40 transition-colors">
-                ✏️ 이 날 일기/할일 기록하러 가기 →
-              </button>
+
+              {/* ── 인라인 기록 (일기 + 할일) ── */}
+              {inlineDiaryOpen && (
+                <div className="border rounded-xl p-3 space-y-2.5 bg-violet-50/50 dark:bg-violet-950/10 mt-1">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-muted-foreground">✏️ {selectedDate} 기록</p>
+                    <button onClick={() => setInlineDiaryOpen(false)} className="text-muted-foreground hover:text-foreground">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <Textarea
+                    placeholder="오늘 있었던 일, 생각, 감정을 자유롭게 기록하세요..."
+                    value={diary.content}
+                    onChange={e => setDiary(d => ({ ...d, content: e.target.value, date: selectedDate }))}
+                    className="min-h-32 text-sm"
+                  />
+                  <Button size="sm" className="w-full h-8" onClick={async () => {
+                    setDiarySaving(true);
+                    try {
+                      await fetch("/api/planner/diary", { method:"POST", headers:{"Content-Type":"application/json"},
+                        body: JSON.stringify({ ...diary, date: selectedDate }) });
+                      toast.success("기록 저장됨");
+                      setInlineDiaryOpen(false);
+                    } finally { setDiarySaving(false); }
+                  }} disabled={diarySaving || !diary.content.trim()}>
+                    {diarySaving ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}저장
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -674,7 +675,7 @@ export default function PlannerPage() {
             <p className="text-xs font-medium mb-1.5 text-muted-foreground">📝 오늘의 기록</p>
             <Textarea placeholder="오늘 있었던 일, 생각, 감정을 기록해보세요..." value={diary.content}
               onChange={e => setDiary(d=>({...d, content:e.target.value}))}
-              className="min-h-36 text-sm resize-none" />
+              className="min-h-48 text-sm" />
           </div>
 
           <Button className="w-full" onClick={saveDiary} disabled={diarySaving||!diary.content.trim()}>
@@ -741,14 +742,6 @@ export default function PlannerPage() {
         </div>
       )}
 
-      {/* Event Dialog */}
-      <EventDialog
-        open={eventDialog}
-        onClose={() => setEventDialog(false)}
-        initial={editingEvent}
-        defaultDate={selectedDate}
-        onSave={saveEvent}
-      />
     </div>
   );
 }

@@ -388,73 +388,6 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* 오늘의 플래너 */}
-      {(
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base flex items-center gap-2">
-                <CalendarDays className="w-4 h-4 text-violet-500" />
-                오늘의 플래너
-              </CardTitle>
-              <Link href="/planner" className="text-xs flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
-                전체 보기<ArrowRight className="w-3 h-3" />
-              </Link>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {/* 오늘 일정 */}
-            {todayEvents.length > 0 && (
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-1.5">📅 일정</p>
-                <div className="space-y-1">
-                  {todayEvents.map(ev => (
-                    <div key={ev.id} className="flex items-center gap-2 text-sm">
-                      <div className={`w-2 h-2 rounded-full shrink-0 ${ev.color}`} />
-                      <span className="flex-1 truncate">{ev.title}</span>
-                      {!ev.isAllDay && ev.startTime && (
-                        <span className="text-xs text-muted-foreground shrink-0">{ev.startTime}</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {/* 오늘 할일 */}
-            {todayGoals.length > 0 && (
-              <div className={todayEvents.length > 0 ? "border-t pt-3" : ""}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <p className="text-xs font-medium text-muted-foreground">✅ 할일</p>
-                  <p className="text-xs text-muted-foreground">
-                    {todayGoals.filter(g => g.done).length}/{todayGoals.length}
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  {todayGoals.map(g => (
-                    <div key={g.id} className="flex items-center gap-2 text-sm">
-                      <Check className={`w-3.5 h-3.5 shrink-0 ${g.done ? "text-green-500" : "text-muted-foreground/30"}`} />
-                      <span className={`flex-1 truncate ${g.done ? "line-through text-muted-foreground" : ""}`}>{g.title}</span>
-                    </div>
-                  ))}
-                </div>
-                {todayGoals.length > 0 && (
-                  <div className="h-1.5 bg-muted rounded-full overflow-hidden mt-2">
-                    <div className="h-full bg-green-500 rounded-full transition-all"
-                      style={{ width: `${(todayGoals.filter(g => g.done).length / todayGoals.length) * 100}%` }} />
-                  </div>
-                )}
-              </div>
-            )}
-            {/* 빈 상태 */}
-            {todayEvents.length === 0 && todayGoals.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-3">
-                오늘 일정이 없어요 <Link href="/planner" className="text-primary underline">플래너에서 추가</Link>
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
       {/* 글로벌 시황 */}
       <Card>
         <CardContent className="p-4">
@@ -462,13 +395,13 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      {/* 학습 캘린더 */}
+      {/* 오늘의 플래너 + 학습 현황 */}
       <Card>
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
-              <Target className="w-4 h-4 text-primary" />
-              학습 현황
+              <CalendarDays className="w-4 h-4 text-violet-500" />
+              오늘의 플래너
               {streak > 0 && (
                 <Badge variant="secondary" className="gap-1 text-orange-600 bg-orange-100 dark:bg-orange-950">
                   <Flame className="w-3 h-3" />{streak}일 연속
@@ -476,18 +409,71 @@ export default function DashboardPage() {
               )}
             </CardTitle>
             <div className="flex items-center gap-2">
-              {/* 탭 */}
               <div className="flex rounded-md border overflow-hidden text-xs">
                 <button onClick={() => setCalTab("week")} className={`px-2.5 py-1 transition-colors ${calTab === "week" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"}`}>주간</button>
                 <button onClick={() => setCalTab("month")} className={`px-2.5 py-1 transition-colors ${calTab === "month" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"}`}>월간</button>
               </div>
-              <Link href="/study/sessions" className="text-xs flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
-                기록 추가<ArrowRight className="w-3 h-3" />
+              <Link href="/planner" className="text-xs flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
+                플래너<ArrowRight className="w-3 h-3" />
               </Link>
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {/* 오늘 일정 */}
+          {todayEvents.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-1.5">📅 오늘 일정</p>
+              <div className="space-y-1">
+                {todayEvents.map(ev => (
+                  <div key={ev.id} className="flex items-center gap-2 text-sm">
+                    <div className={`w-2 h-2 rounded-full shrink-0 ${ev.color}`} />
+                    <span className="flex-1 truncate">{ev.title}</span>
+                    {!ev.isAllDay && ev.startTime && (
+                      <span className="text-xs text-muted-foreground shrink-0">{ev.startTime}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {/* 오늘 할일 */}
+          {todayGoals.length > 0 && (
+            <div className={todayEvents.length > 0 ? "border-t pt-3" : ""}>
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-xs font-medium text-muted-foreground">✅ 오늘 할 일</p>
+                <p className="text-xs text-muted-foreground">
+                  {todayGoals.filter(g => g.done).length}/{todayGoals.length}
+                </p>
+              </div>
+              <div className="space-y-1">
+                {todayGoals.map(g => (
+                  <div key={g.id} className="flex items-center gap-2 text-sm">
+                    <Check className={`w-3.5 h-3.5 shrink-0 ${g.done ? "text-green-500" : "text-muted-foreground/30"}`} />
+                    <span className={`flex-1 truncate ${g.done ? "line-through text-muted-foreground" : ""}`}>{g.title}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="h-1.5 bg-muted rounded-full overflow-hidden mt-2">
+                <div className="h-full bg-green-500 rounded-full transition-all"
+                  style={{ width: `${(todayGoals.filter(g => g.done).length / todayGoals.length) * 100}%` }} />
+              </div>
+            </div>
+          )}
+          {/* 빈 상태 */}
+          {todayEvents.length === 0 && todayGoals.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center py-1">
+              오늘 일정이 없어요 — <Link href="/planner" className="text-primary underline">플래너에서 추가</Link>
+            </p>
+          )}
+
+          {/* 구분선 + 학습 캘린더 */}
+          <div className="border-t pt-3">
+            <p className="text-xs font-medium text-muted-foreground mb-3 flex items-center gap-1.5">
+              <Target className="w-3.5 h-3.5" />
+              학습 현황
+              <span className="ml-auto text-[10px]">이번 주 {weeklyMinutes >= 60 ? `${Math.floor(weeklyMinutes/60)}h${weeklyMinutes%60>0?` ${weeklyMinutes%60}m`:""}` : `${weeklyMinutes}m`} / 목표 {Math.floor(weeklyGoal/60)}h</span>
+            </p>
           {calTab === "week" ? (
             <div className="grid grid-cols-7 gap-2">
               {thisWeekDays.map((day) => {
@@ -633,6 +619,7 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
+          </div>{/* end 학습현황 div */}
         </CardContent>
       </Card>
 
