@@ -23,6 +23,8 @@ interface Profile {
   image: string | null;
   createdAt: string;
   role: string;
+  birthDate?: string | null;
+  birthTime?: string | null;
 }
 
 interface Stats {
@@ -38,6 +40,8 @@ export default function ProfilePage() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ name: "", username: "", bio: "" });
   const [saving, setSaving] = useState(false);
+  const [birthForm, setBirthForm] = useState({ birthDate: "", birthTime: "" });
+  const [savingBirth, setSavingBirth] = useState(false);
 
   async function loadProfile() {
     const res = await fetch("/api/user/profile");
@@ -45,6 +49,7 @@ export default function ProfilePage() {
       const data = await res.json();
       setProfile(data);
       setForm({ name: data.name ?? "", username: data.username ?? "", bio: data.bio ?? "" });
+      setBirthForm({ birthDate: data.birthDate ?? "", birthTime: data.birthTime ?? "" });
     }
   }
 
@@ -68,6 +73,20 @@ export default function ProfilePage() {
   }
 
   useEffect(() => { loadProfile(); loadStats(); }, []);
+
+  async function handleBirthSave() {
+    setSavingBirth(true);
+    const res = await fetch("/api/user/profile", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(birthForm),
+    });
+    setSavingBirth(false);
+    if (!res.ok) { toast.error((await res.json()).error ?? "저장 실패"); return; }
+    const updated = await res.json();
+    setProfile(p => p ? { ...p, ...updated } : p);
+    toast.success("생년월일이 저장되었습니다.");
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -223,6 +242,36 @@ export default function ProfilePage() {
               <Separator />
             </>
           )}
+
+          <Separator />
+
+          {/* 생년월일 설정 */}
+          <div className="px-4 py-3 space-y-2.5">
+            <p className="text-xs font-medium text-muted-foreground">운세 설정</p>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-muted-foreground">생년월일</span>
+              <input
+                type="date"
+                value={birthForm.birthDate}
+                onChange={e => setBirthForm(f => ({ ...f, birthDate: e.target.value }))}
+                className="text-sm bg-transparent border border-input rounded px-2 py-1 text-right"
+              />
+            </div>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-muted-foreground">태어난 시간 <span className="text-xs">(선택)</span></span>
+              <input
+                type="time"
+                value={birthForm.birthTime}
+                onChange={e => setBirthForm(f => ({ ...f, birthTime: e.target.value }))}
+                className="text-sm bg-transparent border border-input rounded px-2 py-1 text-right"
+              />
+            </div>
+            <Button size="sm" className="w-full h-8 text-xs" onClick={handleBirthSave} disabled={savingBirth}>
+              {savingBirth ? "저장 중..." : "운세 정보 저장"}
+            </Button>
+          </div>
+
+          <Separator />
 
           {/* 로그아웃 */}
           <div className="px-4 py-3">

@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, BookOpen, TrendingUp, MessageSquare, Utensils,
-  ChevronRight, X, UserCircle2, CalendarDays,
+  ChevronRight, X, UserCircle2, CalendarDays, Sparkles,
 } from "lucide-react";
 import { useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -38,6 +38,7 @@ const tabs: Tab[] = [
   },
   { label: "커뮤", href: "/community", icon: MessageSquare },
   { label: "맛집", href: "/restaurant", icon: Utensils },
+  { label: "운세", href: "/fortune", icon: Sparkles },
   { label: "내 정보", href: "/profile", icon: UserCircle2 },
 ];
 

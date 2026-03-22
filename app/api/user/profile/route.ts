@@ -8,7 +8,7 @@ export async function GET() {
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { id: true, name: true, email: true, username: true, bio: true, image: true, createdAt: true, role: true },
+    select: { id: true, name: true, email: true, username: true, bio: true, image: true, createdAt: true, role: true, birthDate: true, birthTime: true },
   });
 
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -20,7 +20,7 @@ export async function PUT(req: NextRequest) {
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { name, username, bio } = body;
+  const { name, username, bio, birthDate, birthTime } = body;
 
   // Check username uniqueness
   if (username) {
@@ -36,8 +36,10 @@ export async function PUT(req: NextRequest) {
       name: name || undefined,
       username: username || undefined,
       bio: bio !== undefined ? bio : undefined,
+      birthDate: birthDate !== undefined ? birthDate : undefined,
+      birthTime: birthTime !== undefined ? birthTime : undefined,
     },
-    select: { id: true, name: true, email: true, username: true, bio: true, image: true },
+    select: { id: true, name: true, email: true, username: true, bio: true, image: true, birthDate: true, birthTime: true },
   });
 
   return NextResponse.json(updated);
