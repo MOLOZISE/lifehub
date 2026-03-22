@@ -451,7 +451,7 @@ export default function DashboardPage() {
                   const mins = sessionDateMap[day] ?? 0;
                   const isToday = day === today;
                   const intensity = mins === 0 ? 0 : mins < 30 ? 1 : mins < 60 ? 2 : mins < 120 ? 3 : 4;
-                  const bgColors = ["bg-muted/60","bg-green-100 dark:bg-green-900/50","bg-green-300 dark:bg-green-700/60","bg-green-500/70 dark:bg-green-600/70","bg-green-600 dark:bg-green-500"];
+                  const bgColors = ["bg-muted","bg-green-200 dark:bg-green-900/70","bg-green-400 dark:bg-green-700","bg-green-500 dark:bg-green-600","bg-green-700 dark:bg-green-500"];
                   return (
                     <div key={day} title={mins > 0 ? `${mins}분` : undefined}
                       className={`aspect-square flex flex-col items-center justify-center rounded-xl transition-colors cursor-default
