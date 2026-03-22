@@ -57,19 +57,21 @@ export async function POST(req: NextRequest) {
 JSON 형식으로 응답:
 {"cards":[{"position":"과거","name":"${past}","meaning":"...","advice":"..."},{"position":"현재","name":"${present}","meaning":"...","advice":"..."},{"position":"미래","name":"${future}","meaning":"...","advice":"..."}],"overall":"전체 흐름 요약 (2-3문장)","luckyColor":"오늘의 행운 색깔","luckyNumber":7}`;
 
-  } else if (type === "saju" && birthDate) {
+  } else if (type.startsWith("saju") && birthDate) {
     const year = parseInt(birthDate.slice(0, 4));
     const month = parseInt(birthDate.slice(5, 7));
     const day = parseInt(birthDate.slice(8, 10));
     const timeHour = birthTime ? parseInt(birthTime.slice(0, 2)) : null;
+    const sajuPeriod = type.split("_")[1] ?? "today"; // today | week | month | year
+    const periodLabel = sajuPeriod === "today" ? "오늘" : sajuPeriod === "week" ? "이번 주" : sajuPeriod === "month" ? "이번 달" : `${new Date().getFullYear()}년 전체`;
 
-    prompt = `사주 분석을 해주세요.
+    prompt = `사주명리학 기반 운세 분석을 해주세요.
 생년월일: ${year}년 ${month}월 ${day}일${timeHour !== null ? ` ${timeHour}시` : ""}
+분석 기간: ${periodLabel}
 오늘 날짜: ${date}
 
-한국의 사주명리학을 바탕으로 오늘의 운세를 분석해주세요.
 JSON 형식으로 응답:
-{"overall":"전체 운세 요약","categories":{"love":"연애운","money":"재물운","health":"건강운","work":"직업운"},"luckyColor":"행운의 색","luckyNumber":3,"luckyDirection":"행운의 방향","advice":"오늘의 조언 (2-3문장)","caution":"주의할 점"}`;
+{"overall":"${periodLabel} 전체 운세 요약 (3-4문장)","categories":{"연애운":"...","재물운":"...","건강운":"...","직업/학업운":"..."},"luckyColor":"행운의 색","luckyNumber":3,"luckyDirection":"행운의 방향","advice":"${periodLabel} 조언 (2-3문장)","caution":"주의할 점"}`;
 
   } else {
     // daily fortune

@@ -745,6 +745,9 @@ model CalendarEvent {
   category    String   @default("personal") // study/work/personal/health/etc
   color       String   @default("blue")
   memo        String?  @db.Text
+  location    String?
+  travelTime  Int?     // 이동시간 (분)
+  duration    Int?     // 소요시간 (분)
   isRepeat    Boolean  @default(false)
   repeatType  String?  // "daily" | "weekly" | "monthly"
   createdAt   DateTime @default(now())
