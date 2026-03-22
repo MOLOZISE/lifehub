@@ -36,21 +36,8 @@ const tabs: Tab[] = [
       { label: "⭐ 관심 종목", href: "/portfolio/watchlist" },
     ],
   },
-  {
-    label: "커뮤", href: "/community", icon: MessageSquare,
-    children: [
-      { label: "🗣️ 자유게시판", href: "/community?category=free" },
-      { label: "📈 주식 토론방", href: "/community?category=stock" },
-      { label: "📖 스터디 인증", href: "/community?category=study" },
-      { label: "🍜 맛집 추천", href: "/community?category=restaurant" },
-    ],
-  },
-  {
-    label: "맛집", href: "/restaurant", icon: Utensils,
-    children: [
-      { label: "🗺️ 맛집 지도", href: "/restaurant" },
-    ],
-  },
+  { label: "커뮤", href: "/community", icon: MessageSquare },
+  { label: "맛집", href: "/restaurant", icon: Utensils },
   { label: "내 정보", href: "/profile", icon: UserCircle2 },
 ];
 

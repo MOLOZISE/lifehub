@@ -41,20 +41,13 @@ const navItems = [
   },
   {
     label: "커뮤니티",
+    href: "/community",
     icon: MessageSquare,
-    children: [
-      { label: "🗣️ 자유게시판", href: "/community?category=free" },
-      { label: "📈 주식 토론방", href: "/community?category=stock" },
-      { label: "📖 스터디 인증", href: "/community?category=study" },
-      { label: "🍜 맛집 추천", href: "/community?category=restaurant" },
-    ],
   },
   {
     label: "맛집",
+    href: "/restaurant",
     icon: Utensils,
-    children: [
-      { label: "🗺️ 맛집 지도", href: "/restaurant" },
-    ],
   },
 ];
 

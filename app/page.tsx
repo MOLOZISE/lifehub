@@ -55,6 +55,13 @@ interface CommunityPost {
   viewCount: number;
 }
 
+interface PlannerEvent {
+  id: string; title: string; date: string;
+  startTime?: string; isAllDay: boolean; category: string; color: string;
+  location?: string;
+}
+interface PlanGoal { id: string; title: string; done: boolean; }
+
 interface RestaurantItem {
   id: string;
   name: string;
@@ -152,6 +159,8 @@ export default function DashboardPage() {
   const [exams, setExams] = useState<Exam[]>([]);
   const [recentPosts, setRecentPosts] = useState<CommunityPost[]>([]);
   const [topRestaurants, setTopRestaurants] = useState<RestaurantItem[]>([]);
+  const [todayEvents, setTodayEvents] = useState<PlannerEvent[]>([]);
+  const [todayGoals, setTodayGoals] = useState<PlanGoal[]>([]);
   const [loading, setLoading] = useState(true);
   const [dayChangePct, setDayChangePct] = useState<Record<string, number>>({});
   const [weeklyGoal, setWeeklyGoal] = useState(DEFAULT_WEEKLY_GOAL);
@@ -178,8 +187,10 @@ export default function DashboardPage() {
       fetch("/api/study/exams").then(r => r.ok ? r.json() : null),
       fetch("/api/community/posts?limit=4&sort=latest").then(r => r.ok ? r.json() : null),
       fetch("/api/restaurant?limit=4&sort=rating").then(r => r.ok ? r.json() : null),
+      fetch(`/api/planner/events?month=${today.slice(0,7)}`).then(r => r.ok ? r.json() : null),
+      fetch(`/api/planner/plans?type=day&period=${today}`).then(r => r.ok ? r.json() : null),
     ]).then(results => {
-      const [sessRes, subRes, holdRes, examRes, postsRes, restRes] = results;
+      const [sessRes, subRes, holdRes, examRes, postsRes, restRes, evRes, planRes] = results;
       if (sessRes.status === "fulfilled" && sessRes.value?.sessions) setSessions(sessRes.value.sessions);
       if (subRes.status === "fulfilled" && Array.isArray(subRes.value)) setSubjects(subRes.value);
       if (holdRes.status === "fulfilled" && Array.isArray(holdRes.value)) {
@@ -208,6 +219,13 @@ export default function DashboardPage() {
       }
       if (postsRes.status === "fulfilled" && postsRes.value?.posts) setRecentPosts(postsRes.value.posts);
       if (restRes.status === "fulfilled" && restRes.value?.restaurants) setTopRestaurants(restRes.value.restaurants);
+      if (evRes.status === "fulfilled" && evRes.value?.events) {
+        const todayEvs = (evRes.value.events as PlannerEvent[]).filter(e => e.date === today);
+        setTodayEvents(todayEvs);
+      }
+      if (planRes.status === "fulfilled" && planRes.value?.plan?.goals) {
+        setTodayGoals(planRes.value.plan.goals);
+      }
       setLoading(false);
     });
   }, [today]);
@@ -369,6 +387,67 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* 오늘의 플래너 */}
+      {(todayEvents.length > 0 || todayGoals.length > 0) && (
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <CalendarDays className="w-4 h-4 text-violet-500" />
+                오늘의 플래너
+              </CardTitle>
+              <Link href="/planner" className="text-xs flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
+                전체 보기<ArrowRight className="w-3 h-3" />
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {/* 오늘 일정 */}
+            {todayEvents.length > 0 && (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1.5">📅 일정</p>
+                <div className="space-y-1">
+                  {todayEvents.map(ev => (
+                    <div key={ev.id} className="flex items-center gap-2 text-sm">
+                      <div className={`w-2 h-2 rounded-full shrink-0 ${ev.color}`} />
+                      <span className="flex-1 truncate">{ev.title}</span>
+                      {!ev.isAllDay && ev.startTime && (
+                        <span className="text-xs text-muted-foreground shrink-0">{ev.startTime}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* 오늘 할일 */}
+            {todayGoals.length > 0 && (
+              <div className={todayEvents.length > 0 ? "border-t pt-3" : ""}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-xs font-medium text-muted-foreground">✅ 할일</p>
+                  <p className="text-xs text-muted-foreground">
+                    {todayGoals.filter(g => g.done).length}/{todayGoals.length}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  {todayGoals.map(g => (
+                    <div key={g.id} className="flex items-center gap-2 text-sm">
+                      <Check className={`w-3.5 h-3.5 shrink-0 ${g.done ? "text-green-500" : "text-muted-foreground/30"}`} />
+                      <span className={`flex-1 truncate ${g.done ? "line-through text-muted-foreground" : ""}`}>{g.title}</span>
+                    </div>
+                  ))}
+                </div>
+                {todayGoals.length > 0 && (
+                  <div className="h-1.5 bg-muted rounded-full overflow-hidden mt-2">
+                    <div className="h-full bg-green-500 rounded-full transition-all"
+                      style={{ width: `${(todayGoals.filter(g => g.done).length / todayGoals.length) * 100}%` }} />
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* 글로벌 시황 */}
       <Card>
