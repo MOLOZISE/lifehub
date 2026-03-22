@@ -260,12 +260,14 @@ export function TradingViewChart({ bars, height = 340, isKRW = false, showMA = t
         secondsVisible: false,
       },
       localization: {
-        timeFormatter: (t: number) => {
-          const d = new Date(t * 1000);
-          if (intraday) {
-            return d.toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+        timeFormatter: (t: number | { year: number; month: number; day: number }) => {
+          if (typeof t === "object") {
+            // BusinessDay (일봉/주봉/월봉)
+            return `${t.year}년 ${t.month}월 ${t.day}일`;
           }
-          return d.toLocaleDateString("ko-KR", { year: "numeric", month: "numeric", day: "numeric" });
+          // UTCTimestamp (분봉)
+          const d = new Date(t * 1000);
+          return d.toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
         },
       },
       handleScale: true,

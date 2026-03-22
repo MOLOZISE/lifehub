@@ -24,7 +24,7 @@ const TIMEFRAME: Record<Timeframe, { range: string; interval: string; label: str
   "15m": { range: "5d",  interval: "15m", label: "15분", intraday: true  },
   "30m": { range: "1mo", interval: "30m", label: "30분", intraday: true  },
   "60m": { range: "1mo", interval: "60m", label: "60분", intraday: true  },
-  "D":   { range: "2y",  interval: "1d",  label: "일",   intraday: false },
+  "D":   { range: "5y",  interval: "1d",  label: "일",   intraday: false },
   "W":   { range: "5y",  interval: "1wk", label: "주",   intraday: false },
   "M":   { range: "10y", interval: "1mo", label: "월",   intraday: false },
 };
