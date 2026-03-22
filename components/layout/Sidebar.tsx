@@ -6,7 +6,7 @@ import { useSession, signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, BookOpen, TrendingUp, MessageSquare, Utensils,
-  Moon, Sun, ChevronRight, LogOut, User, LogIn,
+  Moon, Sun, ChevronRight, LogOut, User, LogIn, CalendarDays,
 } from "lucide-react";
 import { useTheme } from "@/components/providers/ThemeProvider";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,11 @@ const navItems = [
     label: "대시보드",
     href: "/",
     icon: LayoutDashboard,
+  },
+  {
+    label: "플래너",
+    href: "/planner",
+    icon: CalendarDays,
   },
   {
     label: "학습",

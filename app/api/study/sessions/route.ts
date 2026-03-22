@@ -8,12 +8,13 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url);
   const date = searchParams.get("date");
+  const month = searchParams.get("month");
   const limit = parseInt(searchParams.get("limit") ?? "50");
 
   const sessions = await prisma.studySession.findMany({
     where: {
       userId: session.user.id,
-      ...(date && { date }),
+      ...(date ? { date } : month ? { date: { startsWith: month } } : {}),
     },
     orderBy: { createdAt: "desc" },
     take: limit,

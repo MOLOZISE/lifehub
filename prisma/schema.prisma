@@ -21,6 +21,8 @@ model User {
   username      String?   @unique  // 커뮤니티 닉네임
   bio           String?
   role          String    @default("USER") // "USER" | "ADMIN"
+  birthDate     String?
+  birthTime     String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -65,6 +67,12 @@ model User {
   // Portfolio
   stockTrades        StockTrade[]
   portfolioSnapshots PortfolioSnapshot[]
+
+  // Planner
+  calendarEvents CalendarEvent[]
+  diaryEntries   DiaryEntry[]
+  plans          Plan[]
+  fortuneCache   FortuneCache[]
 
   @@map("users")
 }
@@ -722,4 +730,78 @@ model RestaurantListItem {
 
   @@unique([listId, restaurantId])
   @@map("restaurant_list_items")
+}
+
+// ─── Planner App ──────────────────────────────────────────────────────────────
+
+model CalendarEvent {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  date        String   // YYYY-MM-DD
+  startTime   String?  // "HH:MM"
+  endTime     String?  // "HH:MM"
+  isAllDay    Boolean  @default(true)
+  category    String   @default("personal") // study/work/personal/health/etc
+  color       String   @default("blue")
+  memo        String?  @db.Text
+  isRepeat    Boolean  @default(false)
+  repeatType  String?  // "daily" | "weekly" | "monthly"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
+  @@map("calendar_events")
+}
+
+model DiaryEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  date      String   // YYYY-MM-DD (one per day)
+  content   String   @db.Text
+  mood      String?  // "great" | "good" | "neutral" | "bad" | "terrible"
+  tags      String[] @default([])
+  isPrivate Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@map("diary_entries")
+}
+
+model Plan {
+  id         String   @id @default(cuid())
+  userId     String
+  type       String   // "week" | "month" | "year"
+  period     String   // "2026-W12" | "2026-03" | "2026"
+  goals      Json     @default("[]") // [{id, title, done, priority}]
+  reflection String?  @db.Text
+  updatedAt  DateTime @updatedAt
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type, period])
+  @@index([userId])
+  @@map("plans")
+}
+
+model FortuneCache {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // "daily" | "tarot" | "saju"
+  date      String   // YYYY-MM-DD
+  content   Json
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type, date])
+  @@index([userId])
+  @@map("fortune_cache")
 }

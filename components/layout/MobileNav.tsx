@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, BookOpen, TrendingUp, MessageSquare, Utensils,
-  ChevronRight, X, UserCircle2,
+  ChevronRight, X, UserCircle2, CalendarDays,
 } from "lucide-react";
 import { useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -20,6 +20,7 @@ interface Tab {
 
 const tabs: Tab[] = [
   { label: "홈", href: "/", icon: LayoutDashboard },
+  { label: "플래너", href: "/planner", icon: CalendarDays },
   {
     label: "학습", href: "/study/analytics", icon: BookOpen,
     children: [
