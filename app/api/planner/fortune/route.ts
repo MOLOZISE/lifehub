@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   const cached = await prisma.fortuneCache.findUnique({
     where: { userId_type_date: { userId: session.user.id, type, date } },
   });
-  if (cached) return NextResponse.json({ ...cached.content, cached: true, date });
+  if (cached) return NextResponse.json({ ...(cached.content as object), cached: true, date });
 
   return NextResponse.json({ cached: false, date });
 }
