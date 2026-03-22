@@ -248,6 +248,14 @@ export default function DashboardPage() {
     }
   }
 
+  // 과목별 이번 달 누적 시간
+  const subjectMonthMinutes: Record<string, number> = {};
+  for (const s of sessions) {
+    if (s.subject && s.date?.startsWith(calMonth)) {
+      subjectMonthMinutes[s.subject.id] = (subjectMonthMinutes[s.subject.id] ?? 0) + s.durationMinutes;
+    }
+  }
+
   const thisWeekDays = getThisWeekDays();
   const monthCalDays = buildMonthCalendar(calMonth);
 
@@ -434,7 +442,7 @@ export default function DashboardPage() {
                   setCalMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
                 }} className="text-muted-foreground hover:text-foreground p-1">›</button>
               </div>
-              <div className="grid grid-cols-7 gap-0.5">
+              <div className="grid grid-cols-7 gap-1">
                 {DOW_KO.map(d => (
                   <div key={d} className="text-center text-[9px] text-muted-foreground font-medium pb-1">{d}</div>
                 ))}
@@ -471,11 +479,17 @@ export default function DashboardPage() {
           {/* 과목별 학습 시간 */}
           {effectiveSubjects.length > 0 && (
             <div className="mt-4 pt-3 border-t">
-              <p className="text-xs font-semibold text-muted-foreground mb-2">이번 주 과목별</p>
+              <p className="text-xs font-semibold text-muted-foreground mb-2">
+                {calTab === "week" ? "이번 주 과목별" : `${calMonth.replace("-", "년 ")}월 과목별`}
+              </p>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
                 {effectiveSubjects.map(s => {
-                  const wMin = subjectWeekMinutes[s.id] ?? 0;
-                  const maxMin = Math.max(...effectiveSubjects.map(x => subjectWeekMinutes[x.id] ?? 0), 1);
+                  const wMin = calTab === "week"
+                    ? (subjectWeekMinutes[s.id] ?? 0)
+                    : (subjectMonthMinutes[s.id] ?? 0);
+                  const maxMin = Math.max(...effectiveSubjects.map(x =>
+                    calTab === "week" ? (subjectWeekMinutes[x.id] ?? 0) : (subjectMonthMinutes[x.id] ?? 0)
+                  ), 1);
                   const pct = Math.round((wMin / maxMin) * 100);
                   return (
                     <div key={s.id} className="flex items-center gap-2 min-w-0">
