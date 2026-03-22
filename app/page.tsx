@@ -389,7 +389,7 @@ export default function DashboardPage() {
       </div>
 
       {/* 오늘의 플래너 */}
-      {(todayEvents.length > 0 || todayGoals.length > 0) && (
+      {(
         <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
@@ -444,6 +444,12 @@ export default function DashboardPage() {
                   </div>
                 )}
               </div>
+            )}
+            {/* 빈 상태 */}
+            {todayEvents.length === 0 && todayGoals.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-3">
+                오늘 일정이 없어요 <Link href="/planner" className="text-primary underline">플래너에서 추가</Link>
+              </p>
             )}
           </CardContent>
         </Card>

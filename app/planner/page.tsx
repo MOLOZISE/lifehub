@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, useCallback, useRef } from "react";
 import {
   ChevronLeft, ChevronRight, Plus, X, Loader2, RefreshCw,
@@ -19,7 +20,7 @@ import { toast } from "sonner";
 
 type Tab = "캘린더" | "기록" | "운세";
 type FortuneKind = "daily" | "tarot" | "saju";
-type SajuPeriod = "today" | "week" | "month" | "year";
+type SajuPeriod = "today" | "month" | "year" | "custom";
 
 interface CalendarEvent {
   id: string; title: string; date: string;
@@ -268,6 +269,8 @@ export default function PlannerPage() {
   // ── Fortune state ───────────────────────────────────────────────────────────
   const [fortuneKind, setFortuneKind] = useState<FortuneKind>("daily");
   const [sajuPeriod, setSajuPeriod]   = useState<SajuPeriod>("today");
+  const [sajuStart, setSajuStart]     = useState(today);
+  const [sajuEnd, setSajuEnd]         = useState("");
   const [birthDate, setBirthDate]     = useState("");
   const [birthTime, setBirthTime]     = useState("");
   const [fortune, setFortune]         = useState<FortuneData|null>(null);
@@ -277,6 +280,11 @@ export default function PlannerPage() {
   const [pickedCards, setPickedCards] = useState<string[]>([]);
   const [flippedCards, setFlippedCards] = useState<Set<number>>(new Set());
   const [tarotReady, setTarotReady]   = useState(false);
+  const [tarotQuestion, setTarotQuestion] = useState("");
+  // ── Week/month memo state ────────────────────────────────────────────────────
+  const [weekMemo, setWeekMemo]       = useState("");
+  const [monthMemo, setMonthMemo]     = useState("");
+  const [weekMemoOpen, setWeekMemoOpen] = useState(false);
 
   // ── Load calendar ───────────────────────────────────────────────────────────
   const loadCalendar = useCallback(async (month: string) => {
@@ -295,17 +303,23 @@ export default function PlannerPage() {
 
   useEffect(() => { loadCalendar(calMonth); }, [calMonth, loadCalendar]);
 
-  // ── Load year plan ──────────────────────────────────────────────────────────
+  // ── Load year plan + week/month memos ──────────────────────────────────────
   useEffect(() => {
     const year = today.slice(0,4);
-    fetch(`/api/planner/plans?type=year&period=${year}`)
-      .then(r => r.json())
-      .then(d => {
-        if (d.plan) {
-          setYearGoals(d.plan.goals ?? []);
-          setYearRefl(d.plan.reflection ?? "");
-        }
-      });
+    const weekPeriod = getWeekPeriod(new Date());
+    const monthPeriod = today.slice(0,7);
+    Promise.all([
+      fetch(`/api/planner/plans?type=year&period=${year}`).then(r=>r.json()),
+      fetch(`/api/planner/plans?type=week&period=${weekPeriod}`).then(r=>r.json()),
+      fetch(`/api/planner/plans?type=month&period=${monthPeriod}`).then(r=>r.json()),
+    ]).then(([yRes, wRes, mRes]) => {
+      if (yRes.plan) {
+        setYearGoals(yRes.plan.goals ?? []);
+        setYearRefl(yRes.plan.reflection ?? "");
+      }
+      if (wRes.plan) setWeekMemo(wRes.plan.reflection ?? "");
+      if (mRes.plan) setMonthMemo(mRes.plan.reflection ?? "");
+    });
   }, [today]);
 
   // ── Load diary + day plan ───────────────────────────────────────────────────
@@ -409,14 +423,24 @@ export default function PlannerPage() {
 
     setFortune(null); setFortuneLoading(true);
     try {
-      const cacheKey = fortuneKind === "saju" ? `saju_${sajuPeriod}` : fortuneKind;
+      const cacheKey = fortuneKind === "saju"
+        ? `saju_${sajuStart}${sajuEnd ? "_" + sajuEnd : ""}`
+        : fortuneKind;
       const cached = await fetch(`/api/planner/fortune?type=${cacheKey}`).then(r=>r.json());
       if (cached.cached && (cached.overall || cached.cards)) { setFortune(cached); return; }
 
       const res = await fetch("/api/planner/fortune", {
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ type: cacheKey, birthDate, birthTime, pickedCards: fortuneKind==="tarot" ? pickedCards : undefined }),
+        body: JSON.stringify({
+          type: cacheKey,
+          birthDate,
+          birthTime,
+          pickedCards: fortuneKind==="tarot" ? pickedCards : undefined,
+          question: fortuneKind==="tarot" ? tarotQuestion : undefined,
+          sajuStart: fortuneKind==="saju" ? sajuStart : undefined,
+          sajuEnd: fortuneKind==="saju" ? sajuEnd : undefined,
+        }),
       });
       const data = await res.json();
       if (data.error) { toast.error(data.error); return; }
@@ -486,6 +510,50 @@ export default function PlannerPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* 주간/월간 메모 */}
+          <div>
+            <button
+              onClick={() => setWeekMemoOpen(o => !o)}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full">
+              <span>📝 주간 메모</span>
+              <span className="ml-auto">{weekMemoOpen ? "▲" : "▼"}</span>
+            </button>
+            {weekMemoOpen && (
+              <div className="mt-2 space-y-2">
+                <div>
+                  <p className="text-[10px] text-muted-foreground mb-1">이번 주 메모</p>
+                  <Textarea
+                    placeholder="이번 주 계획, 회고, 메모..."
+                    value={weekMemo}
+                    onChange={e => setWeekMemo(e.target.value)}
+                    className="h-16 text-xs resize-none"
+                  />
+                  <Button size="sm" className="h-7 text-xs mt-1" onClick={async () => {
+                    const period = getWeekPeriod(new Date());
+                    await fetch("/api/planner/plans", { method:"POST", headers:{"Content-Type":"application/json"},
+                      body: JSON.stringify({ type:"week", period, goals:[], reflection: weekMemo }) });
+                    toast.success("주간 메모 저장됨");
+                  }}>저장</Button>
+                </div>
+                <div>
+                  <p className="text-[10px] text-muted-foreground mb-1">이번 달 메모</p>
+                  <Textarea
+                    placeholder="이번 달 목표, 회고, 메모..."
+                    value={monthMemo}
+                    onChange={e => setMonthMemo(e.target.value)}
+                    className="h-16 text-xs resize-none"
+                  />
+                  <Button size="sm" className="h-7 text-xs mt-1" onClick={async () => {
+                    const period = today.slice(0,7);
+                    await fetch("/api/planner/plans", { method:"POST", headers:{"Content-Type":"application/json"},
+                      body: JSON.stringify({ type:"month", period, goals:[], reflection: monthMemo }) });
+                    toast.success("월간 메모 저장됨");
+                  }}>저장</Button>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Month nav */}
           <div className="flex items-center justify-between">
@@ -572,6 +640,27 @@ export default function PlannerPage() {
                   </div>
                 ))
               }
+            </CardContent>
+          </Card>
+
+          {/* 종합 기록 - 선택 날짜 */}
+          <Card className="mt-2">
+            <CardHeader className="p-3 pb-1">
+              <CardTitle className="text-sm flex items-center justify-between">
+                <span>📊 {selectedDate} 종합</span>
+                <Link href="/planner?tab=기록" className="text-xs text-muted-foreground hover:text-foreground">기록 작성 →</Link>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-3 pt-0 space-y-2">
+              {studyMap[selectedDate] > 0 && (
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-green-600 font-medium">📚 학습 {studyMap[selectedDate]}분</span>
+                </div>
+              )}
+              <button onClick={() => { setTab("기록"); setRecDate(selectedDate); }}
+                className="w-full text-left text-xs text-muted-foreground border rounded-lg p-2 hover:bg-muted/40 transition-colors">
+                ✏️ 이 날 일기/할일 기록하러 가기 →
+              </button>
             </CardContent>
           </Card>
         </div>
@@ -724,19 +813,49 @@ export default function PlannerPage() {
 
           {/* Saju period selector */}
           {fortuneKind==="saju" && (
-            <div className="flex gap-1 bg-muted/30 rounded-xl p-1 text-xs">
-              {([{k:"today",l:"오늘"},{k:"week",l:"이번주"},{k:"month",l:"이번달"},{k:"year",l:`${today.slice(0,4)}년 총운`}] as {k:SajuPeriod,l:string}[]).map(({k,l}) => (
-                <button key={k} onClick={() => { setSajuPeriod(k); setFortune(null); }}
-                  className={`flex-1 py-1 rounded-lg font-medium transition-all ${sajuPeriod===k?"bg-background shadow-sm text-foreground":"text-muted-foreground"}`}>
-                  {l}
-                </button>
-              ))}
+            <div className="space-y-2">
+              <div className="flex gap-1 bg-muted/30 rounded-xl p-1 text-xs">
+                {([{k:"today",l:"오늘"},{k:"month",l:"이번달"},{k:"year",l:`${today.slice(0,4)}년`},{k:"custom",l:"직접 선택"}] as {k:SajuPeriod,l:string}[]).map(({k,l}) => (
+                  <button key={k} onClick={() => {
+                    setSajuPeriod(k);
+                    setFortune(null);
+                    if (k==="today") { setSajuStart(today); setSajuEnd(""); }
+                    else if (k==="month") { setSajuStart(today.slice(0,7)+"-01"); setSajuEnd(""); }
+                    else if (k==="year") { setSajuStart(today.slice(0,4)+"-01-01"); setSajuEnd(""); }
+                  }}
+                    className={`flex-1 py-1 rounded-lg font-medium transition-all ${sajuPeriod===k?"bg-background shadow-sm text-foreground":"text-muted-foreground"}`}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+              {sajuPeriod==="custom" && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <p className="text-[10px] text-muted-foreground mb-1">시작일 *</p>
+                    <Input type="date" value={sajuStart} onChange={e => { setSajuStart(e.target.value); setFortune(null); }} className="h-8 text-sm" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground mb-1">종료일 (선택)</p>
+                    <Input type="date" value={sajuEnd} onChange={e => { setSajuEnd(e.target.value); setFortune(null); }} className="h-8 text-sm" />
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
           {/* Tarot card picker */}
           {fortuneKind==="tarot" && (
             <div className="space-y-3">
+              {/* Question input */}
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">질문 (선택)</p>
+                <Input
+                  placeholder="어떤 것이 궁금하신가요? (예: 올해 직장운은?)"
+                  value={tarotQuestion}
+                  onChange={e => setTarotQuestion(e.target.value)}
+                  className="h-8 text-sm"
+                />
+              </div>
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium">카드 3장을 선택하세요</p>
                 <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={shuffleDeck}>
@@ -865,7 +984,7 @@ export default function PlannerPage() {
                     <Card className="bg-gradient-to-br from-teal-50 to-cyan-50 dark:from-teal-950/30 dark:to-cyan-950/30 border-teal-200 dark:border-teal-800">
                       <CardContent className="p-4">
                         <p className="font-semibold text-sm mb-1">
-                          ☯️ {sajuPeriod==="today"?"오늘":sajuPeriod==="week"?"이번 주":sajuPeriod==="month"?"이번 달":`${today.slice(0,4)}년`} 운세
+                          ☯️ {sajuEnd ? `${sajuStart} ~ ${sajuEnd}` : sajuPeriod==="today"?"오늘":sajuPeriod==="month"?"이번 달":sajuPeriod==="year"?`${today.slice(0,4)}년`:sajuStart} 운세
                         </p>
                         <p className="text-sm leading-relaxed">{fortune.overall}</p>
                       </CardContent>

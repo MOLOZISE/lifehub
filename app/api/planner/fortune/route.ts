@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { type, birthDate, birthTime } = await req.json();
+  const { type, birthDate, birthTime, pickedCards: userPickedCards, question, sajuStart, sajuEnd } = await req.json();
   const date = todayStr();
 
   // Check cache first
@@ -45,10 +45,13 @@ export async function POST(req: NextRequest) {
     "Ace of Wands","Two of Wands","Three of Wands","Page of Cups","Knight of Swords","Queen of Pentacles",
   ];
 
-  if (type === "tarot") {
-    const cards = Array.from({ length: 3 }, () => TAROT_CARDS[Math.floor(Math.random() * TAROT_CARDS.length)]);
+  if (type === "tarot" || type.startsWith("tarot")) {
+    const cards = (userPickedCards && userPickedCards.length === 3)
+      ? userPickedCards
+      : Array.from({ length: 3 }, () => TAROT_CARDS[Math.floor(Math.random() * TAROT_CARDS.length)]);
     const [past, present, future] = cards;
-    prompt = `타로 카드 3장 뽑기 결과를 한국어로 해석해주세요.
+    const questionLine = question ? `\n질문: ${question}` : "";
+    prompt = `타로 카드 3장 뽑기 결과를 한국어로 해석해주세요.${questionLine}
 과거 카드: ${past}
 현재 카드: ${present}
 미래 카드: ${future}
@@ -62,8 +65,12 @@ JSON 형식으로 응답:
     const month = parseInt(birthDate.slice(5, 7));
     const day = parseInt(birthDate.slice(8, 10));
     const timeHour = birthTime ? parseInt(birthTime.slice(0, 2)) : null;
-    const sajuPeriod = type.split("_")[1] ?? "today"; // today | week | month | year
-    const periodLabel = sajuPeriod === "today" ? "오늘" : sajuPeriod === "week" ? "이번 주" : sajuPeriod === "month" ? "이번 달" : `${new Date().getFullYear()}년 전체`;
+    const sajuPeriod = type.split("_")[1] ?? "today"; // today | month | year | custom
+    const periodLabel = sajuEnd
+      ? `${sajuStart} ~ ${sajuEnd}`
+      : sajuStart
+        ? sajuStart
+        : (sajuPeriod === "today" ? "오늘" : sajuPeriod === "month" ? "이번 달" : `${new Date().getFullYear()}년 전체`);
 
     prompt = `사주명리학 기반 운세 분석을 해주세요.
 생년월일: ${year}년 ${month}월 ${day}일${timeHour !== null ? ` ${timeHour}시` : ""}
