@@ -75,6 +75,17 @@ export default function FortunePage() {
     }).catch(() => {});
   }, []);
 
+  // 탭 전환 시 오늘 캐시 자동 로드 (daily / saju 오늘)
+  useEffect(() => {
+    if (fortuneKind === "tarot") return; // 타로는 카드 선택이 필요하므로 자동 로드 안 함
+    const cacheKey = fortuneKind === "saju" ? `saju_${today}` : "daily";
+    setFortune(null);
+    fetch(`/api/planner/fortune?type=${cacheKey}`)
+      .then(r => r.json())
+      .then(d => { if (d.cached && (d.overall || d.cards)) setFortune(d); })
+      .catch(() => {});
+  }, [fortuneKind, today]);
+
   function saveProfile(patch: { birthDate?: string; birthTime?: string; gender?: string }) {
     fetch("/api/user/profile", {
       method: "PUT",
@@ -278,7 +289,7 @@ export default function FortunePage() {
         (fortuneKind === "tarot" && pickedCards.length < 3)
       }>
         {fortuneLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-        {fortuneLoading ? "분석 중..." : fortune ? "다시 보기" : "운세 보기"}
+        {fortuneLoading ? "분석 중..." : fortune?.cached ? "새로 보기" : fortune ? "다시 보기" : "운세 보기"}
       </Button>
 
       {/* Fortune result */}
@@ -293,6 +304,7 @@ export default function FortunePage() {
                     <div className="flex items-center gap-2 mb-2">
                       <span className="text-lg">🌅</span>
                       <span className="font-semibold text-sm flex-1">{today} 오늘의 운세</span>
+                      {fortune.cached && <Badge variant="outline" className="text-[10px] text-muted-foreground">저장됨</Badge>}
                       {fortune.score && <Badge>{fortune.score}점</Badge>}
                     </div>
                     <p className="text-sm leading-relaxed">{fortune.overall}</p>
