@@ -533,7 +533,11 @@ export default function DashboardPage() {
                     )}
                     <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">{todayFortune.overall}</p>
                   </div>
-                ) : <p className="text-xs text-muted-foreground">오늘 운세를 확인해보세요</p>}
+                ) : (
+                  <Link href="/fortune" className="text-xs text-purple-500 hover:text-purple-600 transition-colors">
+                    🔮 오늘 운세 보러 가기 →
+                  </Link>
+                )}
               </div>
             </div>
           </div>

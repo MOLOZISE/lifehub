@@ -282,15 +282,22 @@ export default function FortunePage() {
         </div>
       )}
 
-      {/* Run button */}
-      <Button className="w-full gap-2" onClick={loadFortune} disabled={
-        fortuneLoading ||
-        (fortuneKind !== "tarot" && !birthDate) ||
-        (fortuneKind === "tarot" && pickedCards.length < 3)
-      }>
-        {fortuneLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-        {fortuneLoading ? "분석 중..." : fortune?.cached ? "새로 보기" : fortune ? "다시 보기" : "운세 보기"}
-      </Button>
+      {/* Run button — 오늘 이미 본 운세는 잠금 */}
+      {fortune?.cached ? (
+        <div className="w-full flex items-center justify-center gap-2 py-2 text-xs text-muted-foreground">
+          <span>🔒</span>
+          <span>오늘의 점괘는 고정됩니다 · 내일 새로워집니다</span>
+        </div>
+      ) : (
+        <Button className="w-full gap-2" onClick={loadFortune} disabled={
+          fortuneLoading ||
+          (fortuneKind !== "tarot" && !birthDate) ||
+          (fortuneKind === "tarot" && pickedCards.length < 3)
+        }>
+          {fortuneLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+          {fortuneLoading ? "분석 중..." : fortune ? "다시 보기" : "운세 보기"}
+        </Button>
+      )}
 
       {/* Fortune result */}
       {fortune && !fortuneLoading && (
