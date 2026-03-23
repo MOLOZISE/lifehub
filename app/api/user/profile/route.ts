@@ -19,6 +19,7 @@ export async function PUT(req: NextRequest) {
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { name, username, bio, birthDate, birthTime, gender } = body;
 
   if (username) {
@@ -33,7 +34,7 @@ export async function PUT(req: NextRequest) {
     bio: bio !== undefined ? bio : undefined,
     birthDate: birthDate !== undefined ? birthDate : undefined,
     birthTime: birthTime !== undefined ? birthTime : undefined,
-    // gender: gender !== undefined ? gender : undefined, // DB 마이그레이션 후 주석 해제
+    gender: gender !== undefined ? gender : undefined,
   };
 
   const updated = await prisma.user.update({
