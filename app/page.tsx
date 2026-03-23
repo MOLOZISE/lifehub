@@ -475,23 +475,27 @@ export default function DashboardPage() {
               오늘 · {new Date().toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "short" })}
             </h3>
             <div className="space-y-0 divide-y">
-              {/* 오늘 공부 요약 */}
-              {todayMinutes > 0 && (
-                <div className="flex items-center gap-2.5 py-2 first:pt-0">
-                  <BookOpen className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                  <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400">
-                    {todayMinutes >= 60 ? `${Math.floor(todayMinutes/60)}h${todayMinutes%60>0?` ${todayMinutes%60}m`:""}` : `${todayMinutes}m`}
-                  </span>
-                  <div className="flex flex-wrap gap-1">
-                    {todaySessions.filter(s => s.subject).map(s => (
-                      <Badge key={s.id} variant="secondary" className="text-[10px] px-1.5 py-0">
-                        {s.subject!.emoji} {s.subject!.name}
-                      </Badge>
-                    ))}
-                  </div>
-                  <Link href="/study/sessions" className="text-[10px] text-muted-foreground hover:text-primary ml-auto shrink-0">+ 기록</Link>
+              {/* 공부 */}
+              <div className="py-2.5 first:pt-0">
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-xs font-semibold flex items-center gap-1.5"><BookOpen className="w-3 h-3 text-indigo-500" />공부</p>
+                  <Link href="/study/sessions" className="text-[10px] text-muted-foreground hover:text-primary">+ 기록</Link>
                 </div>
-              )}
+                {todayMinutes > 0 ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400">
+                      {todayMinutes >= 60 ? `${Math.floor(todayMinutes/60)}h${todayMinutes%60>0?` ${todayMinutes%60}m`:""}` : `${todayMinutes}m`}
+                    </span>
+                    <div className="flex flex-wrap gap-1">
+                      {todaySessions.filter(s => s.subject).map(s => (
+                        <Badge key={s.id} variant="secondary" className="text-[10px] px-1.5 py-0">
+                          {s.subject!.emoji} {s.subject!.name}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                ) : <p className="text-xs text-muted-foreground">오늘 공부 기록 없음</p>}
+              </div>
               {/* 일정 */}
               <div className="py-2.5 first:pt-0">
                 <div className="flex items-center justify-between mb-1.5">
@@ -509,29 +513,6 @@ export default function DashboardPage() {
                     ))}
                   </div>
                 ) : <p className="text-xs text-muted-foreground">오늘 일정 없음</p>}
-              </div>
-              {/* 할 일 */}
-              <div className="py-2.5">
-                <div className="flex items-center justify-between mb-1.5">
-                  <p className="text-xs font-semibold flex items-center gap-1.5"><Check className="w-3 h-3 text-green-500" />할 일</p>
-                  {todayGoals.length > 0 && <span className="text-[10px] text-muted-foreground">{todayGoals.filter(g => g.done).length}/{todayGoals.length} 완료</span>}
-                </div>
-                {todayGoals.length > 0 ? (
-                  <>
-                    <div className="space-y-1">
-                      {todayGoals.slice(0, 3).map(g => (
-                        <div key={g.id} className="flex items-center gap-2 text-xs">
-                          <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${g.done ? "bg-green-500" : "bg-muted-foreground/30"}`} />
-                          <span className={`flex-1 truncate ${g.done ? "line-through text-muted-foreground" : ""}`}>{g.title}</span>
-                        </div>
-                      ))}
-                      {todayGoals.length > 3 && <p className="text-[10px] text-muted-foreground">+ {todayGoals.length - 3}개 더</p>}
-                    </div>
-                    <div className="h-1 bg-muted rounded-full overflow-hidden mt-1.5">
-                      <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${(todayGoals.filter(g => g.done).length / todayGoals.length) * 100}%` }} />
-                    </div>
-                  </>
-                ) : <p className="text-xs text-muted-foreground">오늘 할 일 없음</p>}
               </div>
               {/* 일기 */}
               <div className="py-2.5">
@@ -567,7 +548,7 @@ export default function DashboardPage() {
           <div>
             <div className="flex items-center justify-between mb-2.5">
               <h3 className="text-sm font-semibold flex items-center gap-1.5 text-green-600 dark:text-green-400">
-                <TrendingUp className="w-3.5 h-3.5" />이번 주
+                🔥 이번 주 공부 기록
               </h3>
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span>총 <span className="font-semibold text-foreground">{Math.floor(weeklyMinutes/60)}h {weeklyMinutes%60}m</span></span>
