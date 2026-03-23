@@ -494,13 +494,13 @@ export default function ExamsPage() {
               )}
               <div><p className="text-xs mb-1 font-medium">분류</p>
                 <Select value={form.category} onValueChange={v => v && setForm(f => ({ ...f, category: v }))}>
-                  <SelectTrigger><span>{form.category}</span></SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>{CATEGORY_OPTIONS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div><p className="text-xs mb-1 font-medium">상태</p>
                 <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v as ExamStatus }))}>
-                  <SelectTrigger><span>{STATUS_LABELS[form.status]}</span></SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>{(Object.entries(STATUS_LABELS) as [ExamStatus, string][]).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
                 </Select>
               </div>

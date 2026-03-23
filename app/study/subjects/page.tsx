@@ -14,11 +14,7 @@ import { SubjectCard } from "@/components/study/SubjectCard";
 import { toast } from "sonner";
 import { COLOR_MAP, todayString, localDateStr } from "@/lib/utils-app";
 import type { Subject, SubjectColor } from "@/lib/types";
-
-const ACTIVITY_LABELS: Record<string, string> = {
-  reading: "📖 읽기", lecture: "🎓 강의", problem: "✏️ 문제풀기",
-  review: "🔁 복습", writing: "📝 필기", other: "📌 기타",
-};
+import { ACTIVITY_LABELS, ACTIVITY_OPTIONS } from "@/lib/study-constants";
 
 interface ApiSubject extends Subject {
   _count?: { notes: number; flashcards: number; quizQuestions: number };
@@ -316,7 +312,7 @@ export default function SubjectsPage() {
                 <Select value={quickForm.activityType} onValueChange={v => v && setQuickForm(f => ({ ...f, activityType: v }))}>
                   <SelectTrigger className="h-9"><span className="truncate">{ACTIVITY_LABELS[quickForm.activityType] ?? quickForm.activityType}</span></SelectTrigger>
                   <SelectContent>
-                    {Object.entries(ACTIVITY_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                    {ACTIVITY_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>

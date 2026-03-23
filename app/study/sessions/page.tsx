@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Plus, Trash2, Clock, Zap, Brain, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,14 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { todayString } from "@/lib/utils-app";
 import { toast } from "sonner";
+import { ACTIVITY_LABELS, ACTIVITY_OPTIONS } from "@/lib/study-constants";
 
 type SessionActivityType = "reading" | "problem_solving" | "review" | "quiz" | "flashcard" | "lecture" | "pomodoro" | "writing";
-
-const ACTIVITY_LABELS: Record<SessionActivityType, string> = {
-  reading: "📖 읽기/독해", problem_solving: "✏️ 문제풀이", review: "🔄 복습",
-  quiz: "❓ 퀴즈", flashcard: "🃏 플래시카드", lecture: "🎧 강의 청취",
-  pomodoro: "🍅 뽀모도로", writing: "✍️ 필기/요약",
-};
 
 const SCORE_LABELS: Record<number, string> = { 1:"매우 낮음", 2:"낮음", 3:"보통", 4:"높음", 5:"매우 높음" };
 
@@ -128,30 +123,31 @@ export default function SessionsPage() {
     setSelectedDate(null);
   }
 
-  // Sessions in current month
-  const monthSessions = sessions.filter(s => s.date.startsWith(currentMonth));
-
-  // Minutes per day map
-  const minutesByDay: Record<string, number> = {};
-  const sessionsByDay: Record<string, Session[]> = {};
-  for (const s of monthSessions) {
-    minutesByDay[s.date] = (minutesByDay[s.date] ?? 0) + s.durationMinutes;
-    if (!sessionsByDay[s.date]) sessionsByDay[s.date] = [];
-    sessionsByDay[s.date].push(s);
-  }
-
-  const calendarDays = buildCalendarDays(currentMonth);
   const today = todayString();
-  const monthTotal = monthSessions.reduce((sum, s) => sum + s.durationMinutes, 0);
-  const studyDays = Object.keys(minutesByDay).length;
-  const avgFocus = monthSessions.length > 0
-    ? (monthSessions.reduce((sum, s) => sum + (s.focusScore ?? 3), 0) / monthSessions.length).toFixed(1)
-    : "-";
+
+  const { monthSessions, minutesByDay, sessionsByDay, calendarDays, monthTotal, studyDays, avgFocus, displayedSessions } = useMemo(() => {
+    const monthSessions = sessions.filter(s => s.date.startsWith(currentMonth));
+    const minutesByDay: Record<string, number> = {};
+    const sessionsByDay: Record<string, Session[]> = {};
+    for (const s of monthSessions) {
+      minutesByDay[s.date] = (minutesByDay[s.date] ?? 0) + s.durationMinutes;
+      if (!sessionsByDay[s.date]) sessionsByDay[s.date] = [];
+      sessionsByDay[s.date].push(s);
+    }
+    const calendarDays = buildCalendarDays(currentMonth);
+    const monthTotal = monthSessions.reduce((sum, s) => sum + s.durationMinutes, 0);
+    const studyDays = Object.keys(minutesByDay).length;
+    const avgFocus = monthSessions.length > 0
+      ? (monthSessions.reduce((sum, s) => sum + (s.focusScore ?? 3), 0) / monthSessions.length).toFixed(1)
+      : "-";
+    const displayedSessions = selectedDate
+      ? (sessionsByDay[selectedDate] ?? [])
+      : [...monthSessions].sort((a, b) => b.date.localeCompare(a.date));
+    return { monthSessions, minutesByDay, sessionsByDay, calendarDays, monthTotal, studyDays, avgFocus, displayedSessions };
+  }, [sessions, currentMonth, selectedDate]);
 
   const [year, month] = currentMonth.split("-").map(Number);
   const monthLabel = `${year}년 ${month}월`;
-
-  const displayedSessions = selectedDate ? (sessionsByDay[selectedDate] ?? []) : monthSessions.sort((a, b) => b.date.localeCompare(a.date));
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -318,7 +314,7 @@ export default function SessionsPage() {
                     <SelectTrigger className="h-8 text-xs">
                       <span className="truncate">{ACTIVITY_LABELS[form.activityType] ?? form.activityType}</span>
                     </SelectTrigger>
-                    <SelectContent>{(Object.entries(ACTIVITY_LABELS) as [SessionActivityType, string][]).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
+                    <SelectContent>{ACTIVITY_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div>

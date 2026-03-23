@@ -14,6 +14,7 @@ import { LinkButton } from "@/components/ui/link-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { COLOR_MAP, formatDate, todayString } from "@/lib/utils-app";
 import { toast } from "sonner";
+import { ACTIVITY_LABELS, ACTIVITY_OPTIONS } from "@/lib/study-constants";
 
 interface SubjectDetail {
   id: string; name: string; emoji: string; color: string;
@@ -43,10 +44,6 @@ interface OfficialExam {
   resultDate: string | null; year: number; session: number | null;
 }
 
-const ACTIVITY_LABELS: Record<string, string> = {
-  reading: "📖 읽기", lecture: "🎓 강의", problem: "✏️ 문제풀기",
-  review: "🔁 복습", writing: "📝 필기", other: "📌 기타",
-};
 
 export default function SubjectDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -377,7 +374,7 @@ export default function SubjectDetailPage() {
             </div>
           ) : (
             exams.map(e => {
-              const STATUS_MAP: Record<string, string> = { upcoming: "준비중", passed: "합격", failed: "불합격", cancelled: "취소", completed: "완료", preparing: "준비중" };
+              const STATUS_MAP: Record<string, string> = { upcoming: "준비중", passed: "합격", failed: "불합격", cancelled: "취소", preparing: "준비중" /* 구버전 호환 */ };
               return (
               <div key={e.id} className="p-3 border rounded-lg cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => openEditExam(e)}>
                 <div className="flex items-start justify-between gap-2">
@@ -429,7 +426,7 @@ export default function SubjectDetailPage() {
             sources.map(s => (
               <div key={s.id} className="p-3 border rounded-lg">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs bg-muted px-1.5 py-0.5 rounded">{s.type}</span>
+                  <span className="text-xs bg-muted px-1.5 py-0.5 rounded">{{ link: "🔗 링크", youtube: "▶️ 유튜브", book: "📗 교재", note: "📝 메모" }[s.type] ?? s.type}</span>
                   <span className="font-medium text-sm">{s.title}</span>
                 </div>
                 {s.content && (
@@ -469,7 +466,7 @@ export default function SubjectDetailPage() {
               <Select value={sessionForm.activityType} onValueChange={v => setSessionForm(f => ({ ...f, activityType: v as string }))}>
                 <SelectTrigger><span>{ACTIVITY_LABELS[sessionForm.activityType] ?? sessionForm.activityType}</span></SelectTrigger>
                 <SelectContent>
-                  {Object.entries(ACTIVITY_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                  {ACTIVITY_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>

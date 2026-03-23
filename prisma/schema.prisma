@@ -285,7 +285,7 @@ model Exam {
   targetScore       Float?
   passScore         Float?
   memo              String?
-  status            String    @default("preparing") // ExamStatus
+  status            String    @default("upcoming") // ExamStatus: upcoming | passed | failed | cancelled
   actualScore       Float?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt

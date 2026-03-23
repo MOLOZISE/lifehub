@@ -24,7 +24,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       name: official.name,
       category: official.category,
       examDate: official.examDate,
-      status: "preparing",
+      status: "upcoming",
     },
   });
 
