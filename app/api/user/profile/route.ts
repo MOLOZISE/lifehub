@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
-// gender는 DB 마이그레이션 후 추가 예정 (현재 Supabase에 컬럼 없음)
-const SELECT = { id: true, name: true, email: true, username: true, bio: true, image: true, createdAt: true, role: true, birthDate: true, birthTime: true };
+const SELECT = { id: true, name: true, email: true, username: true, bio: true, image: true, createdAt: true, role: true, birthDate: true, birthTime: true, gender: true };
 
 export async function GET() {
   const session = await auth();
