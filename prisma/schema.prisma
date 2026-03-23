@@ -23,6 +23,7 @@ model User {
   role          String    @default("USER") // "USER" | "ADMIN"
   birthDate     String?
   birthTime     String?
+  gender        String?  // "male" | "female"
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

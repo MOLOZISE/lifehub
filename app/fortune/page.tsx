@@ -75,6 +75,14 @@ export default function FortunePage() {
     }).catch(() => {});
   }, []);
 
+  function saveProfile(patch: { birthDate?: string; birthTime?: string; gender?: string }) {
+    fetch("/api/user/profile", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    }).catch(() => {});
+  }
+
   function shuffleDeck() {
     setDeckShuffled([...TAROT_DECK].sort(() => Math.random() - 0.5));
     setPickedCards([]); setTarotReady(true); setFortune(null);
@@ -144,19 +152,25 @@ export default function FortunePage() {
                 <p className="text-[10px] text-muted-foreground mb-1">생년월일 *</p>
                 <input type="date" value={birthDate}
                   onChange={e => setBirthDate(e.target.value)}
+                  onBlur={e => e.target.value && saveProfile({ birthDate: e.target.value })}
                   className="w-full h-8 text-sm bg-transparent border border-input rounded px-2 py-1" />
               </div>
               <div>
                 <p className="text-[10px] text-muted-foreground mb-1">태어난 시각</p>
                 <input type="time" value={birthTime}
                   onChange={e => setBirthTime(e.target.value)}
+                  onBlur={e => saveProfile({ birthTime: e.target.value })}
                   className="w-full h-8 text-sm bg-transparent border border-input rounded px-2 py-1" />
               </div>
               <div>
                 <p className="text-[10px] text-muted-foreground mb-1">성별</p>
                 <div className="flex gap-1 h-8">
                   {([{v:"male",l:"남"},{v:"female",l:"여"}] as {v:"male"|"female",l:string}[]).map(({v,l}) => (
-                    <button key={v} onClick={() => setGender(g => g === v ? "" : v)}
+                    <button key={v} onClick={() => {
+                      const next = gender === v ? "" : v;
+                      setGender(next);
+                      saveProfile({ gender: next });
+                    }}
                       className={`flex-1 text-xs rounded border transition-colors ${gender===v ? "bg-primary text-primary-foreground border-primary" : "border-input text-muted-foreground hover:border-foreground"}`}>
                       {l}
                     </button>
