@@ -652,7 +652,9 @@ export default function SubjectDetailPage() {
               <div>
                 <p className="text-xs mb-1 font-medium">상태</p>
                 <Select value={examForm.status} onValueChange={v => v && setExamForm(f => ({ ...f, status: v }))}>
-                  <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-9 text-xs">
+                    <span>{{ upcoming:"준비중", passed:"합격", failed:"불합격", cancelled:"취소" }[examForm.status] ?? "준비중"}</span>
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="upcoming">준비중</SelectItem>
                     <SelectItem value="passed">합격</SelectItem>
