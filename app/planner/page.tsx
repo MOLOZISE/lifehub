@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import {
-  ChevronLeft, ChevronRight, Plus, X, Loader2,
-  Edit2, Trash2, MapPin, Clock,
+  ChevronLeft, ChevronRight, ChevronDown, Plus, X, Loader2,
+  Edit2, Trash2, MapPin, Clock, Target, StickyNote, BookMarked,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -104,7 +104,9 @@ export default function PlannerPage() {
   // ── Week/month memo state ────────────────────────────────────────────────────
   const [weekMemo, setWeekMemo]       = useState("");
   const [monthMemo, setMonthMemo]     = useState("");
-  const [weekMemoOpen, setWeekMemoOpen] = useState(false);
+  const [yearGoalOpen, setYearGoalOpen]   = useState(true);
+  const [weekMemoOpen, setWeekMemoOpen]   = useState(false);
+  const [monthMemoOpen, setMonthMemoOpen] = useState(false);
 
   // ── Load calendar ───────────────────────────────────────────────────────────
   const loadCalendar = useCallback(async (month: string) => {
@@ -243,83 +245,114 @@ export default function PlannerPage() {
       {/* ── 캘린더 ──────────────────────────────────────────────────── */}
       <div className="space-y-4">
 
-          {/* 연간 목표 배너 */}
-          <Card className="bg-gradient-to-r from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/30 border-violet-200 dark:border-violet-800">
-            <CardHeader className="p-3 pb-1">
-              <CardTitle className="text-sm flex items-center justify-between">
-                <span>🎯 {today.slice(0,4)}년 목표</span>
-                <span className="text-xs font-normal text-muted-foreground">
-                  {yearGoals.filter(g=>g.done).length}/{yearGoals.length}
+          {/* ── 플랜 섹션 (연간 목표 · 이번 달 메모 · 이번 주 메모) ── */}
+          <div className="space-y-2">
+
+            {/* 연간 목표 */}
+            <Card className="overflow-hidden">
+              <button onClick={() => setYearGoalOpen(o => !o)}
+                className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-muted/40 transition-colors text-left">
+                <span className="text-sm font-semibold flex items-center gap-2">
+                  <Target className="w-3.5 h-3.5 text-violet-500" />
+                  {today.slice(0,4)}년 목표
                 </span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-3 pt-0 space-y-2">
-              {yearGoals.length>0 && (
-                <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                  <div className="h-full bg-violet-500 rounded-full transition-all"
-                    style={{ width:`${yearGoals.length>0?(yearGoals.filter(g=>g.done).length/yearGoals.length)*100:0}%` }} />
+                <div className="flex items-center gap-2.5">
+                  {yearGoals.length > 0 && (
+                    <>
+                      <span className="text-xs text-muted-foreground">
+                        {yearGoals.filter(g=>g.done).length}/{yearGoals.length}
+                      </span>
+                      <div className="w-14 h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div className="h-full bg-violet-500 rounded-full transition-all"
+                          style={{ width:`${(yearGoals.filter(g=>g.done).length/yearGoals.length)*100}%` }} />
+                      </div>
+                    </>
+                  )}
+                  <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform duration-200 ${yearGoalOpen ? "rotate-180" : ""}`} />
+                </div>
+              </button>
+              {yearGoalOpen && (
+                <div className="px-3.5 pb-3 pt-1 border-t space-y-2">
+                  <div className="space-y-1.5">
+                    {yearGoals.length === 0 && (
+                      <p className="text-xs text-muted-foreground">아직 등록된 목표가 없습니다</p>
+                    )}
+                    {yearGoals.map(g => (
+                      <div key={g.id} className="flex items-center gap-2">
+                        <input type="checkbox" checked={g.done} onChange={() => toggleYearGoal(g.id)} className="rounded" />
+                        <span className={`text-xs flex-1 ${g.done ? "line-through text-muted-foreground" : ""}`}>{g.title}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-2 pt-0.5">
+                    <Input placeholder="목표 추가..." value={newYearGoal}
+                      onChange={e => setNewYearGoal(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && addYearGoal()}
+                      className="h-7 text-xs" />
+                    <Button size="sm" className="h-7 px-2.5 text-xs" onClick={addYearGoal} disabled={!newYearGoal.trim()}>추가</Button>
+                  </div>
                 </div>
               )}
-              <div className="space-y-1">
-                {yearGoals.map(g => (
-                  <div key={g.id} className="flex items-center gap-2">
-                    <input type="checkbox" checked={g.done} onChange={() => toggleYearGoal(g.id)} className="rounded" />
-                    <span className={`text-xs flex-1 ${g.done?"line-through text-muted-foreground":""}`}>{g.title}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <Input placeholder="연간 목표 추가..." value={newYearGoal}
-                  onChange={e => setNewYearGoal(e.target.value)}
-                  onKeyDown={e => e.key==="Enter" && addYearGoal()}
-                  className="h-7 text-xs" />
-                <Button size="sm" className="h-7 px-2 text-xs" onClick={addYearGoal} disabled={!newYearGoal.trim()}>추가</Button>
-              </div>
-            </CardContent>
-          </Card>
+            </Card>
 
-          {/* 주간/월간 메모 */}
-          <div>
-            <button
-              onClick={() => setWeekMemoOpen(o => !o)}
-              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full">
-              <span>📝 주간 메모</span>
-              <span className="ml-auto">{weekMemoOpen ? "▲" : "▼"}</span>
-            </button>
-            {weekMemoOpen && (
-              <div className="mt-2 space-y-2">
-                <div>
-                  <p className="text-[10px] text-muted-foreground mb-1">이번 주 메모</p>
-                  <Textarea
-                    placeholder="이번 주 계획, 회고, 메모..."
-                    value={weekMemo}
-                    onChange={e => setWeekMemo(e.target.value)}
-                    className="h-16 text-xs resize-none"
-                  />
-                  <Button size="sm" className="h-7 text-xs mt-1" onClick={async () => {
-                    const period = getWeekPeriod(new Date());
+            {/* 이번 달 메모 */}
+            <Card className="overflow-hidden">
+              <button onClick={() => setMonthMemoOpen(o => !o)}
+                className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-muted/40 transition-colors text-left">
+                <span className="text-sm font-semibold flex items-center gap-2">
+                  <BookMarked className="w-3.5 h-3.5 text-blue-500" />
+                  이번 달 메모
+                </span>
+                <div className="flex items-center gap-2">
+                  {monthMemo && (
+                    <span className="text-[10px] text-muted-foreground max-w-28 truncate">{monthMemo.slice(0, 20)}{monthMemo.length > 20 ? "…" : ""}</span>
+                  )}
+                  <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform duration-200 ${monthMemoOpen ? "rotate-180" : ""}`} />
+                </div>
+              </button>
+              {monthMemoOpen && (
+                <div className="px-3.5 pb-3 pt-1 border-t space-y-2">
+                  <Textarea placeholder="이번 달 목표, 회고, 메모..."
+                    value={monthMemo} onChange={e => setMonthMemo(e.target.value)}
+                    className="h-20 text-xs resize-none" />
+                  <Button size="sm" className="h-7 text-xs w-full" onClick={async () => {
                     await fetch("/api/planner/plans", { method:"POST", headers:{"Content-Type":"application/json"},
-                      body: JSON.stringify({ type:"week", period, goals:[], reflection: weekMemo }) });
-                    toast.success("주간 메모 저장됨");
+                      body: JSON.stringify({ type:"month", period: today.slice(0,7), goals:[], reflection: monthMemo }) });
+                    toast.success("이번 달 메모 저장됨");
                   }}>저장</Button>
                 </div>
-                <div>
-                  <p className="text-[10px] text-muted-foreground mb-1">이번 달 메모</p>
-                  <Textarea
-                    placeholder="이번 달 목표, 회고, 메모..."
-                    value={monthMemo}
-                    onChange={e => setMonthMemo(e.target.value)}
-                    className="h-16 text-xs resize-none"
-                  />
-                  <Button size="sm" className="h-7 text-xs mt-1" onClick={async () => {
-                    const period = today.slice(0,7);
+              )}
+            </Card>
+
+            {/* 이번 주 메모 */}
+            <Card className="overflow-hidden">
+              <button onClick={() => setWeekMemoOpen(o => !o)}
+                className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-muted/40 transition-colors text-left">
+                <span className="text-sm font-semibold flex items-center gap-2">
+                  <StickyNote className="w-3.5 h-3.5 text-amber-500" />
+                  이번 주 메모
+                </span>
+                <div className="flex items-center gap-2">
+                  {weekMemo && (
+                    <span className="text-[10px] text-muted-foreground max-w-28 truncate">{weekMemo.slice(0, 20)}{weekMemo.length > 20 ? "…" : ""}</span>
+                  )}
+                  <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform duration-200 ${weekMemoOpen ? "rotate-180" : ""}`} />
+                </div>
+              </button>
+              {weekMemoOpen && (
+                <div className="px-3.5 pb-3 pt-1 border-t space-y-2">
+                  <Textarea placeholder="이번 주 계획, 회고, 메모..."
+                    value={weekMemo} onChange={e => setWeekMemo(e.target.value)}
+                    className="h-20 text-xs resize-none" />
+                  <Button size="sm" className="h-7 text-xs w-full" onClick={async () => {
                     await fetch("/api/planner/plans", { method:"POST", headers:{"Content-Type":"application/json"},
-                      body: JSON.stringify({ type:"month", period, goals:[], reflection: monthMemo }) });
-                    toast.success("월간 메모 저장됨");
+                      body: JSON.stringify({ type:"week", period: getWeekPeriod(new Date()), goals:[], reflection: weekMemo }) });
+                    toast.success("이번 주 메모 저장됨");
                   }}>저장</Button>
                 </div>
-              </div>
-            )}
+              )}
+            </Card>
+
           </div>
 
           {/* Month nav */}

@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   BookOpen, TrendingUp, CalendarDays, ArrowRight, Flame, CalendarClock,
   AlertCircle, MessageSquare, Utensils, Heart, Eye, Star, Target, Pencil, Check,
-  NotebookPen, Sparkles,
+  NotebookPen, Sparkles, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -108,7 +108,7 @@ function calculateStreak(sessions: { date: string }[]): number {
   return streak;
 }
 
-const DOW_KO = ["월", "화", "수", "목", "금", "토", "일"];
+const DOW_KO = ["일", "월", "화", "수", "목", "금", "토"];
 
 function getThisWeekDays(): string[] {
   const monday = getThisWeekMonday();
@@ -123,9 +123,7 @@ function buildMonthCalendar(yearMonth: string): (string | null)[] {
   const [y, m] = yearMonth.split("-").map(Number);
   const firstDay = new Date(y, m - 1, 1);
   const lastDay = new Date(y, m, 0);
-  // 월요일 시작
-  let startDow = firstDay.getDay(); // 0=일
-  startDow = startDow === 0 ? 6 : startDow - 1; // 월=0
+  const startDow = firstDay.getDay(); // 0=일 시작 (플래너와 동일)
   const days: (string | null)[] = [];
   for (let i = 0; i < startDow; i++) days.push(null);
   for (let d = 1; d <= lastDay.getDate(); d++) {
@@ -634,35 +632,38 @@ export default function DashboardPage() {
 
           {/* ── 월간 캘린더 ── */}
           <div>
-            <div className="flex items-center justify-between mb-2.5">
-              <h3 className="text-sm font-semibold flex items-center gap-1.5 text-blue-600 dark:text-blue-400">
-                <CalendarDays className="w-3.5 h-3.5" />{calMonth.replace("-", "년 ")}월
-              </h3>
-              <div className="flex items-center gap-1">
-                <button onClick={() => {
-                  const [y, m] = calMonth.split("-").map(Number);
-                  const d = new Date(y, m - 2, 1);
-                  setCalMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
-                  setSelectedCalDay(null);
-                }} className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">‹</button>
+            {/* 월 네비게이션 — 플래너와 동일 스타일 */}
+            <div className="flex items-center justify-between mb-2">
+              <button onClick={() => {
+                const [y, m] = calMonth.split("-").map(Number);
+                const d = new Date(y, m - 2, 1);
+                setCalMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+                setSelectedCalDay(null);
+              }} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-sm">{calMonth.replace("-", "년 ")}월</span>
                 <button onClick={() => {
                   const now = new Date();
                   setCalMonth(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
                   setSelectedCalDay(null);
-                }} className="text-[10px] px-2 py-0.5 rounded border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">오늘</button>
-                <button onClick={() => {
-                  const [y, m] = calMonth.split("-").map(Number);
-                  const d = new Date(y, m, 1);
-                  setCalMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
-                  setSelectedCalDay(null);
-                }} className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">›</button>
+                }} className="text-[10px] px-1.5 py-0.5 rounded border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">오늘</button>
               </div>
+              <button onClick={() => {
+                const [y, m] = calMonth.split("-").map(Number);
+                const d = new Date(y, m, 1);
+                setCalMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+                setSelectedCalDay(null);
+              }} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+                <ChevronRight className="w-4 h-4" />
+              </button>
             </div>
 
-            {/* 캘린더 그리드 */}
-            <div className="grid grid-cols-7 gap-1 mb-1">
-              {DOW_KO.map(d => (
-                <div key={d} className="text-center text-[10px] text-muted-foreground font-medium pb-1">{d}</div>
+            {/* 캘린더 그리드 — 플래너와 동일 셀 구조 */}
+            <div className="grid grid-cols-7 gap-1">
+              {DOW_KO.map((d, i) => (
+                <div key={d} className={`text-center text-[10px] font-medium pb-1 ${i === 0 ? "text-red-500" : i === 6 ? "text-blue-500" : "text-muted-foreground"}`}>{d}</div>
               ))}
               {monthCalDays.map((day, i) => {
                 if (!day) return <div key={`empty-${i}`} />;
@@ -673,23 +674,28 @@ export default function DashboardPage() {
                 const hasDiary = !!(todayDiary && day === today);
                 const hasFortune = !!(todayFortune?.overall && day === today);
                 const intensity = mins === 0 ? 0 : mins < 30 ? 1 : mins < 60 ? 2 : mins < 120 ? 3 : 4;
-                const bgColors = ["bg-muted/50 hover:bg-muted","bg-green-100 dark:bg-green-900/40","bg-green-300/70 dark:bg-green-700/50","bg-green-500/60 dark:bg-green-600/60","bg-green-600/80 dark:bg-green-500/80"];
+                const studyBg = ["bg-muted","bg-green-200 dark:bg-green-900/50","bg-green-300 dark:bg-green-700","bg-green-500/70","bg-green-700 dark:bg-green-500"];
+                const dow = new Date(day + "T00:00:00").getDay();
                 return (
                   <button key={day}
                     onClick={() => setSelectedCalDay(d => d === day ? null : day)}
-                    className={`rounded-lg flex flex-col items-center pt-1.5 pb-1 gap-0.5 transition-all hover:scale-105 min-h-[3.2rem]
-                      ${bgColors[intensity]}
-                      ${isToday ? "ring-2 ring-primary ring-offset-1" : ""}
-                      ${isSelected ? "ring-2 ring-blue-400 ring-offset-1 scale-105" : ""}
+                    className={`aspect-square flex flex-col items-start justify-start p-0.5 rounded-xl transition-all hover:brightness-95
+                      ${studyBg[intensity]}
+                      ${isToday ? "ring-2 ring-primary" : ""}
+                      ${isSelected && !isToday ? "ring-2 ring-primary/40" : ""}
                     `}
                   >
-                    <span className={`text-[11px] font-bold leading-none ${isToday ? "text-primary" : intensity > 2 ? "text-white" : "text-foreground"}`}>
+                    <span className={`text-[10px] font-bold ml-0.5 mt-0.5 leading-none
+                      ${isToday ? "text-primary" : dow === 0 ? "text-red-500" : dow === 6 ? "text-blue-500" : intensity > 2 ? "text-white" : "text-muted-foreground"}`}>
                       {day.slice(8).replace(/^0/, "")}
                     </span>
-                    <div className="flex gap-0.5 flex-wrap justify-center min-h-[6px]">
-                      {evs.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-violet-500" />}
-                      {hasDiary && <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />}
-                      {hasFortune && <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />}
+                    <div className="flex flex-col gap-px mt-0.5 w-full px-0.5">
+                      {evs.slice(0, 2).map(ev => (
+                        <div key={ev.id} className={`w-full h-1 rounded-full ${ev.color}`} />
+                      ))}
+                      {evs.length > 2 && <span className="text-[8px] text-muted-foreground leading-none">+{evs.length - 2}</span>}
+                      {hasDiary && <div className="w-full h-1 rounded-full bg-amber-400" />}
+                      {hasFortune && <div className="w-full h-1 rounded-full bg-purple-400" />}
                     </div>
                   </button>
                 );
@@ -697,11 +703,11 @@ export default function DashboardPage() {
             </div>
 
             {/* 범례 */}
-            <div className="flex items-center gap-3 mt-1.5 text-[10px] text-muted-foreground flex-wrap">
+            <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground flex-wrap">
               <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-green-400/70 inline-block" />공부</span>
-              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-violet-500 inline-block" />일정</span>
-              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />일기</span>
-              <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-purple-500 inline-block" />운세</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-1 rounded-full bg-violet-500 inline-block" />일정</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-1 rounded-full bg-amber-400 inline-block" />일기</span>
+              <span className="flex items-center gap-1"><span className="w-2.5 h-1 rounded-full bg-purple-400 inline-block" />운세</span>
             </div>
 
             {/* 날짜 클릭 상세 패널 */}
