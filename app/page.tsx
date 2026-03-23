@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   BookOpen, TrendingUp, CalendarDays, ArrowRight, Flame, CalendarClock,
-  AlertCircle, MessageSquare, Utensils, Heart, Eye, Star, Target, Pencil, Check,
+  MessageSquare, Utensils, Heart, Eye, Star,
   NotebookPen, Sparkles, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -167,9 +167,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [dayChangePct, setDayChangePct] = useState<Record<string, number>>({});
   const [weeklyGoal, setWeeklyGoal] = useState(DEFAULT_WEEKLY_GOAL);
-  const [editingGoal, setEditingGoal] = useState(false);
-  const [goalInput, setGoalInput] = useState("");
-  const goalInputRef = useRef<HTMLInputElement>(null);
+
   const [monthEvents, setMonthEvents] = useState<Record<string, PlannerEvent[]>>({});
   const [selectedCalDay, setSelectedCalDay] = useState<string | null>(null);
   const [calMonth, setCalMonth] = useState(() => {
@@ -542,94 +540,6 @@ export default function DashboardPage() {
 
           <div className="border-t" />
 
-          {/* ── 이번 주 ── */}
-          <div>
-            <div className="flex items-center justify-between mb-2.5">
-              <h3 className="text-sm font-semibold flex items-center gap-1.5 text-green-600 dark:text-green-400">
-                🔥 이번 주 공부 기록
-              </h3>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span>총 <span className="font-semibold text-foreground">{Math.floor(weeklyMinutes/60)}h {weeklyMinutes%60}m</span></span>
-                <div className="flex items-center gap-1 w-20">
-                  <div className="flex-1 bg-muted rounded-full h-1.5 overflow-hidden">
-                    <div className="h-full bg-green-500 rounded-full" style={{ width: `${weeklyGoalPct}%` }} />
-                  </div>
-                  <span className="text-[10px] shrink-0">{weeklyGoalPct}%</span>
-                </div>
-                {editingGoal ? (
-                  <div className="flex items-center gap-1">
-                    <input ref={goalInputRef} type="number" value={goalInput} onChange={e => setGoalInput(e.target.value)}
-                      className="w-12 text-xs border rounded px-1 py-0.5 bg-background text-center"
-                      onKeyDown={e => {
-                        if (e.key === "Enter") { const v = Math.max(1, Number(goalInput)); setWeeklyGoal(v); localStorage.setItem("weeklyGoalMinutes", String(v)); setEditingGoal(false); }
-                        if (e.key === "Escape") setEditingGoal(false);
-                      }} />
-                    <span className="text-[10px]">분</span>
-                    <button onClick={() => { const v = Math.max(1, Number(goalInput)); setWeeklyGoal(v); localStorage.setItem("weeklyGoalMinutes", String(v)); setEditingGoal(false); }}>
-                      <Check className="w-3 h-3 text-green-500" />
-                    </button>
-                  </div>
-                ) : (
-                  <button onClick={() => { setGoalInput(String(weeklyGoal)); setEditingGoal(true); setTimeout(() => goalInputRef.current?.select(), 50); }}
-                    className="flex items-center gap-0.5 hover:text-foreground">
-                    목표 {Math.floor(weeklyGoal/60)}h<Pencil className="w-2.5 h-2.5 ml-0.5" />
-                  </button>
-                )}
-              </div>
-            </div>
-            {/* 7일 바 */}
-            <div className="grid grid-cols-7 gap-1.5 mb-3">
-              {thisWeekDays.map((day) => {
-                const mins = sessionDateMap[day] ?? 0;
-                const isToday = day === today;
-                const evCount = (monthEvents[day] ?? []).length;
-                const intensity = mins === 0 ? 0 : mins < 30 ? 1 : mins < 60 ? 2 : mins < 120 ? 3 : 4;
-                const bgColors = ["bg-muted/60","bg-green-100 dark:bg-green-900/50","bg-green-300 dark:bg-green-700/60","bg-green-500/70","bg-green-600 dark:bg-green-500"];
-                const dow = new Date(day).toLocaleDateString("ko-KR", { weekday: "short" });
-                return (
-                  <div key={day} className="flex flex-col items-center gap-1">
-                    <span className={`text-[10px] font-medium ${isToday ? "text-primary" : "text-muted-foreground"}`}>{dow}</span>
-                    <div className={`w-full aspect-square rounded-xl flex flex-col items-center justify-center gap-0.5 ${bgColors[intensity]} ${isToday ? "ring-2 ring-primary" : ""}`}>
-                      <span className={`text-sm font-bold ${isToday ? "text-primary" : intensity > 2 ? "text-white" : "text-foreground"}`}>
-                        {day.slice(8).replace(/^0/, "")}
-                      </span>
-                      {evCount > 0 && <span className="w-1 h-1 rounded-full bg-violet-400 shrink-0" />}
-                    </div>
-                    <span className={`text-[9px] font-medium ${mins > 0 ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}`}>
-                      {mins > 0 ? (mins >= 60 ? `${Math.floor(mins/60)}h${mins%60>0?`${mins%60}m`:""}` : `${mins}m`) : "·"}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-            {/* 주간 과목별 */}
-            {effectiveSubjects.filter(s => (subjectWeekMinutes[s.id] ?? 0) > 0).length > 0 && (
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-                {effectiveSubjects.filter(s => (subjectWeekMinutes[s.id] ?? 0) > 0).map(s => {
-                  const wMin = subjectWeekMinutes[s.id] ?? 0;
-                  const maxMin = Math.max(...effectiveSubjects.map(x => subjectWeekMinutes[x.id] ?? 0), 1);
-                  const pct = Math.round((wMin / maxMin) * 100);
-                  return (
-                    <div key={s.id} className="flex items-center gap-2 min-w-0">
-                      <span className="text-sm shrink-0">{s.emoji}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-0.5">
-                          <span className="text-xs truncate text-foreground/80">{s.name}</span>
-                          <span className="text-[10px] text-muted-foreground shrink-0 ml-1">{wMin >= 60 ? `${Math.floor(wMin/60)}h${wMin%60>0?`${wMin%60}m`:""}` : `${wMin}m`}</span>
-                        </div>
-                        <div className="h-1 bg-muted rounded-full overflow-hidden">
-                          <div className="h-full bg-primary/60 rounded-full" style={{ width: `${pct}%` }} />
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          <div className="border-t" />
-
           {/* ── 월간 캘린더 ── */}
           <div>
             {/* 월 네비게이션 — 플래너와 동일 스타일 */}
@@ -786,6 +696,42 @@ export default function DashboardPage() {
                 </div>
               </div>
             )}
+
+            {/* 🔥 이번 주 공부 기록 */}
+            <div className="mt-4 pt-3 border-t">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold flex items-center gap-1.5 text-green-600 dark:text-green-400">
+                  🔥 이번 주 공부 기록
+                </p>
+                <span className="text-[10px] text-muted-foreground">
+                  총 <span className="font-semibold text-foreground">
+                    {weeklyMinutes >= 60 ? `${Math.floor(weeklyMinutes/60)}h${weeklyMinutes%60>0?` ${weeklyMinutes%60}m`:""}` : `${weeklyMinutes}m`}
+                  </span>
+                </span>
+              </div>
+              <div className="grid grid-cols-7 gap-1">
+                {thisWeekDays.map(day => {
+                  const mins = sessionDateMap[day] ?? 0;
+                  const isToday = day === today;
+                  const intensity = mins === 0 ? 0 : mins < 30 ? 1 : mins < 60 ? 2 : mins < 120 ? 3 : 4;
+                  const bgColors = ["bg-muted/50","bg-green-100 dark:bg-green-900/50","bg-green-200 dark:bg-green-800/60","bg-green-400/70","bg-green-600 dark:bg-green-500"];
+                  const dow = new Date(day).toLocaleDateString("ko-KR", { weekday: "short" });
+                  return (
+                    <div key={day} className="flex flex-col items-center gap-0.5">
+                      <span className={`text-[9px] font-medium ${isToday ? "text-primary" : "text-muted-foreground"}`}>{dow}</span>
+                      <div className={`w-full aspect-square rounded-lg flex items-center justify-center ${bgColors[intensity]} ${isToday ? "ring-1 ring-primary" : ""}`}>
+                        <span className={`text-[10px] font-bold ${isToday ? "text-primary" : intensity > 2 ? "text-white" : "text-foreground/70"}`}>
+                          {day.slice(8).replace(/^0/, "")}
+                        </span>
+                      </div>
+                      <span className={`text-[9px] leading-none ${mins > 0 ? "text-green-600 dark:text-green-400 font-medium" : "text-muted-foreground"}`}>
+                        {mins > 0 ? (mins >= 60 ? `${Math.floor(mins/60)}h${mins%60>0?`${mins%60}m`:""}` : `${mins}m`) : "·"}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
 
         </CardContent>
