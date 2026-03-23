@@ -19,6 +19,9 @@ interface FortuneData {
   advice?: string; caution?: string; luckyDirection?: string;
   cards?: Array<{ position: string; name: string; meaning: string; advice: string }>;
   cached?: boolean;
+  // 사주 전문 필드
+  ilgan?: string;
+  oheng_summary?: string;
 }
 
 const TAROT_DECK = [
@@ -53,6 +56,7 @@ export default function FortunePage() {
   const [sajuEnd, setSajuEnd] = useState("");
   const [birthDate, setBirthDate] = useState("");
   const [birthTime, setBirthTime] = useState("");
+  const [gender, setGender] = useState<"male" | "female" | "">("");
   const [fortune, setFortune] = useState<FortuneData | null>(null);
   const [fortuneLoading, setFortuneLoading] = useState(false);
 
@@ -62,11 +66,12 @@ export default function FortunePage() {
   const [tarotReady, setTarotReady] = useState(false);
   const [tarotQuestion, setTarotQuestion] = useState("");
 
-  // Load birthDate/birthTime from profile
+  // Load birthDate/birthTime/gender from profile
   useEffect(() => {
     fetch("/api/user/profile").then(r => r.json()).then(d => {
       if (d.birthDate) setBirthDate(d.birthDate);
       if (d.birthTime) setBirthTime(d.birthTime);
+      if (d.gender) setGender(d.gender);
     }).catch(() => {});
   }, []);
 
@@ -96,7 +101,7 @@ export default function FortunePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          type: cacheKey, birthDate, birthTime,
+          type: cacheKey, birthDate, birthTime, gender: gender || undefined,
           pickedCards: fortuneKind === "tarot" ? pickedCards : undefined,
           question: fortuneKind === "tarot" ? tarotQuestion : undefined,
           sajuStart: fortuneKind === "saju" ? sajuStart : undefined,
@@ -134,7 +139,7 @@ export default function FortunePage() {
                 <Link href="/profile" className="text-[10px] text-primary hover:underline">내 정보에서 설정 →</Link>
               )}
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <div>
                 <p className="text-[10px] text-muted-foreground mb-1">생년월일 *</p>
                 <input type="date" value={birthDate}
@@ -142,10 +147,21 @@ export default function FortunePage() {
                   className="w-full h-8 text-sm bg-transparent border border-input rounded px-2 py-1" />
               </div>
               <div>
-                <p className="text-[10px] text-muted-foreground mb-1">태어난 시각 (선택)</p>
+                <p className="text-[10px] text-muted-foreground mb-1">태어난 시각</p>
                 <input type="time" value={birthTime}
                   onChange={e => setBirthTime(e.target.value)}
                   className="w-full h-8 text-sm bg-transparent border border-input rounded px-2 py-1" />
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground mb-1">성별</p>
+                <div className="flex gap-1 h-8">
+                  {([{v:"male",l:"남"},{v:"female",l:"여"}] as {v:"male"|"female",l:string}[]).map(({v,l}) => (
+                    <button key={v} onClick={() => setGender(g => g === v ? "" : v)}
+                      className={`flex-1 text-xs rounded border transition-colors ${gender===v ? "bg-primary text-primary-foreground border-primary" : "border-input text-muted-foreground hover:border-foreground"}`}>
+                      {l}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </CardContent>
@@ -314,6 +330,21 @@ export default function FortunePage() {
           {/* Saju */}
           {fortuneKind === "saju" && (
             <>
+              {/* 일간·오행 요약 배너 */}
+              {(fortune.ilgan || fortune.oheng_summary) && (
+                <div className="flex gap-2 flex-wrap">
+                  {fortune.ilgan && (
+                    <Badge className="bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300 border-0 text-xs py-1 px-2.5">
+                      🌿 {fortune.ilgan}
+                    </Badge>
+                  )}
+                  {fortune.oheng_summary && (
+                    <Badge variant="outline" className="text-xs py-1 px-2.5 font-normal">
+                      ⚖️ {fortune.oheng_summary}
+                    </Badge>
+                  )}
+                </div>
+              )}
               {fortune.overall && (
                 <Card className="bg-gradient-to-br from-teal-50 to-cyan-50 dark:from-teal-950/30 dark:to-cyan-950/30 border-teal-200 dark:border-teal-800">
                   <CardContent className="p-4">
@@ -338,6 +369,7 @@ export default function FortunePage() {
                 {fortune.luckyColor && <Badge variant="outline">🎨 {fortune.luckyColor}</Badge>}
                 {fortune.luckyNumber != null && <Badge variant="outline">🔢 {fortune.luckyNumber}</Badge>}
                 {fortune.luckyDirection && <Badge variant="outline">🧭 {fortune.luckyDirection}</Badge>}
+                {fortune.luckyFood && <Badge variant="outline">🍀 {fortune.luckyFood}</Badge>}
               </div>
               {fortune.advice && <p className="text-sm leading-relaxed border-l-4 border-teal-300 pl-3">{fortune.advice}</p>}
               {fortune.caution && <p className="text-xs text-muted-foreground bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">⚠️ {fortune.caution}</p>}
