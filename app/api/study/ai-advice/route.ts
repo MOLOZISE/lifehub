@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { geminiGenerate } from "@/lib/gemini";
+import Groq from "groq-sdk";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -142,7 +142,13 @@ ${dayPattern}
 각 항목은 2-3문장으로 간결하게 작성하세요. "열심히 하세요" 같은 추상적 격려 대신 구체적 수치와 방법론을 제시하세요.`;
 
   try {
-    const text = await geminiGenerate(prompt, { maxOutputTokens: 1200 });
+    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY ?? "" });
+    const chat = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages: [{ role: "user", content: prompt }],
+      max_tokens: 1200,
+    });
+    const text = chat.choices[0]?.message?.content ?? "";
 
     // 섹션 파싱
     const sections = text

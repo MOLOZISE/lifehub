@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { geminiGenerateJson } from "@/lib/gemini";
+import Groq from "groq-sdk";
 
 export async function POST(
   req: Request,
@@ -75,13 +75,22 @@ export async function POST(
 ${context.slice(0, 8000)}`;
 
   try {
-    const questions = await geminiGenerateJson<{
+    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY ?? "" });
+    const completion = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.7,
+      max_tokens: 3000,
+    });
+    const raw = completion.choices[0]?.message?.content ?? "";
+    const json = raw.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
+    const questions: {
       type: string;
       question: string;
       options: string[];
       answer: string;
       explanation: string;
-    }[]>(prompt, { temperature: 0.7, maxOutputTokens: 3000 });
+    }[] = JSON.parse(json);
 
     const userId = session.user.id!;
     const saved = await Promise.all(
