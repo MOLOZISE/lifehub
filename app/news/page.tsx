@@ -135,7 +135,7 @@ export default function NewsPage() {
               <div className={`border border-l-4 ${borderClass} rounded-xl px-4 py-3.5 bg-card hover:bg-accent/40 transition-colors`}>
                 <div className="flex items-start gap-3">
                   {/* 순번 */}
-                  <span className={`shrink-0 w-5 h-5 rounded-full ${activeCat.color} text-white text-[10px] font-bold flex items-center justify-center mt-0.5`}>
+                  <span className={`shrink-0 w-6 h-6 rounded-full ${activeCat.color} text-white text-xs font-bold flex items-center justify-center mt-0.5 shadow-sm`}>
                     {i + 1}
                   </span>
 

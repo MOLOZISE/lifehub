@@ -35,6 +35,7 @@ const RSS_FEEDS: Record<string, { url: string; name: string }[]> = {
   ],
   sports: [
     { url: "https://www.yonhapnews.co.kr/RSS/sports.xml",        name: "연합뉴스" },
+    { url: "https://rss.hankyung.com/sports.xml",                name: "한국경제" },
   ],
   world: [
     { url: "https://www.yonhapnews.co.kr/RSS/international.xml", name: "연합뉴스" },
@@ -62,7 +63,7 @@ function parseRss(xml: string, sourceName: string, category: string): NewsArticl
     const desc    = extractTag(block, "description");
     const pubDate = extractTag(block, "pubDate");
     if (!title || !link) continue;
-    items.push({
+    if (isJunkArticle(title)) continue;
       title:       cleanHtml(title),
       url:         link.trim(),
       source:      sourceName,
@@ -117,27 +118,48 @@ async function fetchRss(feed: { url: string; name: string }, category: string): 
 }
 
 // ── Tavily fetch ───────────────────────────────────────────────────────────────
+// 카테고리 페이지·홈페이지로 보이는 제목 패턴 필터
+const JUNK_TITLE_RE = /^(뉴스|홈|영상|포토|스포츠|전체|메인|사진)\s*[-|·]\s*|^https?:\/\//i;
+const GARBLED_RE = /[^\uAC00-\uD7A3\u1100-\u11FF\u3130-\u318F\uA960-\uA97F\uD7B0-\uD7FFa-zA-Z0-9\s\-_.,!?()[\]%&*#@$~<>"':;\/\\+]/;
+
+function isJunkArticle(title: string): boolean {
+  if (!title || title.length < 10) return true;
+  if (JUNK_TITLE_RE.test(title)) return true;
+  // 깨진 텍스트 감지: 비정상 특수문자가 전체의 10% 이상
+  const garbledChars = (title.match(/[^\uAC00-\uD7A3\u1100-\u11FF\u3130-\u318F\u0020-\u007Ea-zA-Z0-9]/g) ?? []).length;
+  if (garbledChars / title.length > 0.15) return true;
+  return false;
+}
+
 async function fetchTavily(query: string, category: string): Promise<NewsArticle[]> {
   if (!process.env.TAVILY_API_KEY) return [];
   try {
     const client = tavily({ apiKey: process.env.TAVILY_API_KEY });
     const result = await client.search(query, {
       searchDepth: "basic",
-      maxResults: 6,
+      maxResults: 8,
       includeAnswer: false,
-      days: 2,
-    });
-    return (result.results ?? []).map(r => ({
-      title:       r.title ?? "",
-      url:         r.url ?? "",
-      source:      extractDomain(r.url ?? ""),
-      publishedAt: (r as { published_date?: string }).published_date ?? null,
-      snippet:     r.content?.slice(0, 200) ?? "",
-      category,
-    }));
+      days: 1,
+      topic: "news",
+    } as Parameters<typeof client.search>[1]);
+    return (result.results ?? [])
+      .filter(r => r.title && !isJunkArticle(r.title))
+      .map(r => ({
+        title:       r.title ?? "",
+        url:         r.url ?? "",
+        source:      extractDomain(r.url ?? ""),
+        publishedAt: (r as { published_date?: string }).published_date ?? null,
+        snippet:     cleanSnippet(r.content?.slice(0, 200) ?? ""),
+        category,
+      }));
   } catch {
     return [];
   }
+}
+
+function cleanSnippet(text: string): string {
+  // 깨진 특수문자·마크다운 잔여물 제거
+  return text.replace(/\*\*?|\#{1,3}\s?/g, "").replace(/\s{2,}/g, " ").trim();
 }
 
 function extractDomain(url: string): string {
