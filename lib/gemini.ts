@@ -35,7 +35,7 @@ export function nextGeminiKey(): string {
 
 /** 라운드로빈 키로 GenerativeModel 반환 */
 export function getGeminiModel(
-  modelName = "gemini-2.0-flash",
+  modelName = "gemini-1.5-flash", // 무료 플랜 기본 모델 (2.0-flash는 무료 미지원)
   generationConfig?: GenerationConfig
 ): GenerativeModel {
   const key = nextGeminiKey();
@@ -48,7 +48,7 @@ export async function geminiGenerate(
   prompt: string,
   opts?: { model?: string; temperature?: number; maxOutputTokens?: number }
 ): Promise<string> {
-  const model = getGeminiModel(opts?.model ?? "gemini-2.0-flash", {
+  const model = getGeminiModel(opts?.model ?? "gemini-1.5-flash", {
     temperature: opts?.temperature ?? 0.7,
     maxOutputTokens: opts?.maxOutputTokens ?? 2048,
   });
@@ -61,7 +61,7 @@ export async function geminiGenerateJson<T = unknown>(
   prompt: string,
   opts?: { model?: string; temperature?: number; maxOutputTokens?: number }
 ): Promise<T> {
-  const model = getGeminiModel(opts?.model ?? "gemini-2.0-flash", {
+  const model = getGeminiModel(opts?.model ?? "gemini-1.5-flash", {
     temperature: opts?.temperature ?? 0.7,
     maxOutputTokens: opts?.maxOutputTokens ?? 2048,
     responseMimeType: "application/json",
