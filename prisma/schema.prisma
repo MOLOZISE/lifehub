@@ -78,6 +78,9 @@ model User {
   // News
   newsKeywords   UserNewsKeyword[]
 
+  // Shared Resources
+  sharedResources SharedResource[]
+
   @@map("users")
 }
 
@@ -303,30 +306,69 @@ model Exam {
   @@map("exams")
 }
 
+// ─── Exam Type (시험 종류 — 관리자 등록) ───────────────────────────────────────
+
+model ExamType {
+  id           String   @id @default(cuid())
+  name         String   @unique  // 빅데이터분석기사
+  category     String            // 자격증 | 어학 | 공무원 | 대학시험 | 기타
+  organization String?           // 주관기관
+  description  String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  officialExams   OfficialExam[]
+  sharedResources SharedResource[]
+
+  @@map("exam_types")
+}
+
 // ─── Official Exams (관리자가 등록하는 공식 시험 일정) ──────────────────────────
 
 model OfficialExam {
   id                String   @id @default(cuid())
-  name              String   // 빅데이터분석기사
-  organization      String   // 한국데이터산업진흥원
-  category          String   // 자격증 | 어학 | 공무원 | 대학시험 | 기타
-  examDate          String   // YYYY-MM-DD (시험일)
-  registrationStart String?  // 접수 시작일
-  registrationEnd   String?  // 접수 마감일
-  resultDate        String?  // 결과 발표일
-  fee               Int?     // 응시료(원)
-  location          String?  // 시험 장소
+  examTypeId        String?           // ExamType 연결 (시험 종류)
+  name              String            // 빅데이터분석기사 필기시험
+  organization      String            // 한국데이터산업진흥원
+  category          String            // 자격증 | 어학 | 공무원 | 대학시험 | 기타
+  examDate          String            // YYYY-MM-DD (시험일)
+  registrationStart String?           // 접수 시작일
+  registrationEnd   String?           // 접수 마감일
+  resultDate        String?           // 결과 발표일
+  fee               Int?              // 응시료(원)
+  location          String?           // 시험 장소
   description       String?
-  url               String?  // 공식 페이지
-  year              Int      // 연도
-  session           Int?     // 회차
+  url               String?           // 공식 페이지
+  year              Int               // 연도
+  session           Int?              // 회차
   isActive          Boolean  @default(true)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
+  examType  ExamType? @relation(fields: [examTypeId], references: [id], onDelete: SetNull)
   userExams Exam[]
 
   @@map("official_exams")
+}
+
+// ─── Shared Resources (공식 시험 종류별 커뮤니티 공유 자료) ───────────────────────
+
+model SharedResource {
+  id          String   @id @default(cuid())
+  userId      String
+  examTypeId  String
+  title       String
+  url         String?  @db.Text
+  description String?  @db.Text
+  type        String   // link | youtube | book | note
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  examType ExamType @relation(fields: [examTypeId], references: [id], onDelete: Cascade)
+
+  @@map("shared_resources")
 }
 
 model ExamSubject {

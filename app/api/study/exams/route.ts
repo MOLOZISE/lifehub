@@ -9,7 +9,10 @@ export async function GET() {
   const exams = await prisma.exam.findMany({
     where: { userId: session.user.id },
     orderBy: { examDate: "asc" },
-    include: { subject: { select: { id: true, name: true, emoji: true, color: true } } },
+    include: {
+      subject: { select: { id: true, name: true, emoji: true, color: true } },
+      officialExam: { select: { id: true, examTypeId: true, examType: { select: { id: true, name: true, category: true } } } },
+    },
   });
 
   return NextResponse.json(exams);

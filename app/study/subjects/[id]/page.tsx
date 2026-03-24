@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, CalendarClock, Clock, Plus, Link2, BookOpen, Trophy, Play, CheckCircle, Pencil, Trash2, Search, Loader2 } from "lucide-react";
+import { ArrowLeft, CalendarClock, Clock, Plus, Link2, BookOpen, Trophy, Play, CheckCircle, Pencil, Trash2, Search, Loader2, Share2, Users, ExternalLink } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -36,12 +36,21 @@ interface Exam {
   organization: string | null; registrationStart: string | null; registrationEnd: string | null;
   resultDate: string | null; fee: number | null; location: string | null; url: string | null;
   year: number | null; session: number | null; description: string | null;
+  officialExam?: { id: string; examTypeId: string | null; examType?: { id: string; name: string; category: string } | null } | null;
 }
 
 interface OfficialExam {
   id: string; name: string; organization: string; category: string;
   examDate: string; registrationStart: string | null; registrationEnd: string | null;
   resultDate: string | null; year: number; session: number | null;
+  examTypeId?: string | null;
+  examType?: { id: string; name: string; category: string } | null;
+}
+
+interface SharedResource {
+  id: string; title: string; url: string | null; description: string | null;
+  type: string; createdAt: string;
+  user: { id: string; name: string | null; image: string | null; username: string | null };
 }
 
 
@@ -66,6 +75,13 @@ export default function SubjectDetailPage() {
   const [sourceTitle, setSourceTitle] = useState("");
   const [sourceContent, setSourceContent] = useState("");
   const [sourceType, setSourceType] = useState("link");
+
+  // 커뮤니티 공유 자료
+  const [sharedResources, setSharedResources] = useState<SharedResource[]>([]);
+  const [examTypeForSubject, setExamTypeForSubject] = useState<{ id: string; name: string; category: string } | null>(null);
+  const [shareDialog, setShareDialog] = useState(false);
+  const [shareForm, setShareForm] = useState({ title: "", url: "", description: "", type: "link" });
+  const [sharing, setSharing] = useState(false);
 
   // 시험 결과 입력 다이얼로그
   const [examDialog, setExamDialog] = useState(false);
@@ -131,7 +147,54 @@ export default function SubjectDetailPage() {
     if (srcRes.ok) setSources(await srcRes.json());
     if (examRes.ok) {
       const all: Exam[] = await examRes.json();
-      setExams(all.filter(e => e.subjectId === id));
+      const subjectExams = all.filter(e => e.subjectId === id);
+      setExams(subjectExams);
+
+      // 연결된 OfficialExam에서 ExamType 추출
+      const examType = subjectExams
+        .map(e => e.officialExam?.examType)
+        .find(et => et != null) ?? null;
+      setExamTypeForSubject(examType ?? null);
+
+      // 시험 종류가 있으면 공유 자료 로드
+      if (examType?.id) {
+        const sharedRes = await fetch(`/api/study/shared-resources?examTypeId=${examType.id}`);
+        if (sharedRes.ok) setSharedResources(await sharedRes.json());
+      }
+    }
+  }
+
+  async function submitSharedResource() {
+    if (!shareForm.title.trim() || !examTypeForSubject) return;
+    setSharing(true);
+    try {
+      const res = await fetch("/api/study/shared-resources", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...shareForm, examTypeId: examTypeForSubject.id }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success("커뮤니티에 자료가 공유되었습니다.");
+      setShareDialog(false);
+      setShareForm({ title: "", url: "", description: "", type: "link" });
+      // 공유 자료 목록 갱신
+      const sharedRes = await fetch(`/api/study/shared-resources?examTypeId=${examTypeForSubject.id}`);
+      if (sharedRes.ok) setSharedResources(await sharedRes.json());
+    } catch {
+      toast.error("공유 실패");
+    } finally {
+      setSharing(false);
+    }
+  }
+
+  async function deleteSharedResource(resourceId: string) {
+    if (!confirm("이 공유 자료를 삭제할까요?")) return;
+    const res = await fetch(`/api/study/shared-resources/${resourceId}`, { method: "DELETE" });
+    if (res.ok) {
+      toast.success("삭제되었습니다.");
+      setSharedResources(prev => prev.filter(r => r.id !== resourceId));
+    } else {
+      toast.error("삭제 실패");
     }
   }
 
@@ -409,38 +472,104 @@ export default function SubjectDetailPage() {
         </TabsContent>
 
         {/* 자료 링크 탭 */}
-        <TabsContent value="sources" className="mt-4 space-y-3">
-          <div className="flex justify-between items-center">
-            <p className="text-sm text-muted-foreground">강의, 링크, 메모 자료</p>
-            <Button size="sm" onClick={() => setSourceDialog(true)}>
-              <Plus className="w-3.5 h-3.5 mr-1" /> 자료 추가
-            </Button>
-          </div>
-          {sources.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <Link2 className="w-8 h-8 mx-auto mb-2 opacity-30" />
-              <p>등록된 자료가 없습니다.</p>
-              <p className="text-xs mt-1">강의 링크나 참고 자료를 추가해보세요.</p>
+        <TabsContent value="sources" className="mt-4 space-y-4">
+          {/* ── 내 자료 ── */}
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <p className="text-sm font-medium text-muted-foreground">내 자료</p>
+              <Button size="sm" onClick={() => setSourceDialog(true)}>
+                <Plus className="w-3.5 h-3.5 mr-1" /> 자료 추가
+              </Button>
             </div>
-          ) : (
-            sources.map(s => (
-              <div key={s.id} className="p-3 border rounded-lg">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs bg-muted px-1.5 py-0.5 rounded">{{ link: "🔗 링크", youtube: "▶️ 유튜브", book: "📗 교재", note: "📝 메모" }[s.type] ?? s.type}</span>
-                  <span className="font-medium text-sm">{s.title}</span>
-                </div>
-                {s.content && (
-                  s.content.startsWith("http") ? (
-                    <a href={s.content} target="_blank" rel="noopener noreferrer"
-                      className="text-xs text-blue-500 hover:underline mt-1 block truncate">
-                      <Link2 className="inline w-3 h-3 mr-1" />{s.content}
-                    </a>
-                  ) : (
-                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{s.content}</p>
-                  )
-                )}
+            {sources.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Link2 className="w-7 h-7 mx-auto mb-2 opacity-30" />
+                <p className="text-sm">등록된 자료가 없습니다.</p>
+                <p className="text-xs mt-1">강의 링크나 참고 자료를 추가해보세요.</p>
               </div>
-            ))
+            ) : (
+              sources.map(s => (
+                <div key={s.id} className="p-3 border rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs bg-muted px-1.5 py-0.5 rounded">{{ link: "🔗 링크", youtube: "▶️ 유튜브", book: "📗 교재", note: "📝 메모" }[s.type] ?? s.type}</span>
+                    <span className="font-medium text-sm">{s.title}</span>
+                  </div>
+                  {s.content && (
+                    s.content.startsWith("http") ? (
+                      <a href={s.content} target="_blank" rel="noopener noreferrer"
+                        className="text-xs text-blue-500 hover:underline mt-1 block truncate">
+                        <Link2 className="inline w-3 h-3 mr-1" />{s.content}
+                      </a>
+                    ) : (
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{s.content}</p>
+                    )
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* ── 커뮤니티 공유 자료 (examType 연결 시만 표시) ── */}
+          {examTypeForSubject && (
+            <div className="space-y-3">
+              <div className="border-t pt-4 flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-emerald-500" />
+                  <p className="text-sm font-medium">
+                    <span className="text-emerald-600 dark:text-emerald-400">{examTypeForSubject.name}</span> 커뮤니티 자료
+                  </p>
+                  <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                    {sharedResources.length}개
+                  </span>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => setShareDialog(true)}>
+                  <Share2 className="w-3.5 h-3.5 mr-1" /> 공유하기
+                </Button>
+              </div>
+
+              {sharedResources.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground border rounded-lg bg-muted/20">
+                  <Share2 className="w-7 h-7 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">아직 공유된 자료가 없습니다.</p>
+                  <p className="text-xs mt-1">첫 번째로 유용한 자료를 공유해보세요!</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {sharedResources.map(r => (
+                    <div key={r.id} className="p-3 border rounded-lg bg-muted/10 hover:bg-muted/20 transition-colors">
+                      <div className="flex items-start gap-2">
+                        <span className="text-xs bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded shrink-0">
+                          {{ link: "🔗 링크", youtube: "▶️ 유튜브", book: "📗 교재", note: "📝 메모" }[r.type] ?? r.type}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm">{r.title}</p>
+                          {r.url && (
+                            <a href={r.url} target="_blank" rel="noopener noreferrer"
+                              className="text-xs text-blue-500 hover:underline mt-0.5 flex items-center gap-1 truncate">
+                              <ExternalLink className="w-3 h-3 shrink-0" />{r.url}
+                            </a>
+                          )}
+                          {r.description && (
+                            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{r.description}</p>
+                          )}
+                          <div className="flex items-center gap-2 mt-1.5">
+                            <span className="text-[10px] text-muted-foreground">
+                              {r.user.username ?? r.user.name ?? "익명"} · {new Date(r.createdAt).toLocaleDateString("ko-KR")}
+                            </span>
+                            <button
+                              onClick={() => deleteSharedResource(r.id)}
+                              className="text-[10px] text-destructive/60 hover:text-destructive ml-auto"
+                            >
+                              삭제
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </TabsContent>
       </Tabs>
@@ -526,6 +655,66 @@ export default function SubjectDetailPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setSourceDialog(false)}>취소</Button>
             <Button onClick={addSource} disabled={!sourceTitle.trim()}>저장</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 커뮤니티 자료 공유 다이얼로그 */}
+      <Dialog open={shareDialog} onOpenChange={setShareDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Share2 className="w-4 h-4 text-emerald-500" />
+              {examTypeForSubject?.name} 커뮤니티에 공유
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <p className="text-xs mb-1 font-medium">유형</p>
+              <Select value={shareForm.type} onValueChange={v => v && setShareForm(f => ({ ...f, type: v }))}>
+                <SelectTrigger>
+                  <span>{{ link: "🔗 링크", youtube: "▶️ 유튜브", book: "📗 교재", note: "📝 메모" }[shareForm.type] ?? shareForm.type}</span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="link">🔗 링크</SelectItem>
+                  <SelectItem value="youtube">▶️ 유튜브</SelectItem>
+                  <SelectItem value="book">📗 교재</SelectItem>
+                  <SelectItem value="note">📝 메모</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <p className="text-xs mb-1 font-medium">제목 *</p>
+              <Input
+                value={shareForm.title}
+                onChange={e => setShareForm(f => ({ ...f, title: e.target.value }))}
+                placeholder="예: 빅데이터분석기사 합격 후기 + 추천 강의"
+              />
+            </div>
+            <div>
+              <p className="text-xs mb-1 font-medium">URL (선택)</p>
+              <Input
+                value={shareForm.url}
+                onChange={e => setShareForm(f => ({ ...f, url: e.target.value }))}
+                placeholder="https://..."
+              />
+            </div>
+            <div>
+              <p className="text-xs mb-1 font-medium">설명 (선택)</p>
+              <Textarea
+                value={shareForm.description}
+                onChange={e => setShareForm(f => ({ ...f, description: e.target.value }))}
+                placeholder="자료에 대한 간단한 설명을 남겨주세요..."
+                className="h-20 resize-none text-sm"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShareDialog(false)}>취소</Button>
+            <Button onClick={submitSharedResource} disabled={sharing || !shareForm.title.trim()}>
+              {sharing && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />}
+              공유하기
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

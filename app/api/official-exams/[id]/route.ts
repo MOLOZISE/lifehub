@@ -32,6 +32,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       year: Number(body.year),
       session: body.session ? Number(body.session) : null,
       isActive: body.isActive ?? true,
+      examTypeId: body.examTypeId || null,
     },
   });
 

@@ -8,6 +8,7 @@ export async function GET(req: NextRequest) {
   const category = searchParams.get("category");
   const year = searchParams.get("year");
   const q = searchParams.get("q");
+  const examTypeId = searchParams.get("examTypeId");
 
   const exams = await prisma.officialExam.findMany({
     where: {
@@ -15,8 +16,10 @@ export async function GET(req: NextRequest) {
       ...(category ? { category } : {}),
       ...(year ? { year: Number(year) } : {}),
       ...(q ? { name: { contains: q, mode: "insensitive" } } : {}),
+      ...(examTypeId ? { examTypeId } : {}),
     },
     orderBy: [{ examDate: "asc" }],
+    include: { examType: { select: { id: true, name: true } } },
   });
 
   return NextResponse.json(exams);
@@ -31,7 +34,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { name, organization, category, examDate, registrationStart, registrationEnd, resultDate, fee, location, description, url, year, session: examSession } = body;
+  const { name, organization, category, examDate, registrationStart, registrationEnd, resultDate, fee, location, description, url, year, session: examSession, examTypeId } = body;
 
   if (!name || !organization || !category || !examDate || !year) {
     return NextResponse.json({ error: "필수 항목 누락" }, { status: 400 });
@@ -49,6 +52,7 @@ export async function POST(req: NextRequest) {
       url: url || null,
       year: Number(year),
       session: examSession ? Number(examSession) : null,
+      examTypeId: examTypeId || null,
     },
   });
 

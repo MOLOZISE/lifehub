@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Pencil, Trash2, Loader2, ChevronDown } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, BookOpen } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,8 +15,15 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 
+interface ExamType {
+  id: string;
+  name: string;
+  category: string;
+}
+
 interface OfficialExam {
   id: string;
+  examTypeId: string | null;
   name: string;
   organization: string;
   category: string;
@@ -30,6 +38,7 @@ interface OfficialExam {
   year: number;
   session: number | null;
   isActive: boolean;
+  examType?: ExamType | null;
 }
 
 const EMPTY_FORM = {
@@ -37,13 +46,14 @@ const EMPTY_FORM = {
   examDate: "", registrationStart: "", registrationEnd: "",
   resultDate: "", fee: "", location: "", description: "",
   url: "", year: String(new Date().getFullYear()), session: "",
-  isActive: true,
+  isActive: true, examTypeId: "",
 };
 
 const CATEGORIES = ["자격증", "어학", "공무원", "대학시험", "기타"];
 
 export default function AdminExamsPage() {
   const [exams, setExams] = useState<OfficialExam[]>([]);
+  const [examTypes, setExamTypes] = useState<ExamType[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [open, setOpen] = useState(false);
@@ -54,10 +64,12 @@ export default function AdminExamsPage() {
   async function loadExams() {
     setLoading(true);
     try {
-      const res = await fetch("/api/official-exams?isActive=all");
-      // admin은 비활성 포함 전체 조회 — 단순 GET 재활용
-      const all = await fetch("/api/official-exams").then(r => r.json());
+      const [all, types] = await Promise.all([
+        fetch("/api/official-exams").then(r => r.json()),
+        fetch("/api/admin/exam-types").then(r => r.json()),
+      ]);
       setExams(Array.isArray(all) ? all : []);
+      setExamTypes(Array.isArray(types) ? types : []);
     } finally {
       setLoading(false);
     }
@@ -88,6 +100,7 @@ export default function AdminExamsPage() {
       year: String(exam.year),
       session: exam.session != null ? String(exam.session) : "",
       isActive: exam.isActive,
+      examTypeId: exam.examTypeId ?? "",
     });
     setOpen(true);
   }
@@ -128,12 +141,19 @@ export default function AdminExamsPage() {
     <div className="min-h-screen bg-background p-4 max-w-4xl mx-auto space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">공식 시험 관리</h1>
+          <h1 className="text-2xl font-bold">공식 시험 일정 관리</h1>
           <p className="text-sm text-muted-foreground">관리자 전용 — 공식 시험 일정 등록/수정/삭제</p>
         </div>
-        <Button onClick={openCreate} size="sm">
-          <Plus className="w-4 h-4 mr-1" /> 시험 추가
-        </Button>
+        <div className="flex gap-2">
+          <Link href="/admin/exam-types">
+            <Button variant="outline" size="sm">
+              <BookOpen className="w-4 h-4 mr-1" /> 시험 종류 관리
+            </Button>
+          </Link>
+          <Button onClick={openCreate} size="sm">
+            <Plus className="w-4 h-4 mr-1" /> 시험 추가
+          </Button>
+        </div>
       </div>
 
       {/* 카테고리 필터 */}
@@ -167,6 +187,11 @@ export default function AdminExamsPage() {
                     <span className="font-semibold text-sm">{exam.name}</span>
                     <Badge variant="outline" className="text-xs">{exam.category}</Badge>
                     {exam.session && <Badge variant="secondary" className="text-xs">{exam.session}회차</Badge>}
+                    {exam.examType && (
+                      <Badge className="text-xs bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 border-0">
+                        {exam.examType.name}
+                      </Badge>
+                    )}
                     {!exam.isActive && <Badge variant="destructive" className="text-xs">비활성</Badge>}
                   </div>
                   <div className="text-xs text-muted-foreground mt-0.5 flex flex-wrap gap-x-3">
@@ -248,6 +273,24 @@ export default function AdminExamsPage() {
             <div className="col-span-2 space-y-1">
               <p className="text-xs font-medium">공식 URL</p>
               <Input value={form.url} onChange={e => setForm(f => ({ ...f, url: e.target.value }))} placeholder="https://..." />
+            </div>
+            <div className="col-span-2 space-y-1">
+              <p className="text-xs font-medium">시험 종류 연결</p>
+              <Select
+                value={form.examTypeId || "_none"}
+                onValueChange={v => setForm(f => ({ ...f, examTypeId: v === "_none" ? "" : v }))}
+              >
+                <SelectTrigger className="h-9">
+                  <span>{examTypes.find(t => t.id === form.examTypeId)?.name ?? "연결 안 함"}</span>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">연결 안 함</SelectItem>
+                  {examTypes.map(t => (
+                    <SelectItem key={t.id} value={t.id}>{t.name} ({t.category})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground">시험 종류와 연결하면 해당 종류의 자료 공유 게시판에 표시됩니다.</p>
             </div>
             <div className="col-span-2 space-y-1">
               <p className="text-xs font-medium">설명</p>
