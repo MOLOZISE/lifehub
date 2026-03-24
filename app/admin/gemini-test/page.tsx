@@ -253,7 +253,7 @@ export default function GeminiTestPage() {
                     {result.ok && typeof result.result === "string" && (
                       <div className="text-xs bg-muted/60 rounded p-2.5 leading-relaxed whitespace-pre-wrap">{result.result}</div>
                     )}
-                    {result.ok && result.result && typeof result.result === "object" && !Array.isArray(result.result) && (
+                    {result.ok && !!result.result && typeof result.result === "object" && !Array.isArray(result.result) && (
                       <div className="text-xs bg-muted/60 rounded p-2.5 space-y-1">
                         {Object.entries(result.result as Record<string, unknown>).map(([k, v]) => (
                           <div key={k} className="flex gap-2">
