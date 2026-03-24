@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import {
   User, Pencil, Check, X, Calendar, BookOpen,
-  TrendingUp, MessageSquare, LogOut, ShieldCheck, ChevronRight,
+  TrendingUp, MessageSquare, LogOut, ShieldCheck, ChevronRight, FlaskConical,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -236,6 +236,15 @@ export default function ProfilePage() {
                   <div className="flex items-center gap-2">
                     <ShieldCheck className="w-4 h-4 text-amber-500" />
                     공식 시험 일정 관리
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                </Link>
+                <Link href="/admin/gemini-test"
+                  className="flex items-center justify-between py-2 text-sm hover:text-primary transition-colors">
+                  <div className="flex items-center gap-2">
+                    <FlaskConical className="w-4 h-4 text-violet-500" />
+                    <span>Gemini API 테스트</span>
+                    <span className="text-[10px] bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 px-1.5 py-0.5 rounded-full">NEW</span>
                   </div>
                   <ChevronRight className="w-4 h-4 text-muted-foreground" />
                 </Link>
