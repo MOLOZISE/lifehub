@@ -75,6 +75,9 @@ model User {
   plans          Plan[]
   fortuneCache   FortuneCache[]
 
+  // News
+  newsKeywords   UserNewsKeyword[]
+
   @@map("users")
 }
 
@@ -819,4 +822,30 @@ model FortuneCache {
   @@unique([userId, type, date])
   @@index([userId])
   @@map("fortune_cache")
+}
+
+// ─── News ─────────────────────────────────────────────────────────────────────
+
+model NewsCache {
+  id        String   @id @default(cuid())
+  category  String   // "all" | "economy" | "society" | "tech" | "sports"
+  articles  Json     // NewsArticle[]
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@unique([category])
+  @@map("news_cache")
+}
+
+model UserNewsKeyword {
+  id        String   @id @default(cuid())
+  userId    String
+  keyword   String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, keyword])
+  @@index([userId])
+  @@map("user_news_keywords")
 }

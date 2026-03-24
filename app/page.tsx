@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   BookOpen, TrendingUp, CalendarDays, ArrowRight, Flame, CalendarClock,
   MessageSquare, Utensils, Heart, Eye, Star,
-  NotebookPen, Sparkles, ChevronLeft, ChevronRight,
+  NotebookPen, Sparkles, ChevronLeft, ChevronRight, Newspaper, ExternalLink,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -72,6 +72,14 @@ interface RestaurantItem {
   avgRating: number;
   reviewCount: number;
   address: string;
+}
+
+interface NewsArticle {
+  title: string;
+  url: string;
+  source: string;
+  publishedAt: string | null;
+  snippet: string;
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -167,6 +175,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [dayChangePct, setDayChangePct] = useState<Record<string, number>>({});
   const [weeklyGoal, setWeeklyGoal] = useState(DEFAULT_WEEKLY_GOAL);
+  const [newsArticles, setNewsArticles] = useState<NewsArticle[]>([]);
 
   const [monthEvents, setMonthEvents] = useState<Record<string, PlannerEvent[]>>({});
   const [selectedCalDay, setSelectedCalDay] = useState<string | null>(null);
@@ -212,8 +221,9 @@ export default function DashboardPage() {
       fetch(`/api/planner/plans?type=day&period=${today}`).then(r => r.ok ? r.json() : null),
       fetch(`/api/planner/diary?date=${today}`).then(r => r.ok ? r.json() : null),
       fetch("/api/planner/fortune?type=daily").then(r => r.ok ? r.json() : null),
+      fetch("/api/news?category=all").then(r => r.ok ? r.json() : null),
     ]).then(results => {
-      const [sessRes, subRes, holdRes, examRes, postsRes, restRes, evRes, planRes, diaryRes, fortuneRes] = results;
+      const [sessRes, subRes, holdRes, examRes, postsRes, restRes, evRes, planRes, diaryRes, fortuneRes, newsRes] = results;
       if (sessRes.status === "fulfilled" && sessRes.value?.sessions) setSessions(sessRes.value.sessions);
       if (subRes.status === "fulfilled" && Array.isArray(subRes.value)) setSubjects(subRes.value);
       if (holdRes.status === "fulfilled" && Array.isArray(holdRes.value)) {
@@ -260,6 +270,9 @@ export default function DashboardPage() {
       }
       if (fortuneRes.status === "fulfilled" && fortuneRes.value?.cached) {
         setTodayFortune(fortuneRes.value);
+      }
+      if (newsRes.status === "fulfilled" && Array.isArray(newsRes.value?.articles)) {
+        setNewsArticles(newsRes.value.articles.slice(0, 4));
       }
       setLoading(false);
     });
@@ -812,6 +825,37 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
+      {/* 오늘의 뉴스 */}
+      {newsArticles.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Newspaper className="w-4 h-4 text-blue-500" />뉴스
+              </CardTitle>
+              <Link href="/news" className="text-xs flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
+                더 보기<ArrowRight className="w-3 h-3" />
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-2 pt-0">
+            {newsArticles.map((article, i) => (
+              <a key={i} href={article.url} target="_blank" rel="noopener noreferrer" className="block">
+                <div className="flex items-start gap-2 p-2 rounded-lg hover:bg-accent transition-colors">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium line-clamp-2 leading-snug">{article.title}</p>
+                    <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted-foreground">
+                      <Badge variant="secondary" className="text-[9px] px-1.5 py-0">{article.source}</Badge>
+                    </div>
+                  </div>
+                  <ExternalLink className="w-3 h-3 text-muted-foreground shrink-0 mt-1" />
+                </div>
+              </a>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Community + Restaurant widgets */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Community recent posts */}
@@ -886,28 +930,6 @@ export default function DashboardPage() {
             ))}
           </CardContent>
         </Card>
-      </div>
-
-      {/* Quick links */}
-      <div>
-        <h2 className="text-sm font-semibold text-muted-foreground mb-3">빠른 이동</h2>
-        <div className="grid grid-cols-4 gap-2">
-          {[
-            { href: "/study/subjects", icon: "📚", label: "학습 관리" },
-            { href: "/stock", icon: "📡", label: "증권 동향" },
-            { href: "/community?category=free", icon: "🗣️", label: "자유게시판" },
-            { href: "/restaurant", icon: "🍜", label: "맛집" },
-          ].map(item => (
-            <Link key={item.href} href={item.href}>
-              <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
-                <CardContent className="p-3 text-center">
-                  <span className="text-xl">{item.icon}</span>
-                  <p className="font-medium text-xs mt-1.5 leading-tight">{item.label}</p>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
-        </div>
       </div>
     </div>
   );
