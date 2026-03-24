@@ -39,7 +39,7 @@ export async function geminiGenerate(
 ): Promise<string> {
   const ai = new GoogleGenAI({ apiKey: opts?.key ?? nextGeminiKey() });
   const response = await ai.models.generateContent({
-    model: opts?.model ?? "gemini-2.0-flash",
+    model: opts?.model ?? "gemini-2.5-flash-lite",
     contents: prompt,
     config: {
       temperature: opts?.temperature ?? 0.7,
@@ -56,7 +56,7 @@ export async function geminiGenerateJson<T = unknown>(
 ): Promise<T> {
   const ai = new GoogleGenAI({ apiKey: opts?.key ?? nextGeminiKey() });
   const response = await ai.models.generateContent({
-    model: opts?.model ?? "gemini-2.0-flash",
+    model: opts?.model ?? "gemini-2.5-flash-lite",
     contents: prompt,
     config: {
       temperature: opts?.temperature ?? 0.7,

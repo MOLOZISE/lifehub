@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
 
     } else {
       // ── 기능 테스트 ──────────────────────────────────────────────────────
-      const modelName = overrideModel ?? "gemini-2.0-flash";
+      const modelName = overrideModel ?? "gemini-2.5-flash-lite";
 
       if (type === "basic") {
         const result = await geminiGenerate(
