@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import Groq from "groq-sdk";
+import { geminiGenerate } from "@/lib/gemini";
 import { tavily } from "@tavily/core";
 
 const ANALYSIS_TTL_MS = 72 * 60 * 60 * 1000; // 72시간
@@ -100,43 +100,30 @@ async function fetchHeadlines(name: string): Promise<string[]> {
   } catch { return []; }
 }
 
-// ── 3. Groq (소형 모델, 최소 토큰) ──────────────────────────────────────────────
-
-const MINI_SYSTEM = `주식 애널리스트 AI. 기술적 분석 신호와 뉴스 헤드라인을 종합해 다음 형식으로만 응답하세요:
-
-호재: [한 줄, 없으면 "특이사항 없음"]
-악재: [한 줄, 없으면 "특이사항 없음"]
-투자의견: [매수/중립/매도]
-리스크: [상/중/하]
-한 줄 요약: [30자 이내 핵심 판단]`;
+// ── 3. Gemini 분석 ────────────────────────────────────────────────────────────
 
 async function runMiniAnalysis(name: string, ticker: string, signal: RuleSignal, headlines: string[]) {
-  const groq = new Groq({ apiKey: process.env.GROQ_API_KEY ?? "" });
-
   const newsBlock = headlines.length > 0
-    ? `\n\n최근 뉴스:\n${headlines.slice(0, 4).map((h, i) => `${i + 1}. ${h}`).join("\n")}`
-    : "";
+    ? `\n최근 뉴스 (${headlines.length}건):\n${headlines.slice(0, 5).map((h, i) => `${i + 1}. ${h}`).join("\n")}`
+    : "\n최근 뉴스: 없음";
 
-  const userMsg = `종목: ${name}(${ticker})
+  const prompt = `당신은 주식 애널리스트입니다. 기술적 분석 신호와 최신 뉴스를 종합하여 투자의견을 제시하세요.
 
-기술적 분석 신호 (점수 ${signal.score > 0 ? "+" : ""}${signal.score}/6):
-- 긍정: ${signal.bullish.join(", ") || "없음"}
-- 부정: ${signal.bearish.join(", ") || "없음"}
-- 기술적 소견: ${signal.opinion}${newsBlock}
+종목: ${name} (${ticker})
+기술적 점수: ${signal.score > 0 ? "+" : ""}${signal.score}/6 (${signal.opinion})
+긍정 신호: ${signal.bullish.join(" · ") || "없음"}
+부정 신호: ${signal.bearish.join(" · ") || "없음"}
+${newsBlock}
 
-위를 종합하여 투자의견을 제시하세요.`;
+다음 형식으로 정확히 응답하세요 (각 항목은 반드시 포함):
 
-  const chat = await groq.chat.completions.create({
-    model: "llama-3.1-8b-instant", // 고속 소형 모델 (TPM 한도 5배 이상)
-    messages: [
-      { role: "system", content: MINI_SYSTEM },
-      { role: "user",   content: userMsg },
-    ],
-    max_tokens: 300,
-    temperature: 0.3,
-  });
+호재: [기술적 신호와 뉴스를 종합한 핵심 긍정 요인 1-2가지, 없으면 "특이사항 없음"]
+악재: [기술적 신호와 뉴스를 종합한 핵심 부정 요인 1-2가지, 없으면 "특이사항 없음"]
+투자의견: [매수/중립/매도 중 하나만]
+리스크: [상/중/하 중 하나만]
+한 줄 요약: [30자 이내 핵심 판단]`;
 
-  return chat.choices[0]?.message?.content ?? "";
+  return geminiGenerate(prompt, { model: "gemini-2.5-flash", temperature: 0.3, maxOutputTokens: 400 });
 }
 
 // ── 4. 응답 파싱 ──────────────────────────────────────────────────────────────

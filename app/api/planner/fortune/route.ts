@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import Groq from "groq-sdk";
-
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+import { geminiGenerateJson } from "@/lib/gemini";
 
 function todayStr() {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
@@ -65,24 +63,24 @@ export async function POST(req: NextRequest) {
     const [past, present, future] = cards;
     const questionLine = question ? `\n질문: "${question}"` : "\n(전반적인 운세 리딩)";
 
-    systemPrompt = `당신은 15년 경력의 타로 카드 전문 상담가입니다. 라이더-웨이트 타로 체계를 기반으로 해석하며, 각 카드의 상징, 수비학, 원소(불·물·바람·흙)를 깊이 있게 활용합니다. 상투적인 표현 없이 구체적이고 실질적인 통찰을 제공합니다.`;
+    systemPrompt = `당신은 20년 경력의 타로 카드 전문 상담가입니다. 라이더-웨이트 타로 체계를 기반으로 해석하며, 각 카드의 수비학(Numerology), 원소(불·물·바람·흙), 아르카나 계열이 전달하는 에너지를 정밀하게 읽어냅니다. 상투적 위로나 막연한 긍정 대신, 카드가 실제로 보여주는 상황과 그에 대한 구체적 행동 지침을 제공합니다. 어두운 카드도 솔직하게 해석하되, 그 안에 담긴 기회와 전환점을 함께 짚어주세요.`;
 
     userPrompt = `타로 3장 스프레드를 리딩해주세요.${questionLine}
 
 뽑힌 카드:
-- 과거(뿌리/원인): ${past}
-- 현재(핵심 에너지): ${present}
-- 미래(방향/결과): ${future}
+- 과거(뿌리/원인/씨앗): ${past}
+- 현재(핵심 에너지/도전): ${present}
+- 미래(방향/잠재적 결과): ${future}
 
 해석 지침:
-1. 각 카드의 위치별 의미를 2-3문장으로 구체적으로 해석하세요 (정방향·역방향 에너지 모두 고려)
-2. 3장 카드가 연결되는 스토리라인과 흐름을 보여주세요
-3. 질문이 있다면 질문에 집중하여 직접적인 답변을 제공하세요
-4. 각 카드마다 실용적인 행동 조언을 포함하세요
-5. 행운 색상과 숫자를 카드의 원소·수비학에서 도출하세요
+1. 각 카드가 해당 위치(과거/현재/미래)에서 갖는 의미를 구체적 상황으로 2-3문장 묘사 — 상징과 에너지를 현실 맥락과 연결하세요
+2. 3장 카드 사이의 흐름과 인과관계를 이어 하나의 서사로 만드세요 (과거의 원인이 현재를 만들고, 현재의 선택이 미래를 결정한다는 관점)
+3. 질문이 있다면 해당 질문에 대한 직접적이고 솔직한 답을 포함하세요
+4. 각 카드마다 "지금 당장 할 수 있는" 구체적 행동 조언 1가지를 포함하세요
+5. 행운 색상은 카드 원소(불=빨강/주황, 물=파랑/청록, 바람=노랑/흰색, 흙=초록/갈색)와 수비학에서 논리적으로 도출하세요
 
-JSON 형식으로 응답:
-{"cards":[{"position":"과거","name":"${past}","meaning":"이 위치에서의 구체적 해석 2-3문장","advice":"실용적 행동 조언"},{"position":"현재","name":"${present}","meaning":"이 위치에서의 구체적 해석 2-3문장","advice":"실용적 행동 조언"},{"position":"미래","name":"${future}","meaning":"이 위치에서의 구체적 해석 2-3문장","advice":"실용적 행동 조언"}],"overall":"3장의 흐름을 연결하는 스토리텔링 방식의 전체 요약 3-4문장","luckyColor":"카드 원소에서 도출한 행운 색상","luckyNumber":7}`;
+반드시 JSON 형식으로만 응답:
+{"cards":[{"position":"과거","name":"${past}","meaning":"이 위치에서의 구체적 상황 묘사 2-3문장","advice":"지금 당장 실행 가능한 행동 조언"},{"position":"현재","name":"${present}","meaning":"이 위치에서의 구체적 상황 묘사 2-3문장","advice":"지금 당장 실행 가능한 행동 조언"},{"position":"미래","name":"${future}","meaning":"이 위치에서의 구체적 상황 묘사 2-3문장","advice":"지금 당장 실행 가능한 행동 조언"}],"overall":"3장의 인과적 흐름과 핵심 메시지를 담은 스토리텔링 3-4문장","luckyColor":"카드 원소·수비학 근거 색상","luckyNumber":7}`;
 
   // ── 사주 ──────────────────────────────────────────────────────────────────
   } else if (type.startsWith("saju") && birthDate) {
@@ -105,9 +103,10 @@ JSON 형식으로 응답:
     systemPrompt = `당신은 30년 경력의 사주명리학 전문 상담가입니다. 음양오행(陰陽五行), 천간(天干), 지지(地支), 십신(十神), 육친(六親), 용신(用神), 격국(格局), 대운(大運), 세운(歲運) 이론을 정밀하게 활용합니다.
 분석 원칙:
 - 일간(日干)의 강약을 기반으로 모든 해석을 전개하세요
-- "노력하면 된다", "좋은 일이 있을 것입니다" 같은 상투어를 절대 사용하지 마세요
+- "노력하면 된다", "좋은 일이 있을 것입니다", "긍정적으로 생각하세요" 같은 공허한 상투어를 절대 사용하지 마세요
 - 오행 원리에 근거한 구체적이고 현실적인 조언을 제공하세요
-- 길흉을 솔직하게 전달하되, 극복 방법을 함께 제시하세요`;
+- 길흉을 솔직하게 전달하되, 극복 방법과 구체적 실천 시점을 함께 제시하세요
+- 각 분야(연애/재물/건강/직업)의 조언은 일간의 특성과 세운의 흐름을 반드시 연계하세요`;
 
     userPrompt = `다음 사주를 분석하여 ${periodLabel} 운세를 알려주세요.
 
@@ -142,7 +141,7 @@ JSON으로 응답:
     const genderLabel = gender === "male" ? "남성" : gender === "female" ? "여성" : null;
     const yearGanji = getYearGanji(currentYear);
 
-    systemPrompt = `당신은 사주명리학과 점성술에 정통한 운세 전문 상담가입니다. 생년월일을 바탕으로 일간(日干)과 오행을 추정하여 오늘의 개인화된 운세를 분석합니다. 상투적 표현 없이 구체적이고 실용적인 하루 지침을 제공합니다.`;
+    systemPrompt = `당신은 사주명리학과 동양 점술에 정통한 운세 전문 상담가입니다. 생년월일을 바탕으로 일간(日干)과 오행을 추정하여 오늘의 개인화된 운세를 분석합니다. "좋은 하루 되세요", "행복하세요" 같은 상투적 표현 없이, 오늘 하루 실제로 어떻게 행동하면 좋을지 구체적이고 실용적인 지침을 제공합니다. 주의사항도 솔직하게 전달하되 불안감이 아닌 대비책으로 표현하세요.`;
 
     const birthInfo = birthDate
       ? `\n- 생년월일: ${birthDate}${genderLabel ? ` (${genderLabel})` : ""}
@@ -169,18 +168,10 @@ JSON으로 응답:
   }
 
   try {
-    const completion = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      temperature: 0.85,
-      response_format: { type: "json_object" },
-    });
-
-    const text = completion.choices[0]?.message?.content ?? "{}";
-    const content = JSON.parse(text);
+    const content = await geminiGenerateJson<object>(
+      `${systemPrompt}\n\n---\n\n${userPrompt}`,
+      { temperature: 0.85, maxOutputTokens: 1500 }
+    );
 
     await prisma.fortuneCache.create({
       data: { userId: session.user.id, type, date, content },
@@ -188,7 +179,7 @@ JSON으로 응답:
 
     return NextResponse.json({ ...content, cached: false });
   } catch (e) {
-    console.error("Fortune Groq error:", e);
+    console.error("Fortune Gemini error:", e);
     return NextResponse.json({ error: "운세 생성 실패" }, { status: 500 });
   }
 }

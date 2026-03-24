@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import Groq from "groq-sdk";
+import { geminiGenerate } from "@/lib/gemini";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -89,44 +89,60 @@ export async function POST(req: NextRequest) {
   const avgFocusOverall =
     sessions.length > 0 ? Math.round(totalFocus / sessions.length) : 0;
 
-  const prompt = `당신은 전문 학습 코치입니다. 다음 최근 30일 학습 데이터를 분석하고 구체적이고 실용적인 조언을 제공하세요.
+  // 집중도 트렌드 계산 (전반부 vs 후반부 15일 비교)
+  const recentSessions = [...sessions].sort((a, b) => a.date.localeCompare(b.date));
+  const half = Math.floor(recentSessions.length / 2);
+  const firstHalf = recentSessions.slice(0, half);
+  const secondHalf = recentSessions.slice(half);
+  const firstAvgFocus = firstHalf.length > 0 ? firstHalf.reduce((s, r) => s + r.focusScore, 0) / firstHalf.length : 0;
+  const secondAvgFocus = secondHalf.length > 0 ? secondHalf.reduce((s, r) => s + r.focusScore, 0) / secondHalf.length : 0;
+  const focusTrend = secondAvgFocus > firstAvgFocus + 0.3 ? "상승" : secondAvgFocus < firstAvgFocus - 0.3 ? "하락" : "유지";
 
-[학습 데이터]
-- 총 학습 시간: ${totalMinutes}분 (${(totalMinutes / 60).toFixed(1)}시간)
+  // 가장 집중도 높은 요일
+  const dayFocusMap: Record<number, { total: number; count: number }> = {};
+  for (const s of sessions) {
+    const day = new Date(s.date).getDay();
+    if (!dayFocusMap[day]) dayFocusMap[day] = { total: 0, count: 0 };
+    dayFocusMap[day].total += s.focusScore;
+    dayFocusMap[day].count += 1;
+  }
+  const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
+  const bestDay = Object.entries(dayFocusMap).sort((a, b) => (b[1].total / b[1].count) - (a[1].total / a[1].count))[0];
+  const bestDayLabel = bestDay ? `${dayNames[Number(bestDay[0])]}요일 (평균 집중도 ${(bestDay[1].total / bestDay[1].count).toFixed(1)}/5)` : "데이터 없음";
+
+  const prompt = `당신은 데이터 기반 학습 코치입니다. 아래 30일 학습 통계를 심층 분석하고 실행 가능한 맞춤 조언을 제공하세요.
+
+[30일 종합 통계]
+- 총 학습 시간: ${totalMinutes}분 (${(totalMinutes / 60).toFixed(1)}시간 / 일평균 ${(totalMinutes / 30).toFixed(0)}분)
 - 평균 집중도: ${avgFocusOverall}/5
-- 세션 수: ${sessions.length}회
+- 총 세션 수: ${sessions.length}회 (평균 ${(totalMinutes / Math.max(sessions.length, 1)).toFixed(0)}분/세션)
+- 집중도 트렌드: 최근 15일이 이전 15일 대비 ${focusTrend} 중 (${firstAvgFocus.toFixed(1)} → ${secondAvgFocus.toFixed(1)})
+- 최고 집중 요일: ${bestDayLabel}
 
-[과목별 학습 현황]
+[과목별 현황]
 ${subjectSummary}
 
-[요일별 패턴]
+[요일별 학습량]
 ${dayPattern}
 
-다음 형식으로 분석해주세요:
+다음 형식으로 분석하세요. 각 항목은 데이터를 직접 인용하며 구체적으로 작성하세요:
 
 ## 강점
-현재 잘하고 있는 점 2-3가지
+데이터에서 확인된 잘하고 있는 점 2-3가지 (수치 포함)
 
 ## 개선 포인트
-구체적으로 개선이 필요한 부분 2-3가지
+데이터가 보여주는 문제점과 구체적 개선 방법 2-3가지
 
 ## 이번 주 추천 학습 계획
-요일별 구체적인 실행 계획
+현재 패턴을 반영한 요일별 실행 계획 (학습 시간·과목 배분 포함)
 
-## 집중도 향상 팁
-데이터 기반의 맞춤 조언
+## 집중도 향상 전략
+집중도 트렌드와 요일 패턴을 기반으로 한 맞춤 전략 2가지
 
-각 항목은 간결하게 2-3문장으로 작성하세요.`;
+각 항목은 2-3문장으로 간결하게 작성하세요. "열심히 하세요" 같은 추상적 격려 대신 구체적 수치와 방법론을 제시하세요.`;
 
   try {
-    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY ?? "" });
-    const chat = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
-      messages: [{ role: "user", content: prompt }],
-      max_tokens: 1200,
-    });
-
-    const text = chat.choices[0]?.message?.content ?? "";
+    const text = await geminiGenerate(prompt, { maxOutputTokens: 1200 });
 
     // 섹션 파싱
     const sections = text
