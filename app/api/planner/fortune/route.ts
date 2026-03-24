@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   const cached = await prisma.fortuneCache.findUnique({
     where: { userId_type_date: { userId: session.user.id, type, date } },
   });
-  if (cached) return NextResponse.json({ ...(cached.content as object), cached: true, date });
+  if (cached) return NextResponse.json({ ...(cached.content as object), cached: true, date, generatedAt: cached.createdAt.toISOString() });
 
   return NextResponse.json({ cached: false, date });
 }
@@ -177,7 +177,7 @@ JSON으로 응답:
       data: { userId: session.user.id, type, date, content },
     });
 
-    return NextResponse.json({ ...content, cached: false });
+    return NextResponse.json({ ...content, cached: false, generatedAt: new Date().toISOString() });
   } catch (e) {
     console.error("Fortune Gemini error:", e);
     return NextResponse.json({ error: "운세 생성 실패" }, { status: 500 });

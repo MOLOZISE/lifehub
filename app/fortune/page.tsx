@@ -19,6 +19,7 @@ interface FortuneData {
   advice?: string; caution?: string; luckyDirection?: string;
   cards?: Array<{ position: string; name: string; meaning: string; advice: string }>;
   cached?: boolean;
+  generatedAt?: string;
   // 사주 전문 필드
   ilgan?: string;
   oheng_summary?: string;
@@ -311,8 +312,13 @@ export default function FortunePage() {
                     <div className="flex items-center gap-2 mb-2">
                       <span className="text-lg">🌅</span>
                       <span className="font-semibold text-sm flex-1">{today} 오늘의 운세</span>
-                      {fortune.cached && <Badge variant="outline" className="text-[10px] text-muted-foreground">저장됨</Badge>}
                       {fortune.score && <Badge>{fortune.score}점</Badge>}
+                    </div>
+                    <div className="flex items-center gap-2 mb-2 text-[10px] text-muted-foreground">
+                      <span className="bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 px-1.5 py-0.5 rounded-md font-medium">Gemini AI</span>
+                      {fortune.generatedAt && (
+                        <span>{fortune.cached ? "캐시됨" : "방금 생성"} · {new Date(fortune.generatedAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                      )}
                     </div>
                     <p className="text-sm leading-relaxed">{fortune.overall}</p>
                   </CardContent>
@@ -340,6 +346,10 @@ export default function FortunePage() {
           {/* Tarot */}
           {fortuneKind === "tarot" && fortune.cards && (
             <>
+              <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                <span className="bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded-md font-medium">Gemini AI</span>
+                {fortune.generatedAt && <span>{fortune.cached ? "캐시됨" : "방금 생성"} · {new Date(fortune.generatedAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>}
+              </div>
               <div className="grid grid-cols-3 gap-2">
                 {fortune.cards.map((card, i) => (
                   <Card key={i} className="bg-gradient-to-b from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 border-amber-200 dark:border-amber-800">
@@ -363,6 +373,10 @@ export default function FortunePage() {
           {/* Saju */}
           {fortuneKind === "saju" && (
             <>
+              <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                <span className="bg-teal-100 dark:bg-teal-900/40 text-teal-600 dark:text-teal-400 px-1.5 py-0.5 rounded-md font-medium">Gemini AI</span>
+                {fortune.generatedAt && <span>{fortune.cached ? "캐시됨" : "방금 생성"} · {new Date(fortune.generatedAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>}
+              </div>
               {/* 일간·오행 요약 배너 */}
               {(fortune.ilgan || fortune.oheng_summary) && (
                 <div className="flex gap-2 flex-wrap">

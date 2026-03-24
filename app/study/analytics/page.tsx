@@ -290,11 +290,13 @@ export default function AnalyticsPage() {
       <Card>
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-sm flex items-center gap-2">
+            <CardTitle className="text-sm flex items-center gap-2 flex-wrap">
               🤖 AI 학습 조언
+              <span className="text-[10px] bg-orange-100 dark:bg-orange-900/40 text-orange-600 dark:text-orange-400 px-1.5 py-0.5 rounded-md font-medium">Groq AI</span>
+              <span className="text-[10px] text-muted-foreground font-normal">최근 30일 기준</span>
               {aiAdvice && (
                 <span className="text-[10px] text-muted-foreground font-normal">
-                  {new Date(aiAdvice.generatedAt).toLocaleString("ko-KR", {
+                  · {new Date(aiAdvice.generatedAt).toLocaleString("ko-KR", {
                     month: "short",
                     day: "numeric",
                     hour: "2-digit",
@@ -343,7 +345,7 @@ export default function AnalyticsPage() {
             <div className="space-y-4">
               {aiAdvice.sections.map((sec, i) => (
                 <div key={i} className="bg-muted/30 rounded-xl p-3">
-                  <p className="text-xs font-semibold mb-1.5">## {sec.title}</p>
+                  <p className="text-xs font-semibold mb-1.5">{sec.title}</p>
                   <p className="text-sm text-muted-foreground whitespace-pre-line leading-relaxed">
                     {sec.content}
                   </p>

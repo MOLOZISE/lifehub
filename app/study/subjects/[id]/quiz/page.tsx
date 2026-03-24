@@ -60,6 +60,7 @@ export default function QuizPage() {
   // AI generation
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiCount, setAiCount] = useState(5);
+  const [aiLastGenerated, setAiLastGenerated] = useState<{ count: number; at: Date } | null>(null);
 
   // Add form
   const [addType, setAddType] = useState<QuestionType>("multiple");
@@ -224,6 +225,7 @@ export default function QuizPage() {
       const data = await res.json();
       if (!res.ok) { toast.error(data.error ?? "AI 생성 실패"); return; }
       setQuestions(prev => [...prev, ...data.questions]);
+      setAiLastGenerated({ count: data.questions.length, at: new Date() });
       toast.success(`${data.questions.length}개 문제가 생성됐습니다!`);
     } finally {
       setAiGenerating(false);
@@ -395,19 +397,26 @@ export default function QuizPage() {
         <h2 className="font-semibold">{subject?.emoji} {subject?.name} — 문제풀이</h2>
         <div className="ml-auto flex gap-2 flex-wrap justify-end">
           {/* AI 생성 */}
-          <div className="flex items-center gap-1 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-lg px-2 py-1">
-            <Sparkles className="w-3.5 h-3.5 text-purple-500 shrink-0" />
-            <select
-              value={aiCount}
-              onChange={e => setAiCount(Number(e.target.value))}
-              className="text-xs bg-transparent outline-none text-purple-700 dark:text-purple-300 w-12"
-              disabled={aiGenerating}
-            >
-              {[3, 5, 7, 10].map(n => <option key={n} value={n}>{n}개</option>)}
-            </select>
-            <Button size="sm" variant="ghost" className="h-6 text-xs text-purple-700 dark:text-purple-300 px-2 hover:bg-purple-100 dark:hover:bg-purple-900" onClick={handleAiGenerate} disabled={aiGenerating}>
-              {aiGenerating ? <><RotateCcw className="w-3 h-3 animate-spin mr-1" />생성 중...</> : "AI 생성"}
-            </Button>
+          <div className="flex flex-col items-end gap-0.5">
+            <div className="flex items-center gap-1 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-lg px-2 py-1">
+              <Sparkles className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+              <select
+                value={aiCount}
+                onChange={e => setAiCount(Number(e.target.value))}
+                className="text-xs bg-transparent outline-none text-purple-700 dark:text-purple-300 w-12"
+                disabled={aiGenerating}
+              >
+                {[3, 5, 7, 10].map(n => <option key={n} value={n}>{n}개</option>)}
+              </select>
+              <Button size="sm" variant="ghost" className="h-6 text-xs text-purple-700 dark:text-purple-300 px-2 hover:bg-purple-100 dark:hover:bg-purple-900" onClick={handleAiGenerate} disabled={aiGenerating}>
+                {aiGenerating ? <><RotateCcw className="w-3 h-3 animate-spin mr-1" />생성 중...</> : "AI 생성"}
+              </Button>
+            </div>
+            {aiLastGenerated && (
+              <span className="text-[10px] text-muted-foreground">
+                Groq AI · {aiLastGenerated.count}개 생성 · {aiLastGenerated.at.toLocaleString("ko-KR", { hour: "2-digit", minute: "2-digit" })}
+              </span>
+            )}
           </div>
           <label className="cursor-pointer">
             <Button variant="outline" size="sm"><Upload className="w-3.5 h-3.5 mr-1" />CSV</Button>

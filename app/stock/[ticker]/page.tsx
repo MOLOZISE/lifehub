@@ -221,6 +221,7 @@ export default function StockDetailPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="font-semibold text-sm">🤖 AI 분석</h2>
+              <span className="text-[10px] bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded-md font-medium">Gemini 2.5 Flash</span>
               {ai?.analyzedAt && (
                 <span className="text-[10px] text-muted-foreground">
                   {new Date(ai.analyzedAt).toLocaleString("ko-KR", { month:"numeric", day:"numeric", hour:"2-digit", minute:"2-digit" })} 기준
@@ -228,7 +229,7 @@ export default function StockDetailPage() {
               )}
               {ai?.stale && (
                 <span className="text-[10px] bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 px-1.5 py-0.5 rounded-md">
-                  오래된 분석
+                  72시간 경과 · 갱신 권장
                 </span>
               )}
             </div>
