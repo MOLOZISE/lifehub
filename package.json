@@ -14,7 +14,7 @@
     "@anthropic-ai/sdk": "^0.78.0",
     "@auth/prisma-adapter": "^2.11.1",
     "@base-ui/react": "^1.2.0",
-    "@google/generative-ai": "^0.24.1",
+    "@google/genai": "^1.0.0",
     "@prisma/adapter-pg": "^7.5.0",
     "@prisma/client": "^7.5.0",
     "@supabase/supabase-js": "^2.99.1",

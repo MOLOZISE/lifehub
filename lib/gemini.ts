@@ -5,16 +5,15 @@
  *   (하나만 쓸 경우 GEMINI_API_KEY_1 만 등록해도 됨)
  */
 
-import { GoogleGenerativeAI, type GenerativeModel, type GenerationConfig } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 
 // 등록된 API 키 목록
 export function getGeminiKeys(): string[] {
-  const keys = [
+  return [
     process.env.GEMINI_API_KEY_1,
     process.env.GEMINI_API_KEY_2,
     process.env.GEMINI_API_KEY_3,
   ].filter((k): k is string => !!k && k.length > 10);
-  return keys;
 }
 
 export function hasGeminiKey(): boolean {
@@ -33,40 +32,37 @@ export function nextGeminiKey(): string {
   return key;
 }
 
-/** 라운드로빈 키로 GenerativeModel 반환 */
-export function getGeminiModel(
-  modelName = "gemini-1.5-flash", // 무료 플랜 기본 모델 (2.0-flash는 무료 미지원)
-  generationConfig?: GenerationConfig
-): GenerativeModel {
-  const key = nextGeminiKey();
-  const genAI = new GoogleGenerativeAI(key);
-  return genAI.getGenerativeModel({ model: modelName, generationConfig });
-}
-
 /** 간단한 텍스트 생성 헬퍼 */
 export async function geminiGenerate(
   prompt: string,
-  opts?: { model?: string; temperature?: number; maxOutputTokens?: number }
+  opts?: { model?: string; temperature?: number; maxOutputTokens?: number; key?: string }
 ): Promise<string> {
-  const model = getGeminiModel(opts?.model ?? "gemini-1.5-flash", {
-    temperature: opts?.temperature ?? 0.7,
-    maxOutputTokens: opts?.maxOutputTokens ?? 2048,
+  const ai = new GoogleGenAI({ apiKey: opts?.key ?? nextGeminiKey() });
+  const response = await ai.models.generateContent({
+    model: opts?.model ?? "gemini-2.0-flash",
+    contents: prompt,
+    config: {
+      temperature: opts?.temperature ?? 0.7,
+      maxOutputTokens: opts?.maxOutputTokens ?? 2048,
+    },
   });
-  const result = await model.generateContent(prompt);
-  return result.response.text();
+  return response.text ?? "";
 }
 
 /** JSON 구조화 응답 헬퍼 */
 export async function geminiGenerateJson<T = unknown>(
   prompt: string,
-  opts?: { model?: string; temperature?: number; maxOutputTokens?: number }
+  opts?: { model?: string; temperature?: number; maxOutputTokens?: number; key?: string }
 ): Promise<T> {
-  const model = getGeminiModel(opts?.model ?? "gemini-1.5-flash", {
-    temperature: opts?.temperature ?? 0.7,
-    maxOutputTokens: opts?.maxOutputTokens ?? 2048,
-    responseMimeType: "application/json",
+  const ai = new GoogleGenAI({ apiKey: opts?.key ?? nextGeminiKey() });
+  const response = await ai.models.generateContent({
+    model: opts?.model ?? "gemini-2.0-flash",
+    contents: prompt,
+    config: {
+      temperature: opts?.temperature ?? 0.7,
+      maxOutputTokens: opts?.maxOutputTokens ?? 2048,
+      responseMimeType: "application/json",
+    },
   });
-  const result = await model.generateContent(prompt);
-  const text = result.response.text();
-  return JSON.parse(text) as T;
+  return JSON.parse(response.text ?? "{}") as T;
 }

@@ -1,18 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { getGeminiKeys, getGeminiModel, hasGeminiKey } from "@/lib/gemini";
+import { GoogleGenAI } from "@google/genai";
+import { getGeminiKeys, geminiGenerate, geminiGenerateJson, hasGeminiKey } from "@/lib/gemini";
 
 export const maxDuration = 30;
 
 // 무료 플랜에서 시도할 후보 모델 목록 (우선순위 순)
 const PROBE_MODELS = [
+  "gemini-2.0-flash",
+  "gemini-2.0-flash-lite",
+  "gemini-2.0-flash-exp",
   "gemini-1.5-flash",
   "gemini-1.5-flash-latest",
-  "gemini-1.5-flash-001",
-  "gemini-1.5-flash-002",
   "gemini-1.5-flash-8b",
-  "gemini-1.5-flash-8b-001",
   "gemini-1.5-pro",
   "gemini-1.0-pro",
   "gemini-pro",
@@ -62,14 +62,17 @@ export async function POST(req: NextRequest) {
     if (type === "probe") {
       // ── 사용 가능한 모델 자동 탐지 ────────────────────────────────────────
       const key = getGeminiKeys()[0];
-      const genAI = new GoogleGenerativeAI(key);
+      const ai = new GoogleGenAI({ apiKey: key });
       const results = await Promise.all(
         PROBE_MODELS.map(async (modelName) => {
           const t1 = Date.now();
           try {
-            const m = genAI.getGenerativeModel({ model: modelName, generationConfig: { maxOutputTokens: 20 } });
-            const r = await m.generateContent("OK");
-            return { model: modelName, ok: true, latencyMs: Date.now() - t1, text: r.response.text().slice(0, 40) };
+            const r = await ai.models.generateContent({
+              model: modelName,
+              contents: "OK",
+              config: { maxOutputTokens: 20 },
+            });
+            return { model: modelName, ok: true, latencyMs: Date.now() - t1, text: (r.text ?? "").slice(0, 40) };
           } catch (e) {
             const msg = String(e);
             const code = msg.includes("404") ? "404" : msg.includes("429") ? "429" : msg.includes("403") ? "403" : "ERR";
@@ -81,27 +84,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, type, results, working, totalMs: Date.now() - t0 });
 
     } else {
-      // ── 기능 테스트 (모델명은 probe로 확인한 것 or 기본값) ──────────────
-      const modelName = overrideModel ?? "gemini-1.5-flash";
+      // ── 기능 테스트 ──────────────────────────────────────────────────────
+      const modelName = overrideModel ?? "gemini-2.0-flash";
 
       if (type === "basic") {
-        const model = getGeminiModel(modelName, { temperature: 0.5, maxOutputTokens: 200 });
-        const result = await model.generateContent("안녕하세요! 한국어로 LifeHub 앱을 소개하는 한 문장을 작성해주세요.");
-        return NextResponse.json({ ok: true, type, result: result.response.text(), latencyMs: Date.now() - t0, model: modelName });
+        const result = await geminiGenerate(
+          "안녕하세요! 한국어로 LifeHub 앱을 소개하는 한 문장을 작성해주세요.",
+          { model: modelName, temperature: 0.5, maxOutputTokens: 200 }
+        );
+        return NextResponse.json({ ok: true, type, result, latencyMs: Date.now() - t0, model: modelName });
 
       } else if (type === "fortune") {
-        const model = getGeminiModel(modelName, { temperature: 0.85, maxOutputTokens: 512, responseMimeType: "application/json" });
         const prompt = `오늘의 간단한 운세를 JSON으로 생성해주세요.
 형식: {"overall":"전체 운세 1문장","score":85,"luckyColor":"행운 색상","luckyNumber":7,"advice":"오늘의 한마디"}`;
-        const result = await model.generateContent(prompt);
-        const text = result.response.text();
-        return NextResponse.json({ ok: true, type, result: JSON.parse(text), raw: text, latencyMs: Date.now() - t0, model: modelName });
+        const result = await geminiGenerateJson<unknown>(prompt, { model: modelName, temperature: 0.85, maxOutputTokens: 512 });
+        return NextResponse.json({ ok: true, type, result, latencyMs: Date.now() - t0, model: modelName });
 
       } else if (type === "study") {
-        const model = getGeminiModel(modelName, { temperature: 0.6, maxOutputTokens: 400 });
-        const prompt = `학습 코치로서, 하루 2시간씩 30일 공부한 학생에게 짧은 동기부여 메시지와 개선 팁 2가지를 한국어로 제공해주세요.`;
-        const result = await model.generateContent(prompt);
-        return NextResponse.json({ ok: true, type, result: result.response.text(), latencyMs: Date.now() - t0, model: modelName });
+        const result = await geminiGenerate(
+          "학습 코치로서, 하루 2시간씩 30일 공부한 학생에게 짧은 동기부여 메시지와 개선 팁 2가지를 한국어로 제공해주세요.",
+          { model: modelName, temperature: 0.6, maxOutputTokens: 400 }
+        );
+        return NextResponse.json({ ok: true, type, result, latencyMs: Date.now() - t0, model: modelName });
 
       } else if (type === "multikey") {
         const keys = getGeminiKeys();
@@ -109,10 +113,13 @@ export async function POST(req: NextRequest) {
           keys.map(async (key, idx) => {
             const t1 = Date.now();
             try {
-              const genAI = new GoogleGenerativeAI(key);
-              const m = genAI.getGenerativeModel({ model: modelName, generationConfig: { temperature: 0.3, maxOutputTokens: 50 } });
-              const r = await m.generateContent(`키 ${idx + 1} 테스트: "OK" 라고만 답해주세요.`);
-              return { slot: idx + 1, ok: true, latencyMs: Date.now() - t1, text: r.response.text().trim() };
+              const ai = new GoogleGenAI({ apiKey: key });
+              const r = await ai.models.generateContent({
+                model: modelName,
+                contents: `키 ${idx + 1} 테스트: "OK" 라고만 답해주세요.`,
+                config: { temperature: 0.3, maxOutputTokens: 50 },
+              });
+              return { slot: idx + 1, ok: true, latencyMs: Date.now() - t1, text: (r.text ?? "").trim() };
             } catch (e) {
               return { slot: idx + 1, ok: false, latencyMs: Date.now() - t1, error: String(e).slice(0, 100) };
             }
