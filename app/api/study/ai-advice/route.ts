@@ -106,7 +106,6 @@ export async function POST(req: NextRequest) {
     dayFocusMap[day].total += s.focusScore;
     dayFocusMap[day].count += 1;
   }
-  const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
   const bestDay = Object.entries(dayFocusMap).sort((a, b) => (b[1].total / b[1].count) - (a[1].total / a[1].count))[0];
   const bestDayLabel = bestDay ? `${dayNames[Number(bestDay[0])]}요일 (평균 집중도 ${(bestDay[1].total / bestDay[1].count).toFixed(1)}/5)` : "데이터 없음";
 
