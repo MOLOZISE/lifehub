@@ -1236,6 +1236,7 @@ export default function StockPage() {
     } catch { /* 무시 */ }
   }
 
+  // KR 단독 새로고침 버튼용
   async function loadKrPrices(selectedKr?: string[]) {
     setKrLoading(true);
     const kr = selectedKr ?? popularKrTickers;
@@ -1247,6 +1248,7 @@ export default function StockPage() {
     } finally { setKrLoading(false); }
   }
 
+  // US 단독 새로고침 버튼용
   async function loadUsPrices(selectedUs?: string[]) {
     setUsLoading(true);
     const us = selectedUs ?? popularUsTickers;
@@ -1258,8 +1260,29 @@ export default function StockPage() {
     } finally { setUsLoading(false); }
   }
 
+  // KR+US 합쳐서 단일 HTTP 요청으로 처리 (초기 로딩 / 전체 새로고침용)
   async function loadPopularPrices(selectedKr?: string[], selectedUs?: string[]) {
-    await Promise.all([loadKrPrices(selectedKr), loadUsPrices(selectedUs)]);
+    const kr = selectedKr ?? popularKrTickers;
+    const us = selectedUs ?? popularUsTickers;
+    const krTickers = ALL_POPULAR_KR.filter(s => kr.includes(s.ticker)).map(s => `${s.ticker}.KS`);
+    const usTickers = ALL_POPULAR_US.filter(s => us.includes(s.ticker)).map(s => s.ticker);
+    const combined = [...krTickers, ...usTickers].join(",");
+    if (!combined) return;
+    setKrLoading(true);
+    setUsLoading(true);
+    try {
+      const res = await fetch(`/api/stock/price?tickers=${encodeURIComponent(combined)}`);
+      if (res.ok) {
+        const d = await res.json();
+        const prices = d.prices ?? {};
+        setKrPrices(prices); // krPrices[ticker+".KS"] 로 룩업
+        setUsPrices(prices); // usPrices[ticker] 로 룩업
+      }
+      setPriceLastUpdate(new Date());
+    } finally {
+      setKrLoading(false);
+      setUsLoading(false);
+    }
   }
 
   function refreshAll() {
