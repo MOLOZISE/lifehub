@@ -25,33 +25,45 @@ interface RankItem {
   currency: string;
 }
 
+// v7/finance/quote는 crumb 인증이 필요해 서버에서 자주 막힘
+// v8/finance/chart는 crumb 없이도 동작 — 심볼별 병렬 호출로 대체
+async function fetchOneChart(symbol: string): Promise<RankItem | null> {
+  try {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1d&interval=1d&includePrePost=false`;
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8",
+      },
+      next: { revalidate: 300 },
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const meta = data?.chart?.result?.[0]?.meta;
+    if (!meta || !meta.regularMarketPrice) return null;
+    const price = meta.regularMarketPrice as number;
+    const prevClose = (meta.chartPreviousClose ?? meta.previousClose ?? price) as number;
+    const change = price - prevClose;
+    const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
+    return {
+      ticker: symbol.replace(".KS", ""),
+      name: (meta.longName ?? meta.shortName ?? symbol) as string,
+      price: Math.round(price * 100) / 100,
+      change: Math.round(change * 100) / 100,
+      changePercent: Math.round(changePercent * 100) / 100,
+      volume: (meta.regularMarketVolume ?? 0) as number,
+      currency: (meta.currency ?? "USD") as string,
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function fetchQuotes(symbols: string[]): Promise<RankItem[]> {
-  const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols.join(",")}&fields=shortName,regularMarketPrice,regularMarketChange,regularMarketChangePercent,regularMarketVolume,currency`;
-  const res = await fetch(url, {
-    headers: { "User-Agent": "Mozilla/5.0" },
-    next: { revalidate: 300 },
-  });
-  if (!res.ok) return [];
-  const data = await res.json() as {
-    quoteResponse?: { result?: Array<{
-      symbol: string; shortName?: string; longName?: string;
-      regularMarketPrice?: number; regularMarketChange?: number;
-      regularMarketChangePercent?: number; regularMarketVolume?: number;
-      currency?: string;
-    }> };
-  };
-  const results = data?.quoteResponse?.result ?? [];
-  return results
-    .filter(r => r.regularMarketPrice != null)
-    .map(r => ({
-      ticker: r.symbol.replace(".KS", ""),
-      name: r.shortName ?? r.longName ?? r.symbol,
-      price: r.regularMarketPrice ?? 0,
-      change: r.regularMarketChange ?? 0,
-      changePercent: r.regularMarketChangePercent ?? 0,
-      volume: r.regularMarketVolume ?? 0,
-      currency: r.currency ?? "USD",
-    }));
+  const results = await Promise.all(symbols.map(fetchOneChart));
+  return results.filter((r): r is RankItem => r !== null);
 }
 
 export async function GET(req: NextRequest) {

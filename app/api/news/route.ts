@@ -101,7 +101,15 @@ async function fetchRss(feed: { url: string; name: string }, category: string): 
       signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) return [];
-    const xml = await res.text();
+
+    // arrayBuffer로 받아 인코딩을 직접 처리 (연합뉴스 등 EUC-KR RSS 대응)
+    const buffer = await res.arrayBuffer();
+    const ct = res.headers.get("content-type") ?? "";
+    // Content-Type 헤더의 charset 확인, 없으면 XML 선언 앞부분을 ASCII로 미리 읽어 확인
+    const preview = new TextDecoder("ascii", { fatal: false }).decode(new Uint8Array(buffer).slice(0, 200));
+    const isEucKr = /euc-kr|ks_c_5601|euc_kr/i.test(ct) || /encoding=["']EUC-KR["']/i.test(preview);
+    const xml = new TextDecoder(isEucKr ? "euc-kr" : "utf-8").decode(buffer);
+
     return parseRss(xml, feed.name, category);
   } catch {
     return [];
