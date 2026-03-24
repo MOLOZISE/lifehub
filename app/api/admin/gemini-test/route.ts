@@ -5,17 +5,15 @@ import { getGeminiKeys, geminiGenerate, geminiGenerateJson, hasGeminiKey } from 
 
 export const maxDuration = 30;
 
-// 무료 플랜에서 시도할 후보 모델 목록 (우선순위 순)
+// 실제 API에서 확인된 후보 모델 목록 (우선순위 순)
 const PROBE_MODELS = [
   "gemini-2.0-flash",
   "gemini-2.0-flash-lite",
-  "gemini-2.0-flash-exp",
-  "gemini-1.5-flash",
-  "gemini-1.5-flash-latest",
-  "gemini-1.5-flash-8b",
-  "gemini-1.5-pro",
-  "gemini-1.0-pro",
-  "gemini-pro",
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
+  "gemini-2.5-pro",
+  "gemini-flash-latest",
+  "gemini-flash-lite-latest",
 ];
 
 // 관리자 체크
@@ -63,23 +61,22 @@ export async function POST(req: NextRequest) {
       // ── 사용 가능한 모델 자동 탐지 ────────────────────────────────────────
       const key = getGeminiKeys()[0];
       const ai = new GoogleGenAI({ apiKey: key });
-      const results = await Promise.all(
-        PROBE_MODELS.map(async (modelName) => {
-          const t1 = Date.now();
-          try {
-            const r = await ai.models.generateContent({
-              model: modelName,
-              contents: "OK",
-              config: { maxOutputTokens: 20 },
-            });
-            return { model: modelName, ok: true, latencyMs: Date.now() - t1, text: (r.text ?? "").slice(0, 40) };
-          } catch (e) {
-            const msg = String(e);
-            const code = msg.includes("404") ? "404" : msg.includes("429") ? "429" : msg.includes("403") ? "403" : "ERR";
-            return { model: modelName, ok: false, latencyMs: Date.now() - t1, code, error: msg.slice(0, 120) };
-          }
-        })
-      );
+      const results = [];
+      for (const modelName of PROBE_MODELS) {
+        const t1 = Date.now();
+        try {
+          const r = await ai.models.generateContent({
+            model: modelName,
+            contents: "OK",
+            config: { maxOutputTokens: 20 },
+          });
+          results.push({ model: modelName, ok: true, latencyMs: Date.now() - t1, text: (r.text ?? "").slice(0, 40) });
+        } catch (e) {
+          const msg = String(e);
+          const code = msg.includes("404") ? "404" : msg.includes("429") ? "429" : msg.includes("403") ? "403" : "ERR";
+          results.push({ model: modelName, ok: false, latencyMs: Date.now() - t1, code, error: msg.slice(0, 120) });
+        }
+      }
       const working = results.filter(r => r.ok).map(r => r.model);
       return NextResponse.json({ ok: true, type, results, working, totalMs: Date.now() - t0 });
 
