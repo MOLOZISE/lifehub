@@ -278,7 +278,7 @@ export default function AdminExamsPage() {
               <p className="text-xs font-medium">시험 종류 연결</p>
               <Select
                 value={form.examTypeId || "_none"}
-                onValueChange={v => setForm(f => ({ ...f, examTypeId: v === "_none" ? "" : v }))}
+                onValueChange={(v: string) => setForm(f => ({ ...f, examTypeId: v === "_none" ? "" : v }))}
               >
                 <SelectTrigger className="h-9">
                   <span>{examTypes.find(t => t.id === form.examTypeId)?.name ?? "연결 안 함"}</span>
