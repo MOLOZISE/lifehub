@@ -64,6 +64,7 @@ function parseRss(xml: string, sourceName: string, category: string): NewsArticl
     const pubDate = extractTag(block, "pubDate");
     if (!title || !link) continue;
     if (isJunkArticle(title)) continue;
+    items.push({
       title:       cleanHtml(title),
       url:         link.trim(),
       source:      sourceName,
