@@ -36,9 +36,13 @@ const RSS_FEEDS: Record<string, { url: string; name: string }[]> = {
   sports: [
     { url: "https://www.yonhapnews.co.kr/RSS/sports.xml",        name: "연합뉴스" },
     { url: "https://rss.hankyung.com/sports.xml",                name: "한국경제" },
+    { url: "https://sports.chosun.com/news/rss/rss.htm",         name: "스포츠조선" },
+    { url: "https://www.hani.co.kr/rss/sports/",                 name: "한겨레" },
   ],
   world: [
     { url: "https://www.yonhapnews.co.kr/RSS/international.xml", name: "연합뉴스" },
+    { url: "https://www.hani.co.kr/rss/international/",          name: "한겨레" },
+    { url: "https://www.chosun.com/arc/outboundfeeds/rss/category/international/", name: "조선일보" },
   ],
 };
 
@@ -47,9 +51,18 @@ const TAVILY_QUERIES: Record<string, string> = {
   economy:  "오늘 경제 주식 금융 뉴스",
   society:  "오늘 사회 정치 뉴스 한국",
   tech:     "오늘 IT 기술 AI 뉴스",
-  sports:   "오늘 스포츠 축구 야구 뉴스",
-  world:    "오늘 국제 세계 뉴스",
+  sports:   "오늘 한국 스포츠 축구 야구 농구 뉴스",
+  world:    "오늘 국제 세계 뉴스 한국어",
 };
+
+// Tavily에 한국 뉴스 도메인만 포함
+const KOREAN_NEWS_DOMAINS = [
+  "yonhapnews.co.kr", "yna.co.kr", "chosun.com", "hani.co.kr",
+  "mk.co.kr", "hankyung.com", "joongang.co.kr", "joins.com",
+  "donga.com", "sbs.co.kr", "kbs.co.kr", "mbc.co.kr",
+  "etnews.com", "zdnet.co.kr", "bloter.net", "newsis.com",
+  "news1.kr", "ohmynews.com", "khan.co.kr", "kmib.co.kr",
+];
 
 // ── 간단한 RSS XML 파서 ────────────────────────────────────────────────────────
 function parseRss(xml: string, sourceName: string, category: string): NewsArticle[] {
@@ -142,6 +155,7 @@ async function fetchTavily(query: string, category: string): Promise<NewsArticle
       includeAnswer: false,
       days: 1,
       topic: "news",
+      includeDomains: KOREAN_NEWS_DOMAINS,
     } as Parameters<typeof client.search>[1]);
     return (result.results ?? [])
       .filter(r => r.title && !isJunkArticle(r.title))
