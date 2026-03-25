@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, RotateCcw, Zap } from "lucide-react";
+import { Loader2, RotateCcw, Zap, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { toast } from "sonner";
 
-type FortuneKind = "daily" | "tarot" | "saju";
+type FortuneKind = "daily" | "tarot" | "saju" | "history";
 type SajuPeriod = "today" | "month" | "year" | "custom";
 
 interface FortuneData {
@@ -23,6 +23,25 @@ interface FortuneData {
   // 사주 전문 필드
   ilgan?: string;
   oheng_summary?: string;
+}
+
+interface HistoryRecord {
+  id: string; type: string; date: string;
+  content: FortuneData;
+  createdAt: string;
+}
+
+function typeLabel(type: string) {
+  if (type === "daily") return "오늘 운세";
+  if (type === "tarot" || type.startsWith("tarot")) return "타로";
+  if (type.startsWith("saju")) return "사주";
+  return type;
+}
+
+function typeEmoji(type: string) {
+  if (type === "daily") return "🌅";
+  if (type === "tarot" || type.startsWith("tarot")) return "🃏";
+  return "☯️";
 }
 
 const TAROT_DECK = [
@@ -61,6 +80,12 @@ export default function FortunePage() {
   const [fortune, setFortune] = useState<FortuneData | null>(null);
   const [fortuneLoading, setFortuneLoading] = useState(false);
 
+  // History tab state
+  const [historyMonth, setHistoryMonth] = useState(today.slice(0, 7));
+  const [historyGrouped, setHistoryGrouped] = useState<Record<string, HistoryRecord[]>>({});
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [expandedRecord, setExpandedRecord] = useState<string | null>(null);
+
   // Tarot state
   const [deckShuffled, setDeckShuffled] = useState<string[]>([]);
   const [pickedCards, setPickedCards] = useState<string[]>([]);
@@ -76,9 +101,20 @@ export default function FortunePage() {
     }).catch(() => {});
   }, []);
 
+  // 기록 탭 로드
+  useEffect(() => {
+    if (fortuneKind !== "history") return;
+    setHistoryLoading(true);
+    fetch(`/api/fortune/history?month=${historyMonth}`)
+      .then(r => r.json())
+      .then(d => setHistoryGrouped(d.grouped ?? {}))
+      .catch(() => {})
+      .finally(() => setHistoryLoading(false));
+  }, [fortuneKind, historyMonth]);
+
   // 탭 전환 시 오늘 캐시 자동 로드 (daily / saju 오늘)
   useEffect(() => {
-    if (fortuneKind === "tarot") return; // 타로는 카드 선택이 필요하므로 자동 로드 안 함
+    if (fortuneKind === "tarot" || fortuneKind === "history") return; // 타로/기록 탭은 자동 로드 안 함
     const cacheKey = fortuneKind === "saju" ? `saju_${today}` : "daily";
     setFortune(null);
     fetch(`/api/planner/fortune?type=${cacheKey}`)
@@ -141,7 +177,7 @@ export default function FortunePage() {
 
       {/* Kind tabs */}
       <div className="flex gap-1 bg-muted/50 rounded-xl p-1 text-xs">
-        {([{k:"daily",l:"🌅 오늘 운세"},{k:"tarot",l:"🃏 타로"},{k:"saju",l:"☯️ 사주"}] as {k:FortuneKind,l:string}[]).map(({k,l}) => (
+        {([{k:"daily",l:"🌅 오늘"},{k:"tarot",l:"🃏 타로"},{k:"saju",l:"☯️ 사주"},{k:"history",l:"📋 기록"}] as {k:FortuneKind,l:string}[]).map(({k,l}) => (
           <button key={k} onClick={() => { setFortuneKind(k); setFortune(null); }}
             className={`flex-1 py-1.5 rounded-lg font-medium transition-all ${fortuneKind===k?"bg-background shadow-sm text-foreground":"text-muted-foreground hover:text-foreground"}`}>
             {l}
@@ -149,8 +185,106 @@ export default function FortunePage() {
         ))}
       </div>
 
+      {/* ── 기록 탭 ── */}
+      {fortuneKind === "history" && (
+        <div className="space-y-3">
+          {/* 월 선택 */}
+          <div className="flex items-center gap-2">
+            <input type="month" value={historyMonth}
+              onChange={e => setHistoryMonth(e.target.value)}
+              className="h-8 text-sm bg-transparent border border-input rounded px-2 py-1" />
+            <span className="text-xs text-muted-foreground">조회 월</span>
+          </div>
+
+          {historyLoading && (
+            <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+          )}
+
+          {!historyLoading && Object.keys(historyGrouped).length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-8">이 달에 조회한 운세 기록이 없어요</p>
+          )}
+
+          {!historyLoading && Object.entries(historyGrouped)
+            .sort(([a], [b]) => b.localeCompare(a))
+            .map(([date, records]) => (
+              <div key={date} className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground">{date.replace(/-/g, ". ")}</p>
+                {records.map(rec => {
+                  const isExpanded = expandedRecord === rec.id;
+                  const c = rec.content;
+                  return (
+                    <Card key={rec.id} className="border border-purple-100 dark:border-purple-900/40">
+                      <CardContent className="p-3 space-y-2">
+                        {/* 헤더 */}
+                        <button className="w-full flex items-center justify-between"
+                          onClick={() => setExpandedRecord(isExpanded ? null : rec.id)}>
+                          <div className="flex items-center gap-2">
+                            <span className="text-base">{typeEmoji(rec.type)}</span>
+                            <div className="text-left">
+                              <p className="text-xs font-semibold">{typeLabel(rec.type)}</p>
+                              {c.overall && <p className="text-[11px] text-muted-foreground line-clamp-1 max-w-[240px]">{c.overall}</p>}
+                            </div>
+                          </div>
+                          {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground shrink-0" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
+                        </button>
+
+                        {/* 펼침 상세 */}
+                        {isExpanded && (
+                          <div className="space-y-2 pt-1 border-t border-muted">
+                            {c.ilgan && <p className="text-xs text-purple-600 dark:text-purple-400 font-medium">{c.ilgan}</p>}
+                            {c.oheng_summary && <p className="text-xs text-muted-foreground">{c.oheng_summary}</p>}
+                            {c.overall && <p className="text-sm leading-relaxed">{c.overall}</p>}
+                            {c.score != null && (
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 h-1.5 bg-muted rounded-full">
+                                  <div className="h-full bg-purple-400 rounded-full" style={{ width: `${c.score}%` }} />
+                                </div>
+                                <span className="text-xs font-medium text-purple-600">{c.score}점</span>
+                              </div>
+                            )}
+                            {c.categories && (
+                              <div className="grid grid-cols-2 gap-1.5">
+                                {Object.entries(c.categories).map(([k, v]) => (
+                                  <div key={k} className="bg-muted/40 rounded-lg p-2">
+                                    <p className="text-[10px] text-muted-foreground font-medium mb-0.5">{k}</p>
+                                    <p className="text-xs leading-relaxed">{v}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {c.cards && (
+                              <div className="space-y-2">
+                                {c.cards.map(card => (
+                                  <div key={card.position} className="bg-muted/40 rounded-lg p-2">
+                                    <p className="text-[10px] font-medium text-purple-500">{card.position} · {card.name}</p>
+                                    <p className="text-xs mt-0.5">{card.meaning}</p>
+                                    <p className="text-[11px] text-muted-foreground mt-1 border-l-2 border-purple-300 pl-2">{card.advice}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            <div className="flex flex-wrap gap-1.5 text-xs">
+                              {c.luckyColor && <Badge variant="outline">🎨 {c.luckyColor}</Badge>}
+                              {c.luckyNumber != null && <Badge variant="outline">🔢 {c.luckyNumber}</Badge>}
+                              {c.luckyDirection && <Badge variant="outline">🧭 {c.luckyDirection}</Badge>}
+                              {c.luckyFood && <Badge variant="outline">🍀 {c.luckyFood}</Badge>}
+                            </div>
+                            {c.advice && <p className="text-sm leading-relaxed border-l-4 border-teal-300 pl-3">{c.advice}</p>}
+                            {c.caution && <p className="text-xs text-muted-foreground bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">⚠️ {c.caution}</p>}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            ))
+          }
+        </div>
+      )}
+
       {/* Birth date (required for daily + saju) */}
-      {fortuneKind !== "tarot" && (
+      {fortuneKind !== "tarot" && fortuneKind !== "history" && (
         <Card className="border-dashed">
           <CardContent className="p-3 space-y-2">
             <div className="flex items-center justify-between">
@@ -284,7 +418,7 @@ export default function FortunePage() {
       )}
 
       {/* Run button — 오늘 이미 본 운세는 잠금 */}
-      {fortune?.cached ? (
+      {fortuneKind !== "history" && (fortune?.cached ? (
         <div className="w-full flex items-center justify-center gap-2 py-2 text-xs text-muted-foreground">
           <span>🔒</span>
           <span>오늘의 점괘는 고정됩니다 · 내일 새로워집니다</span>
@@ -298,10 +432,10 @@ export default function FortunePage() {
           {fortuneLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
           {fortuneLoading ? "분석 중..." : fortune ? "다시 보기" : "운세 보기"}
         </Button>
-      )}
+      ))}
 
       {/* Fortune result */}
-      {fortune && !fortuneLoading && (
+      {fortune && !fortuneLoading && fortuneKind !== "history" && (
         <div className="space-y-3">
           {/* Daily */}
           {fortuneKind === "daily" && (
