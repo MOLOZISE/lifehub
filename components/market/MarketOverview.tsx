@@ -130,6 +130,7 @@ export function MarketOverview({ compact = false, refreshKey }: Props) {
   const [market, setMarket] = useState<Record<string, MarketItem>>({});
   const [lastUpdate, setLastUpdate] = useState<number | null>(null);
   const [fetching, setFetching] = useState(false);
+  const [manualFetching, setManualFetching] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [isStale, setIsStale] = useState(false);
   const [selected, setSelected] = useState<string[]>(DEFAULT_SYMBOLS);
@@ -148,9 +149,10 @@ export function MarketOverview({ compact = false, refreshKey }: Props) {
     setCustomSymbols(getCustomSymbols());
   }, []);
 
-  const load = useCallback(async (force = false, symbols?: string[]) => {
+  const load = useCallback(async (force = false, symbols?: string[], isManual = false) => {
     const syms = symbols ?? selected;
     setFetching(true);
+    if (isManual) setManualFetching(true);
     try {
       const params = new URLSearchParams();
       if (force) params.set("refresh", "1");
@@ -178,6 +180,7 @@ export function MarketOverview({ compact = false, refreshKey }: Props) {
       setFetchError("네트워크 오류로 시황 데이터를 불러올 수 없습니다");
     } finally {
       setFetching(false);
+      setManualFetching(false);
     }
   }, [selected]);
 
@@ -191,7 +194,7 @@ export function MarketOverview({ compact = false, refreshKey }: Props) {
     if (refreshKey !== undefined && refreshKey !== prevRefreshKey.current) {
       prevRefreshKey.current = refreshKey;
       clearTimeout(staleTimerRef.current);
-      load(true);
+      load(true, undefined, true);
     }
   }, [refreshKey, load]);
 
@@ -280,7 +283,7 @@ export function MarketOverview({ compact = false, refreshKey }: Props) {
   if (items.length === 0) return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-center h-14 text-xs text-muted-foreground gap-2">
-        {fetching
+        {fetching && !market
           ? <><RefreshCw className="w-3 h-3 animate-spin" />시황 로딩 중...</>
           : <>
               <span>{fetchError ?? "시황 데이터를 불러올 수 없습니다"}</span>
@@ -301,12 +304,7 @@ export function MarketOverview({ compact = false, refreshKey }: Props) {
           <button onClick={() => load(true)} className="shrink-0 underline hover:no-underline">재시도</button>
         </div>
       )}
-      {!fetchError && isStale && lastUpdate && (
-        <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-muted/60 text-xs text-muted-foreground">
-          <RefreshCw className="w-3 h-3 animate-spin" />
-          <span>최신 데이터 갱신 중... ({new Date(lastUpdate).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 기준)</span>
-        </div>
-      )}
+      {/* stale 자동갱신은 백그라운드에서 조용히 처리 */}
 
       {/* 헤더 */}
       <div className="flex items-center justify-between">
@@ -320,8 +318,8 @@ export function MarketOverview({ compact = false, refreshKey }: Props) {
           <button onClick={openSettings} className="text-muted-foreground hover:text-foreground transition-colors" title="종목 설정">
             <Settings2 className="w-3.5 h-3.5" />
           </button>
-          <button onClick={() => load(true)} disabled={fetching} className="text-muted-foreground hover:text-foreground transition-colors" title="새로고침">
-            <RefreshCw className={`w-3 h-3 ${fetching ? "animate-spin" : ""}`} />
+          <button onClick={() => load(true, undefined, true)} disabled={manualFetching} className="text-muted-foreground hover:text-foreground transition-colors" title="새로고침">
+            <RefreshCw className={`w-3 h-3 ${manualFetching ? "animate-spin" : ""}`} />
           </button>
         </div>
       </div>

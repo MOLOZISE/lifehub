@@ -178,6 +178,7 @@ export default function DashboardPage() {
   const [newsArticles, setNewsArticles] = useState<NewsArticle[]>([]);
 
   const [monthEvents, setMonthEvents] = useState<Record<string, PlannerEvent[]>>({});
+  const [fortuneMap, setFortuneMap] = useState<Record<string, { overall: string; type: string }>>({});
   const [selectedCalDay, setSelectedCalDay] = useState<string | null>(null);
   const [calMonth, setCalMonth] = useState(() => {
     const now = new Date();
@@ -190,22 +191,29 @@ export default function DashboardPage() {
     if (saved) setWeeklyGoal(Number(saved));
   }, []);
 
-  // 월 이동 시 해당 월 이벤트 재조회
+  // 월 이동 시 해당 월 이벤트 + 운세 기록 재조회
   useEffect(() => {
     const thisMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
-    if (calMonth === thisMonth) return;
-    fetch(`/api/planner/events?month=${calMonth}`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data?.events) {
-          const byDate: Record<string, PlannerEvent[]> = {};
-          for (const e of data.events as PlannerEvent[]) {
-            if (!byDate[e.date]) byDate[e.date] = [];
-            byDate[e.date].push(e);
+    // 이벤트: 현재 달이 아닐 때만 (현재 달은 초기 로드에서 처리)
+    if (calMonth !== thisMonth) {
+      fetch(`/api/planner/events?month=${calMonth}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (data?.events) {
+            const byDate: Record<string, PlannerEvent[]> = {};
+            for (const e of data.events as PlannerEvent[]) {
+              if (!byDate[e.date]) byDate[e.date] = [];
+              byDate[e.date].push(e);
+            }
+            setMonthEvents(byDate);
           }
-          setMonthEvents(byDate);
-        }
-      })
+        })
+        .catch(() => {});
+    }
+    // 운세 기록: 항상 calMonth 기준으로 재조회
+    fetch(`/api/planner/fortune?month=${calMonth}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.fortuneMap) setFortuneMap(data.fortuneMap); })
       .catch(() => {});
   }, [calMonth]);
 
@@ -599,7 +607,7 @@ export default function DashboardPage() {
                 const isSelected = day === selectedCalDay;
                 const evs = monthEvents[day] ?? [];
                 const hasDiary = !!(todayDiary && day === today);
-                const hasFortune = !!(todayFortune?.overall && day === today);
+                const hasFortune = !!(fortuneMap[day] || (todayFortune?.overall && day === today));
                 const intensity = mins === 0 ? 0 : mins < 30 ? 1 : mins < 60 ? 2 : mins < 120 ? 3 : 4;
                 const studyBg = ["bg-muted","bg-green-200 dark:bg-green-900/50","bg-green-300 dark:bg-green-700","bg-green-500/70","bg-green-700 dark:bg-green-500"];
                 const dow = new Date(day + "T00:00:00").getDay();
@@ -669,13 +677,13 @@ export default function DashboardPage() {
                     <p className="text-muted-foreground line-clamp-2 leading-relaxed">{todayDiary.content}</p>
                   </div>
                 )}
-                {todayFortune?.overall && selectedCalDay === today && (
+                {(fortuneMap[selectedCalDay]?.overall || (todayFortune?.overall && selectedCalDay === today)) && (
                   <div className="flex items-start gap-2 text-xs">
                     <Sparkles className="w-3 h-3 text-purple-500 shrink-0 mt-0.5" />
-                    <p className="text-muted-foreground line-clamp-1">{todayFortune.overall}</p>
+                    <p className="text-muted-foreground line-clamp-1">{fortuneMap[selectedCalDay]?.overall ?? todayFortune?.overall}</p>
                   </div>
                 )}
-                {(sessionDateMap[selectedCalDay] ?? 0) === 0 && (monthEvents[selectedCalDay] ?? []).length === 0 && !(todayDiary && selectedCalDay === today) && !(todayFortune?.overall && selectedCalDay === today) && (
+                {(sessionDateMap[selectedCalDay] ?? 0) === 0 && (monthEvents[selectedCalDay] ?? []).length === 0 && !(todayDiary && selectedCalDay === today) && !(fortuneMap[selectedCalDay] || (todayFortune?.overall && selectedCalDay === today)) && (
                   <p className="text-xs text-muted-foreground">이날 기록 없음</p>
                 )}
                 <div className="flex gap-1.5 pt-0.5 flex-wrap">
