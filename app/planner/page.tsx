@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import {
   ChevronLeft, ChevronRight, ChevronDown, Plus, X, Loader2,
-  Edit2, Trash2, MapPin, Clock, Target, StickyNote, BookMarked,
+  Edit2, Trash2, MapPin, Clock, Target, StickyNote, BookMarked, Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -90,6 +90,7 @@ export default function PlannerPage() {
   const [selectedDate, setSelectedDate] = useState(today);
   const [events, setEvents]           = useState<CalendarEvent[]>([]);
   const [studyMap, setStudyMap]       = useState<Record<string,number>>({});
+  const [fortuneMap, setFortuneMap]   = useState<Record<string,{overall:string;type:string}>>({});
   const [yearGoals, setYearGoals]     = useState<GoalItem[]>([]);
   const [yearRefl, setYearRefl]       = useState("");
   const [newYearGoal, setNewYearGoal] = useState("");
@@ -110,9 +111,10 @@ export default function PlannerPage() {
 
   // ── Load calendar ───────────────────────────────────────────────────────────
   const loadCalendar = useCallback(async (month: string) => {
-    const [evRes, stRes] = await Promise.all([
+    const [evRes, stRes, ftRes] = await Promise.all([
       fetch(`/api/planner/events?month=${month}`),
       fetch(`/api/study/sessions?month=${month}`),
+      fetch(`/api/planner/fortune?month=${month}`),
     ]);
     if (evRes.ok) { const d = await evRes.json(); setEvents(d.events ?? []); }
     if (stRes.ok) {
@@ -121,6 +123,7 @@ export default function PlannerPage() {
       for (const s of (d.sessions ?? [])) map[s.date] = (map[s.date]??0) + (s.durationMinutes??0);
       setStudyMap(map);
     }
+    if (ftRes.ok) { const d = await ftRes.json(); setFortuneMap(d.fortuneMap ?? {}); }
   }, []);
 
   useEffect(() => { loadCalendar(calMonth); }, [calMonth, loadCalendar]);
@@ -371,6 +374,7 @@ export default function PlannerPage() {
               if (!day) return <div key={`e${i}`} />;
               const mins = studyMap[day]??0;
               const evs  = eventsByDate[day]??[];
+              const hasFortune = !!fortuneMap[day];
               const isToday    = day===today;
               const isSelected = day===selectedDate;
               const dow = new Date(day+"T00:00:00").getDay();
@@ -381,10 +385,13 @@ export default function PlannerPage() {
                     ${isToday?"ring-2 ring-primary":""}
                     ${isSelected&&!isToday?"ring-2 ring-primary/40":""}
                     hover:brightness-95`}>
-                  <span className={`text-[10px] font-bold ml-0.5 mt-0.5 leading-none
-                    ${isToday?"text-primary":dow===0?"text-red-500":dow===6?"text-blue-500":studyInt(mins)>2?"text-white":"text-muted-foreground"}`}>
-                    {day.slice(8).replace(/^0/,"")}
-                  </span>
+                  <div className="flex items-center justify-between w-full px-0.5 mt-0.5">
+                    <span className={`text-[10px] font-bold leading-none
+                      ${isToday?"text-primary":dow===0?"text-red-500":dow===6?"text-blue-500":studyInt(mins)>2?"text-white":"text-muted-foreground"}`}>
+                      {day.slice(8).replace(/^0/,"")}
+                    </span>
+                    {hasFortune && <Sparkles className={`w-2 h-2 ${studyInt(mins)>2?"text-yellow-200":"text-purple-400"}`} />}
+                  </div>
                   <div className="flex flex-col gap-px mt-0.5 w-full px-0.5">
                     {evs.slice(0,2).map(ev => (
                       <div key={ev.id} className={`w-full h-1 rounded-full ${ev.color}`} />
@@ -415,6 +422,19 @@ export default function PlannerPage() {
               </div>
             </CardHeader>
             <CardContent className="p-3 pt-1 space-y-2">
+              {/* 운세 요약 */}
+              {fortuneMap[selectedDate] && (
+                <div className="flex items-start gap-2 p-2 rounded-lg bg-purple-50/60 dark:bg-purple-950/20 border border-purple-100 dark:border-purple-900">
+                  <Sparkles className="w-3.5 h-3.5 text-purple-500 mt-0.5 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-medium text-purple-600 dark:text-purple-400 mb-0.5">
+                      {fortuneMap[selectedDate].type === "tarot" ? "타로" : fortuneMap[selectedDate].type.startsWith("saju") ? "사주" : "오늘의 운세"}
+                    </p>
+                    <p className="text-xs text-muted-foreground line-clamp-2">{fortuneMap[selectedDate].overall}</p>
+                  </div>
+                </div>
+              )}
+
               {/* Event list */}
               {selectedEvents.length===0 && !inlineEventOpen
                 ? <p className="text-xs text-muted-foreground text-center py-2">일정이 없습니다</p>

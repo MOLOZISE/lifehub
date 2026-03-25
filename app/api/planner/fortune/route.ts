@@ -11,6 +11,30 @@ export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { searchParams } = new URL(req.url);
+  const month = searchParams.get("month");
+
+  // 월별 운세 기록 목록 반환 (플래너 달력용)
+  if (month) {
+    const records = await prisma.fortuneCache.findMany({
+      where: {
+        userId: session.user.id,
+        date: { gte: `${month}-01`, lte: `${month}-31` },
+      },
+      select: { type: true, date: true, content: true },
+      orderBy: { date: "asc" },
+    });
+    const map: Record<string, { overall: string; type: string }> = {};
+    for (const r of records) {
+      const content = r.content as Record<string, unknown>;
+      const overall = (content.overall as string) ?? "";
+      // 같은 날 여러 기록이면 daily 우선
+      if (!map[r.date] || r.type === "daily") {
+        map[r.date] = { overall, type: r.type };
+      }
+    }
+    return NextResponse.json({ fortuneMap: map });
+  }
+
   const type = searchParams.get("type") ?? "daily";
   const date = todayStr();
 
