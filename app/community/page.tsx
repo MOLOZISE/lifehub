@@ -3,13 +3,19 @@
 import { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { MessageSquare, Heart, Eye, PenSquare, Loader2, Search, X, User } from "lucide-react";
+import {
+  MessageSquare, Heart, Eye, PenSquare, Loader2, Search, X, User,
+  ExternalLink, BookOpen, Plus, Trash2,
+} from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { useSession } from "next-auth/react";
 import { formatDistanceToNow } from "@/lib/utils-app";
+import { toast } from "sonner";
 
 const CATEGORIES = [
   { value: "", label: "전체" },
@@ -17,7 +23,227 @@ const CATEGORIES = [
   { value: "stock", label: "📈 주식토론방" },
   { value: "study", label: "📖 스터디인증" },
   { value: "restaurant", label: "🍜 맛집추천" },
+  { value: "resources", label: "📚 자료공유" },
 ];
+
+// ── 자료공유 타입 ──────────────────────────────────────────────────────────────
+const RESOURCE_TYPES = [
+  { value: "link",    label: "🔗 링크",   color: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300" },
+  { value: "youtube", label: "▶️ 유튜브", color: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300" },
+  { value: "book",    label: "📗 교재",   color: "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300" },
+  { value: "note",    label: "📝 메모",   color: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" },
+];
+
+interface ExamType { id: string; name: string; category: string; }
+interface SharedResource {
+  id: string; type: string; title: string; url: string | null;
+  description: string | null; createdAt: string;
+  user: { id: string; name: string | null; username: string | null; image: string | null };
+  examType: { id: string; name: string; category: string };
+}
+
+function ResourcesView() {
+  const { data: session } = useSession();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const activeExamTypeId = searchParams.get("examType") ?? "";
+
+  const [resources, setResources] = useState<SharedResource[]>([]);
+  const [examTypes, setExamTypes] = useState<ExamType[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ examTypeId: "", type: "link", title: "", url: "", description: "" });
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/study/shared-resources").then(r => r.json()),
+      fetch("/api/admin/exam-types").then(r => r.json()),
+    ]).then(([res, et]) => {
+      setResources(res);
+      setExamTypes((et.examTypes ?? []).filter((t: ExamType & { isActive?: boolean }) => t.isActive !== false));
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  const filtered = activeExamTypeId
+    ? resources.filter(r => r.examType.id === activeExamTypeId)
+    : resources;
+
+  async function submit() {
+    if (!form.examTypeId) { toast.error("시험 종류를 선택해주세요"); return; }
+    if (!form.title.trim()) { toast.error("제목을 입력해주세요"); return; }
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/study/shared-resources", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, title: form.title.trim(), url: form.url.trim() || null, description: form.description.trim() || null }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error ?? "등록 실패"); return; }
+      setResources(prev => [data, ...prev]);
+      setForm({ examTypeId: "", type: "link", title: "", url: "", description: "" });
+      setShowForm(false);
+      toast.success("자료가 등록됐어요!");
+    } catch { toast.error("오류가 발생했습니다"); }
+    finally { setSubmitting(false); }
+  }
+
+  async function deleteResource(id: string) {
+    if (!confirm("이 자료를 삭제할까요?")) return;
+    const res = await fetch(`/api/study/shared-resources/${id}`, { method: "DELETE" });
+    if (res.ok) { setResources(prev => prev.filter(r => r.id !== id)); toast.success("삭제됐어요"); }
+  }
+
+  const rt = (type: string) => RESOURCE_TYPES.find(t => t.value === type) ?? RESOURCE_TYPES[0];
+
+  return (
+    <div className="space-y-4">
+      {/* 시험 종류 필터 태그 */}
+      <div className="flex flex-wrap gap-1.5">
+        <button
+          onClick={() => router.push("/community?category=resources")}
+          className={`text-xs px-3 py-1 rounded-full border font-medium transition-all
+            ${!activeExamTypeId ? "bg-primary text-primary-foreground border-primary" : "border-border hover:border-primary/50 text-muted-foreground"}`}>
+          전체
+        </button>
+        {examTypes.map(et => (
+          <button key={et.id}
+            onClick={() => router.push(`/community?category=resources&examType=${et.id}`)}
+            className={`text-xs px-3 py-1 rounded-full border font-medium transition-all
+              ${activeExamTypeId === et.id ? "bg-primary text-primary-foreground border-primary" : "border-border hover:border-primary/50 text-muted-foreground"}`}>
+            {et.name}
+          </button>
+        ))}
+      </div>
+
+      {/* 등록 버튼 / 폼 */}
+      {session?.user && (
+        showForm ? (
+          <Card className="border-dashed border-2">
+            <CardContent className="p-4 space-y-3">
+              <p className="text-sm font-semibold">자료 등록</p>
+
+              {/* 시험 종류 선택 */}
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">시험 종류 *</p>
+                <Select value={form.examTypeId} onValueChange={(v: string | null) => setForm(f => ({ ...f, examTypeId: v ?? "" }))}>
+                  <SelectTrigger className="h-9 text-sm">
+                    <span>{examTypes.find(t => t.id === form.examTypeId)?.name ?? "선택해주세요"}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {examTypes.map(t => (
+                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* 유형 */}
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">유형</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {RESOURCE_TYPES.map(t => (
+                    <button key={t.value} type="button"
+                      onClick={() => setForm(f => ({ ...f, type: t.value }))}
+                      className={`text-xs px-2.5 py-1 rounded-full font-medium border-2 transition-all
+                        ${form.type === t.value ? "border-primary " + t.color : "border-transparent bg-muted/50 text-muted-foreground"}`}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 제목 */}
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">제목 *</p>
+                <Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                  placeholder="자료 제목을 입력하세요" className="h-9 text-sm" />
+              </div>
+
+              {/* URL */}
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">URL (선택)</p>
+                <Input value={form.url} onChange={e => setForm(f => ({ ...f, url: e.target.value }))}
+                  placeholder="https://..." className="h-9 text-sm" />
+              </div>
+
+              {/* 설명 */}
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">설명 (선택)</p>
+                <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                  placeholder="자료에 대한 간단한 설명을 남겨주세요..." className="h-16 text-sm resize-none" />
+              </div>
+
+              <div className="flex gap-2">
+                <Button className="flex-1 h-9" onClick={submit} disabled={submitting}>
+                  {submitting ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}등록
+                </Button>
+                <Button variant="outline" className="h-9 px-4" onClick={() => setShowForm(false)}>취소</Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <Button size="sm" className="gap-1.5" onClick={() => setShowForm(true)}>
+            <Plus className="w-4 h-4" />자료 등록
+          </Button>
+        )
+      )}
+
+      {/* 자료 목록 */}
+      {loading ? (
+        <div className="flex justify-center py-12"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-16 text-muted-foreground">
+          <BookOpen className="w-10 h-10 mx-auto mb-3 opacity-30" />
+          <p className="text-sm">아직 등록된 자료가 없어요</p>
+          <p className="text-xs mt-1">공부에 도움이 되는 자료를 첫 번째로 공유해보세요!</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {filtered.map(r => (
+            <Card key={r.id} className="hover:shadow-sm transition-all">
+              <CardContent className="p-3 flex items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${rt(r.type).color}`}>
+                      {rt(r.type).label}
+                    </span>
+                    <button
+                      onClick={() => router.push(`/community?category=resources&examType=${r.examType.id}`)}
+                      className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 font-medium hover:opacity-80 transition-opacity">
+                      {r.examType.name}
+                    </button>
+                  </div>
+                  <p className="text-sm font-semibold leading-snug">{r.title}</p>
+                  {r.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{r.description}</p>}
+                  <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
+                    <span>{r.user.name ?? r.user.username ?? "익명"}</span>
+                    <span>{formatDistanceToNow(r.createdAt)}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {r.url && (
+                    <a href={r.url} target="_blank" rel="noopener noreferrer"
+                      className="p-1.5 rounded-md hover:bg-muted transition-colors">
+                      <ExternalLink className="w-4 h-4 text-muted-foreground" />
+                    </a>
+                  )}
+                  {session?.user?.id === r.user.id && (
+                    <button onClick={() => deleteResource(r.id)}
+                      className="p-1.5 rounded-md hover:bg-destructive/10 hover:text-destructive transition-colors">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 type Post = {
   id: string;
@@ -84,11 +310,32 @@ function CommunityContent() {
           <h1 className="text-2xl font-bold">커뮤니티</h1>
           <p className="text-sm text-muted-foreground mt-1">함께 나누는 학습, 투자, 맛집 이야기</p>
         </div>
-        <Button onClick={() => router.push("/community/new")} className="gap-2">
-          <PenSquare className="w-4 h-4" />
-          글쓰기
-        </Button>
+        {category !== "resources" && (
+          <Button onClick={() => router.push("/community/new")} className="gap-2">
+            <PenSquare className="w-4 h-4" />글쓰기
+          </Button>
+        )}
       </div>
+
+      {/* 자료공유 탭이면 ResourcesView로 */}
+      {category === "resources" && (
+        <>
+          {/* 카테고리 탭만 보여주고 ResourcesView 렌더 */}
+          <div className="flex gap-2 flex-wrap">
+            {CATEGORIES.map((cat) => (
+              <Button key={cat.value}
+                variant={category === cat.value ? "default" : "outline"}
+                size="sm"
+                onClick={() => router.push(cat.value ? `/community?category=${cat.value}` : "/community")}>
+                {cat.label}
+              </Button>
+            ))}
+          </div>
+          <ResourcesView />
+        </>
+      )}
+
+      {category === "resources" ? null : <>
 
       {/* 검색 + 정렬 */}
       <div className="flex gap-2">
@@ -226,6 +473,7 @@ function CommunityContent() {
           <Button variant="outline" size="sm" disabled={page >= Math.ceil(total / 20)} onClick={() => setPage(p => p + 1)}>다음</Button>
         </div>
       )}
+      </>}
     </div>
   );
 }

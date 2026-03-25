@@ -2,19 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
-// GET /api/study/shared-resources?examTypeId=xxx — 공유 자료 목록 (로그인 필요)
+// GET /api/study/shared-resources?examTypeId=xxx  — 특정 시험 종류 자료
+// GET /api/study/shared-resources                  — 전체 자료 (커뮤니티용)
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const examTypeId = req.nextUrl.searchParams.get("examTypeId");
-  if (!examTypeId) return NextResponse.json({ error: "examTypeId required" }, { status: 400 });
 
   const resources = await prisma.sharedResource.findMany({
-    where: { examTypeId },
+    where: examTypeId ? { examTypeId } : undefined,
     orderBy: { createdAt: "desc" },
+    take: 100,
     include: {
       user: { select: { id: true, name: true, image: true, username: true } },
+      examType: { select: { id: true, name: true, category: true } },
     },
   });
 
@@ -51,6 +53,7 @@ export async function POST(req: NextRequest) {
     },
     include: {
       user: { select: { id: true, name: true, image: true, username: true } },
+      examType: { select: { id: true, name: true, category: true } },
     },
   });
 
