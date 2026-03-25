@@ -1173,12 +1173,15 @@ export default function StockPage() {
   // Watchlist tab state
   const [watchlistPrices, setWatchlistPrices] = useState<Record<string, StockPrice>>({});
   const [watchlistPriceLoading, setWatchlistPriceLoading] = useState(false);
+  const [watchlistLastUpdate, setWatchlistLastUpdate] = useState<Date | null>(null);
 
   // ── 랭킹 state ───────────────────────────────────────────────────────────────
   const [rankItems, setRankItems] = useState<RankItem[]>([]);
   const [rankLoading, setRankLoading] = useState(false);
   const [rankMarket, setRankMarket] = useState<"KR" | "US">("US");
   const [rankSort, setRankSort] = useState<RankSort>("volume");
+  const [rankLastUpdate, setRankLastUpdate] = useState<Date | null>(null);
+  const [selectedRankTicker, setSelectedRankTicker] = useState<string | null>(null);
   const [watchlistSearchQ, setWatchlistSearchQ] = useState("");
   const [watchlistSuggestions, setWatchlistSuggestions] = useState<{ ticker: string; name: string; market: "KR" | "US" }[]>([]);
   const [showWatchlistSugg, setShowWatchlistSugg] = useState(false);
@@ -1494,6 +1497,7 @@ export default function StockPage() {
       if (res.ok) {
         const d = await res.json();
         setWatchlistPrices(d.prices ?? {});
+        setWatchlistLastUpdate(new Date());
       }
     } finally {
       setWatchlistPriceLoading(false);
@@ -1513,6 +1517,7 @@ export default function StockPage() {
       if (res.ok) {
         const data = await res.json() as { items: RankItem[] };
         setRankItems(data.items ?? []);
+        setRankLastUpdate(new Date());
       }
     } finally {
       setRankLoading(false);
@@ -1566,13 +1571,16 @@ export default function StockPage() {
         <div className="space-y-6">
           {/* 통합 새로고침 */}
           <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground tabular-nums">
-              {priceLastUpdate
-                ? (priceLoading ? "갱신 중..." : `${priceLastUpdate.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} 기준`)
-                : ""}
+            <span className="text-xs text-muted-foreground tabular-nums flex items-center gap-1.5">
+              <Clock className="w-3 h-3 shrink-0" />
+              {priceLoading
+                ? "갱신 중..."
+                : priceLastUpdate
+                  ? `${priceLastUpdate.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 기준`
+                  : "아직 갱신 안 됨"}
             </span>
             <button onClick={refreshAll} disabled={priceLoading}
-              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40">
+              className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40 border rounded-lg px-2.5 py-1 hover:border-foreground/30">
               <RefreshCw className={`w-3.5 h-3.5 ${priceLoading ? "animate-spin" : ""}`} />
               모두 새로고침
             </button>
@@ -1658,7 +1666,14 @@ export default function StockPage() {
           {/* Popular Stocks */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold">국내 인기 종목</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold">국내 인기 종목</h2>
+                {priceLastUpdate && !priceLoading && (
+                  <span className="text-[10px] text-muted-foreground tabular-nums">
+                    {priceLastUpdate.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 기준
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => loadKrPrices()}
@@ -1699,7 +1714,14 @@ export default function StockPage() {
             </div>
 
             <div className="flex items-center justify-between pt-2">
-              <h2 className="text-sm font-semibold">해외 인기 종목</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold">해외 인기 종목</h2>
+                {priceLastUpdate && !priceLoading && (
+                  <span className="text-[10px] text-muted-foreground tabular-nums">
+                    {priceLastUpdate.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 기준
+                  </span>
+                )}
+              </div>
               <button
                 onClick={() => loadUsPrices()}
                 disabled={usLoading}
@@ -1867,8 +1889,8 @@ export default function StockPage() {
             ))}
           </div>
 
-          {/* 정렬 필터 칩 */}
-          <div className="flex gap-1.5 flex-wrap">
+          {/* 정렬 필터 칩 + 갱신 기준 */}
+          <div className="flex gap-1.5 flex-wrap items-center">
             {([
               { key: "volume",      label: "거래량 순" },
               { key: "change_up",   label: "급상승" },
@@ -1890,14 +1912,22 @@ export default function StockPage() {
                 {label}
               </button>
             ))}
-            <button
-              onClick={() => loadRanking(rankMarket, rankSort)}
-              disabled={rankLoading}
-              className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
-            >
-              <RefreshCw className={`w-3 h-3 ${rankLoading ? "animate-spin" : ""}`} />
-              새로고침
-            </button>
+            <div className="ml-auto flex items-center gap-2">
+              {rankLastUpdate && !rankLoading && (
+                <span className="text-[10px] text-muted-foreground tabular-nums flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  {rankLastUpdate.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 기준
+                </span>
+              )}
+              <button
+                onClick={() => loadRanking(rankMarket, rankSort)}
+                disabled={rankLoading}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40 border rounded-lg px-2 py-1 hover:border-foreground/30"
+              >
+                <RefreshCw className={`w-3 h-3 ${rankLoading ? "animate-spin" : ""}`} />
+                새로고침
+              </button>
+            </div>
           </div>
 
           {/* 순위 리스트 */}
@@ -1931,10 +1961,14 @@ export default function StockPage() {
                 return (
                   <button
                     key={item.ticker}
-                    className="w-full grid grid-cols-[2rem_1fr_auto] gap-2 px-2 py-3 hover:bg-muted/40 transition-colors text-left"
+                    className={`w-full grid grid-cols-[2rem_1fr_auto] gap-2 px-2 py-3 transition-colors text-left ${
+                      selectedRankTicker === item.ticker
+                        ? "bg-primary/8 border-l-2 border-primary"
+                        : "hover:bg-muted/40 border-l-2 border-transparent"
+                    }`}
                     onClick={() => {
-                      const market = rankMarket;
-                      router.push(`/portfolio/stock/${item.ticker}?market=${market}`);
+                      setSelectedRankTicker(item.ticker);
+                      router.push(`/portfolio/stock/${item.ticker}?market=${rankMarket}`);
                     }}
                   >
                     {/* 순위 */}
@@ -2000,9 +2034,18 @@ export default function StockPage() {
                   </div>
                 )}
               </div>
-              <Button variant="outline" size="icon" onClick={loadWatchlistPrices} disabled={watchlistPriceLoading} title="가격 새로고침">
-                <RefreshCw className={`w-4 h-4 ${watchlistPriceLoading ? "animate-spin" : ""}`} />
-              </Button>
+              <button
+                onClick={loadWatchlistPrices}
+                disabled={watchlistPriceLoading}
+                className="flex items-center gap-1.5 shrink-0 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40 border rounded-lg px-2.5 py-2 hover:border-foreground/30"
+                title="가격 새로고침"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${watchlistPriceLoading ? "animate-spin" : ""}`} />
+                {watchlistLastUpdate && !watchlistPriceLoading
+                  ? <span className="tabular-nums">{watchlistLastUpdate.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} 기준</span>
+                  : <span>새로고침</span>
+                }
+              </button>
             </div>
 
             {/* 추가할 그룹 선택 */}

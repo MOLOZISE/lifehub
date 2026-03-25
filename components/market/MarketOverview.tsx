@@ -197,20 +197,7 @@ export function MarketOverview({ compact = false, refreshKey }: Props) {
 
   useEffect(() => () => clearTimeout(staleTimerRef.current), []);
 
-  useEffect(() => {
-    const id = setInterval(() => {
-      if (document.visibilityState === "visible") load();
-    }, MARKET_REFRESH_INTERVAL);
-    return () => clearInterval(id);
-  }, [load]);
-
-  useEffect(() => {
-    function onFocus() {
-      if (!lastUpdate || Date.now() - lastUpdate > MARKET_REFRESH_INTERVAL) load();
-    }
-    document.addEventListener("visibilitychange", onFocus);
-    return () => document.removeEventListener("visibilitychange", onFocus);
-  }, [load, lastUpdate]);
+  // 자동 갱신 없음 — 수동 새로고침만 사용 (API 호출량 절약)
 
   function openSettings() {
     setDraftSelected([...selected]);
