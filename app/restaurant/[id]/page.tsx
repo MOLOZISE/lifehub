@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { todayString } from "@/lib/utils-app";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { Star, MapPin, Phone, ExternalLink, Trash2, ArrowLeft, Bookmark, BookmarkCheck, Pencil, Sparkles, Plus, Check, FolderOpen } from "lucide-react";
+import { Star, MapPin, Phone, ExternalLink, Trash2, ArrowLeft, Bookmark, BookmarkCheck, Pencil, Sparkles, Plus, Check, FolderOpen, Navigation2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -95,6 +95,11 @@ export default function RestaurantDetailPage() {
   const [listItemIds, setListItemIds] = useState<Set<string>>(new Set()); // listId -> 이 맛집 포함 여부
   const [togglingList, setTogglingList] = useState<string | null>(null);
 
+  // 코스에 추가
+  const [courseSheet, setCourseSheet] = useState(false);
+  const [myCourses, setMyCourses] = useState<{ id: string; title: string; theme: string; itemCount: number }[]>([]);
+  const [addingToCourse, setAddingToCourse] = useState<string | null>(null);
+
   const CATEGORIES = ["한식", "중식", "일식", "양식", "카페", "기타"];
 
   async function loadDetail() {
@@ -119,6 +124,36 @@ export default function RestaurantDetailPage() {
       openEdit();
     }
   }, [loading, restaurant]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function openCourseSheet() {
+    const res = await fetch("/api/course");
+    if (res.ok) {
+      const data = await res.json();
+      setMyCourses(data.courses ?? []);
+    }
+    setCourseSheet(true);
+  }
+
+  async function addToCourse(courseId: string) {
+    if (!restaurant) return;
+    setAddingToCourse(courseId);
+    try {
+      const res = await fetch(`/api/course/${courseId}/items`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          restaurantId: restaurant.id,
+          placeName: restaurant.name,
+          placeAddress: restaurant.roadAddress || restaurant.address,
+          lat: restaurant.latitude,
+          lng: restaurant.longitude,
+        }),
+      });
+      if (!res.ok) { toast.error("추가 실패"); return; }
+      toast.success("코스에 추가됐어요!");
+      setCourseSheet(false);
+    } finally { setAddingToCourse(null); }
+  }
 
   async function openListSheet() {
     const res = await fetch("/api/restaurant/lists");
@@ -309,6 +344,9 @@ export default function RestaurantDetailPage() {
                   ? <BookmarkCheck className="w-5 h-5 text-primary" />
                   : <Bookmark className="w-5 h-5 text-muted-foreground" />
                 }
+              </button>
+              <button onClick={openCourseSheet} className="p-2 rounded-md hover:bg-accent transition-colors" title="코스에 추가">
+                <Navigation2 className="w-5 h-5 text-muted-foreground" />
               </button>
               {restaurant.url && (
                 <a href={restaurant.url} target="_blank" rel="noopener noreferrer"
@@ -528,6 +566,52 @@ export default function RestaurantDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* 코스에 추가 Sheet */}
+      <Sheet open={courseSheet} onOpenChange={setCourseSheet}>
+        <SheetContent side="bottom" className="rounded-t-2xl pb-safe">
+          <SheetHeader className="pb-4">
+            <SheetTitle className="flex items-center gap-2">
+              <Navigation2 className="w-4 h-4" />코스에 추가
+            </SheetTitle>
+          </SheetHeader>
+          {myCourses.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Navigation2 className="w-8 h-8 mx-auto mb-2 opacity-40" />
+              <p className="text-sm mb-3">아직 코스가 없어요</p>
+              <Button size="sm" variant="outline" onClick={() => { setCourseSheet(false); window.location.href = "/course"; }}>
+                코스 만들러 가기
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-2 pb-6">
+              {myCourses.map(course => {
+                const themeEmoji = { date: "💑", family: "👨‍👩‍👧", friends: "👥", solo: "🚶" }[course.theme] ?? "🗺️";
+                return (
+                  <button key={course.id} onClick={() => addToCourse(course.id)}
+                    disabled={addingToCourse === course.id}
+                    className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-border hover:bg-accent transition-all">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl">{themeEmoji}</span>
+                      <div className="text-left">
+                        <p className="font-medium text-sm">{course.title}</p>
+                        <p className="text-xs text-muted-foreground">{course.itemCount}개 장소</p>
+                      </div>
+                    </div>
+                    {addingToCourse === course.id
+                      ? <div className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                      : <Plus className="w-4 h-4 text-muted-foreground" />}
+                  </button>
+                );
+              })}
+              <Button variant="outline" size="sm" className="w-full gap-1.5 mt-2"
+                onClick={() => { setCourseSheet(false); window.location.href = "/course"; }}>
+                <Plus className="w-3.5 h-3.5" />새 코스 만들기
+              </Button>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
 
       {/* 리스트 저장 Sheet */}
       <Sheet open={listSheet} onOpenChange={setListSheet}>

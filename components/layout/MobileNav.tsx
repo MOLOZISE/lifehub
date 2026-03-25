@@ -13,7 +13,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 interface SubItem { label: string; href: string; }
 interface Tab {
   label: string;
-  href: string;
+  href?: string;
   icon: React.ElementType;
   children?: SubItem[];
 }
@@ -38,12 +38,17 @@ const tabs: Tab[] = [
   },
   { label: "뉴스", href: "/news", icon: Newspaper },
   { label: "커뮤", href: "/community", icon: MessageSquare },
-  { label: "맛집", href: "/restaurant", icon: Utensils },
+  { label: "맛집", icon: Utensils, children: [
+    { label: "🍽️ 맛집 목록", href: "/restaurant" },
+    { label: "📋 내 리스트", href: "/restaurant/mylist" },
+    { label: "🗺️ 코스", href: "/course" },
+  ]},
   { label: "운세", href: "/fortune", icon: Sparkles },
   { label: "내 정보", href: "/profile", icon: UserCircle2 },
 ];
 
 function isTabActive(tab: Tab, pathname: string) {
+  if (!tab.href) return tab.children?.some(c => pathname.startsWith(c.href)) ?? false;
   if (tab.href === "/") return pathname === "/";
   return pathname.startsWith(tab.href.split("?")[0]);
 }
@@ -55,7 +60,7 @@ export function MobileNav() {
 
   function handleTabClick(tab: Tab) {
     if (!tab.children) {
-      router.push(tab.href);
+      if (tab.href) router.push(tab.href);
       return;
     }
     // 하위 메뉴가 있는 탭: 항상 Sheet 토글 (이미 열려있으면 닫기, 아니면 열기)

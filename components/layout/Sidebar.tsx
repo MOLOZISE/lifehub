@@ -46,8 +46,12 @@ const navItems = [
   },
   {
     label: "맛집",
-    href: "/restaurant",
     icon: Utensils,
+    children: [
+      { label: "🍽️ 맛집 목록", href: "/restaurant" },
+      { label: "📋 내 리스트", href: "/restaurant/mylist" },
+      { label: "🗺️ 코스", href: "/course" },
+    ],
   },
   {
     label: "뉴스",
