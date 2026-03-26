@@ -100,7 +100,9 @@ export default function DailyPage() {
         {/* Pomodoro */}
         <div className="space-y-3">
           <Select value={selectedSubject} onValueChange={(v) => v && setSelectedSubject(v)}>
-            <SelectTrigger><SelectValue placeholder="과목 선택 (선택사항)" /></SelectTrigger>
+            <SelectTrigger>
+              <span className="truncate">{(() => { const s = subjects.find(x => x.id === selectedSubject); return s ? `${s.emoji ?? ""} ${s.name}`.trim() : "과목 선택 (선택사항)"; })()}</span>
+            </SelectTrigger>
             <SelectContent>
               {subjects.map((s) => <SelectItem key={s.id} value={s.id}>{s.emoji} {s.name}</SelectItem>)}
             </SelectContent>
@@ -152,7 +154,9 @@ export default function DailyPage() {
             {/* Add goal */}
             <div className="flex gap-2">
               <Select value={goalSubject} onValueChange={v => v && setGoalSubject(v)}>
-                <SelectTrigger className="flex-1 h-8 text-xs"><SelectValue placeholder="과목" /></SelectTrigger>
+                <SelectTrigger className="flex-1 h-8 text-xs">
+                  <span className="truncate">{(() => { const s = subjects.find(x => x.id === goalSubject); return s ? `${s.emoji ?? ""} ${s.name}`.trim() : "과목"; })()}</span>
+                </SelectTrigger>
                 <SelectContent>{subjects.map(s => <SelectItem key={s.id} value={s.id}>{s.emoji} {s.name}</SelectItem>)}</SelectContent>
               </Select>
               <Input type="number" value={goalMinutes} onChange={e => setGoalMinutes(e.target.value)} className="w-20 h-8 text-xs" placeholder="분" />

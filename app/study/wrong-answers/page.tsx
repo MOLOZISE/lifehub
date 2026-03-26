@@ -191,7 +191,9 @@ export default function WrongAnswersPage() {
 
       <div className="flex flex-wrap gap-2 items-center">
         <Select value={filterSubject} onValueChange={v => v && setFilterSubject(v)}>
-          <SelectTrigger className="w-36 h-8 text-xs"><SelectValue placeholder="과목 필터" /></SelectTrigger>
+          <SelectTrigger className="w-36 h-8 text-xs">
+            <span className="truncate">{(() => { const s = subjects.find(x => x.id === filterSubject); return s ? `${s.emoji ?? ""} ${s.name}`.trim() : "과목 필터"; })()}</span>
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">전체 과목</SelectItem>
             {subjects.map(s => <SelectItem key={s.id} value={s.id}>{s.emoji} {s.name}</SelectItem>)}
@@ -277,7 +279,9 @@ export default function WrongAnswersPage() {
             </div>
             <div><p className="text-xs mb-1 font-medium">과목</p>
               <Select value={form.subjectId} onValueChange={v => v && setForm(f => ({ ...f, subjectId: v }))}>
-                <SelectTrigger><SelectValue placeholder="과목 선택 (선택사항)" /></SelectTrigger>
+                <SelectTrigger>
+                  <span className="truncate">{(() => { const s = subjects.find(x => x.id === form.subjectId); return s ? `${s.emoji ?? ""} ${s.name}`.trim() : "과목 선택 (선택사항)"; })()}</span>
+                </SelectTrigger>
                 <SelectContent><SelectItem value="none">없음</SelectItem>{subjects.map(s => <SelectItem key={s.id} value={s.id}>{s.emoji} {s.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>

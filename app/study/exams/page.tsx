@@ -484,7 +484,9 @@ export default function ExamsPage() {
                 <div className="col-span-2">
                   <p className="text-xs mb-1 font-medium">연결 과목 (선택)</p>
                   <Select value={form.subjectId || "none"} onValueChange={v => setForm(f => ({ ...f, subjectId: v === "none" ? "" : (v ?? "") }))}>
-                    <SelectTrigger><SelectValue placeholder="과목 선택 (선택사항)" /></SelectTrigger>
+                    <SelectTrigger>
+                      <span className="truncate">{(() => { const s = subjects.find(x => x.id === form.subjectId); return s ? `${s.emoji ?? ""} ${s.name}`.trim() : "미분류"; })()}</span>
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">미분류</SelectItem>
                       {subjects.map(s => <SelectItem key={s.id} value={s.id}>{s.emoji} {s.name}</SelectItem>)}
@@ -500,7 +502,7 @@ export default function ExamsPage() {
               </div>
               <div><p className="text-xs mb-1 font-medium">상태</p>
                 <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v as ExamStatus }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger><span>{STATUS_LABELS[form.status as ExamStatus] ?? "준비중"}</span></SelectTrigger>
                   <SelectContent>{(Object.entries(STATUS_LABELS) as [ExamStatus, string][]).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
