@@ -10,24 +10,25 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 
+interface DaySummary { day: number; count: number; }
+
 interface Course {
   id: string; title: string; description?: string;
   theme: string; tags: string[]; isPublic: boolean;
+  totalDays: number; daySummary: DaySummary[];
   itemCount: number; createdAt: string; updatedAt: string;
 }
 
 const THEMES = [
-  { key: "date",    label: "💑 데이트",   color: "bg-pink-100 text-pink-700 dark:bg-pink-950/40 dark:text-pink-300" },
-  { key: "family",  label: "👨‍👩‍👧 가족",    color: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" },
-  { key: "friends", label: "👥 친구",     color: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300" },
-  { key: "solo",    label: "🚶 혼자",     color: "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300" },
+  { key: "date",    label: "💑 데이트",   color: "bg-pink-100 text-pink-700 dark:bg-pink-950/40 dark:text-pink-300",   strip: "from-pink-400 to-rose-400" },
+  { key: "family",  label: "👨‍👩‍👧 가족",    color: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300", strip: "from-amber-400 to-orange-400" },
+  { key: "friends", label: "👥 친구",     color: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300",   strip: "from-blue-400 to-indigo-400" },
+  { key: "solo",    label: "🚶 혼자",     color: "bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300", strip: "from-green-400 to-teal-400" },
 ];
 
-function themeInfo(key: string) {
-  return THEMES.find(t => t.key === key) ?? THEMES[0];
-}
+function themeInfo(key: string) { return THEMES.find(t => t.key === key) ?? THEMES[0]; }
 
-const EMPTY_FORM = { title: "", description: "", theme: "date", tags: "" };
+const EMPTY_FORM = { title: "", description: "", theme: "date", tags: "", totalDays: "1" };
 
 export default function CoursePage() {
   const router = useRouter();
@@ -52,7 +53,10 @@ export default function CoursePage() {
       const res = await fetch("/api/course", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: form.title, description: form.description, theme: form.theme, tags }),
+        body: JSON.stringify({
+          title: form.title, description: form.description, theme: form.theme, tags,
+          totalDays: Math.max(1, Math.min(30, parseInt(form.totalDays) || 1)),
+        }),
       });
       const data = await res.json();
       if (!res.ok) { toast.error(data.error ?? "생성 실패"); return; }
@@ -73,7 +77,10 @@ export default function CoursePage() {
   return (
     <div className="max-w-2xl mx-auto space-y-4 pb-20">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">🗺️ 내 코스</h1>
+        <div>
+          <h1 className="text-xl font-bold">🗺️ 내 코스</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">여행·데이트·가족 나들이 동선을 계획해보세요</p>
+        </div>
         <Button size="sm" className="gap-1.5" onClick={() => setShowCreate(o => !o)}>
           <Plus className="w-4 h-4" />{showCreate ? "닫기" : "새 코스"}
         </Button>
@@ -91,6 +98,8 @@ export default function CoursePage() {
             <Textarea placeholder="설명 (선택)" value={form.description}
               onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
               className="h-16 text-sm resize-none" />
+
+            {/* 테마 */}
             <div className="flex flex-wrap gap-1.5">
               {THEMES.map(t => (
                 <button key={t.key} type="button"
@@ -101,6 +110,24 @@ export default function CoursePage() {
                 </button>
               ))}
             </div>
+
+            {/* 일수 */}
+            <div>
+              <p className="text-xs text-muted-foreground mb-1.5">여행 일수</p>
+              <div className="flex gap-1.5 flex-wrap">
+                {[1,2,3,4,5,6,7].map(d => (
+                  <button key={d} type="button"
+                    onClick={() => setForm(f => ({ ...f, totalDays: String(d) }))}
+                    className={`w-9 h-9 rounded-lg text-xs font-medium border-2 transition-all
+                      ${form.totalDays === String(d)
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-muted/30 text-muted-foreground hover:border-primary/50"}`}>
+                    {d}일
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <Input placeholder="태그 (쉼표로 구분, 예: 홍대, 저녁)" value={form.tags}
               onChange={e => setForm(f => ({ ...f, tags: e.target.value }))}
               className="h-9 text-sm" />
@@ -108,7 +135,8 @@ export default function CoursePage() {
               <Button className="flex-1 h-9" onClick={createCourse} disabled={creating}>
                 {creating ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}만들기
               </Button>
-              <Button variant="outline" className="h-9 px-4" onClick={() => { setShowCreate(false); setForm(EMPTY_FORM); }}>
+              <Button variant="outline" className="h-9 px-4"
+                onClick={() => { setShowCreate(false); setForm(EMPTY_FORM); }}>
                 취소
               </Button>
             </div>
@@ -116,7 +144,6 @@ export default function CoursePage() {
         </Card>
       )}
 
-      {/* 코스 목록 */}
       {loading && (
         <div className="flex justify-center py-12">
           <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
@@ -139,33 +166,49 @@ export default function CoursePage() {
           const th = themeInfo(course.theme);
           return (
             <Card key={course.id}
-              className="cursor-pointer hover:shadow-md transition-all group"
+              className="cursor-pointer hover:shadow-md transition-all group overflow-hidden"
               onClick={() => router.push(`/course/${course.id}`)}>
-              <CardContent className="p-4 flex items-center gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${th.color}`}>{th.label}</span>
-                    {course.isPublic && <span className="text-[10px] text-muted-foreground">공개</span>}
+              {/* 테마 그라디언트 스트립 */}
+              <div className={`h-1 bg-gradient-to-r ${th.strip}`} />
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex-1 min-w-0 space-y-1.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${th.color}`}>{th.label}</span>
+                      <span className="text-xs text-muted-foreground font-medium">{course.totalDays}일</span>
+                      {course.isPublic && <span className="text-[10px] text-muted-foreground">공개</span>}
+                    </div>
+                    <p className="font-semibold text-sm truncate">{course.title}</p>
+                    {course.description && (
+                      <p className="text-xs text-muted-foreground truncate">{course.description}</p>
+                    )}
+                    {/* 일차별 장소 수 프리뷰 */}
+                    {course.daySummary?.some(s => s.count > 0) && (
+                      <div className="flex gap-1 flex-wrap">
+                        {course.daySummary.filter(s => s.count > 0).map(s => (
+                          <span key={s.day}
+                            className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded font-medium">
+                            {s.day}일차 {s.count}곳
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                        <MapPin className="w-3 h-3" />{course.itemCount}개 장소
+                      </span>
+                      {course.tags.slice(0, 3).map(tag => (
+                        <Badge key={tag} variant="secondary" className="text-[10px] px-1.5 py-0 h-4">{tag}</Badge>
+                      ))}
+                    </div>
                   </div>
-                  <p className="font-semibold text-sm truncate">{course.title}</p>
-                  {course.description && (
-                    <p className="text-xs text-muted-foreground truncate mt-0.5">{course.description}</p>
-                  )}
-                  <div className="flex items-center gap-2 mt-1.5">
-                    <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
-                      <MapPin className="w-3 h-3" />{course.itemCount}개 장소
-                    </span>
-                    {course.tags.slice(0, 3).map(tag => (
-                      <Badge key={tag} variant="secondary" className="text-[10px] px-1.5 py-0 h-4">{tag}</Badge>
-                    ))}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button onClick={e => deleteCourse(course.id, e)}
+                      className="p-1.5 rounded-md opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive transition-all">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
                   </div>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <button onClick={e => deleteCourse(course.id, e)}
-                    className="p-1.5 rounded-md opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive transition-all">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
                 </div>
               </CardContent>
             </Card>

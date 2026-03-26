@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 export interface CourseMapItem {
   id: string;
   order: number;
+  day: number;
   placeName: string;
   lat: number;
   lng: number;
@@ -14,6 +15,7 @@ interface Props {
   items: CourseMapItem[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  dayFilter?: number | null;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -28,7 +30,7 @@ declare global {
 const DEFAULT_CENTER: [number, number] = [37.5665, 126.9780];
 const THEME_COLOR = "#6366f1"; // indigo
 
-function makeNumberedMarkerEl(order: number, selected: boolean): HTMLDivElement {
+function makeNumberedMarkerEl(label: number, selected: boolean): HTMLDivElement {
   const el = document.createElement("div");
   el.style.cssText = [
     "width:28px", "height:28px",
@@ -43,11 +45,11 @@ function makeNumberedMarkerEl(order: number, selected: boolean): HTMLDivElement 
     `transform:${selected ? "scale(1.2)" : "scale(1)"}`,
     "transition:transform 0.15s",
   ].join(";");
-  el.textContent = String(order + 1);
+  el.textContent = String(label);
   return el;
 }
 
-export default function CourseMap({ items, selectedId, onSelect }: Props) {
+export default function CourseMap({ items, selectedId, onSelect, dayFilter }: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<AnyKakao>(null);
   const markersRef = useRef<{ overlay: AnyKakao; id: string }[]>([]);
@@ -89,7 +91,8 @@ export default function CourseMap({ items, selectedId, onSelect }: Props) {
 
     const script = document.createElement("script");
     script.id = "kakao-maps-sdk";
-    script.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${appKey}&autoload=false`;
+    // libraries=services 추가 — Places 검색 API 사용
+    script.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${appKey}&autoload=false&libraries=services`;
     script.onload = () => window.kakao.maps.load(createMap);
     document.head.appendChild(script);
 
@@ -111,16 +114,21 @@ export default function CourseMap({ items, selectedId, onSelect }: Props) {
     // 기존 폴리라인 제거
     if (polylineRef.current) { polylineRef.current.setMap(null); polylineRef.current = null; }
 
-    const validItems = items.filter(it => it.lat && it.lng);
+    // dayFilter 적용
+    const filteredItems = dayFilter != null
+      ? items.filter(it => it.day === dayFilter)
+      : items;
+
+    const validItems = filteredItems.filter(it => it.lat && it.lng);
     if (validItems.length === 0) return;
 
     const path: AnyKakao[] = [];
 
-    validItems.forEach(item => {
+    validItems.forEach((item, idx) => {
       const pos = new kakao.maps.LatLng(item.lat, item.lng);
       path.push(pos);
 
-      const el = makeNumberedMarkerEl(item.order, item.id === selectedId);
+      const el = makeNumberedMarkerEl(idx + 1, item.id === selectedId);
       const overlay = new kakao.maps.CustomOverlay({
         position: pos,
         content: el,
@@ -133,7 +141,6 @@ export default function CourseMap({ items, selectedId, onSelect }: Props) {
       el.addEventListener("click", () => {
         onSelect(item.id);
         closePopup();
-        // 간단한 팝업
         const popupEl = document.createElement("div");
         popupEl.style.cssText = [
           "background:white", "border-radius:8px",
@@ -142,7 +149,7 @@ export default function CourseMap({ items, selectedId, onSelect }: Props) {
           "font-family:sans-serif", "white-space:nowrap",
           "margin-bottom:8px",
         ].join(";");
-        popupEl.textContent = `${item.order + 1}. ${item.placeName}`;
+        popupEl.textContent = `${idx + 1}. ${item.placeName}`;
         const popup = new kakao.maps.CustomOverlay({
           position: pos, content: popupEl, map, zIndex: 10, yAnchor: 1.15, xAnchor: 0.5,
         });
@@ -170,7 +177,7 @@ export default function CourseMap({ items, selectedId, onSelect }: Props) {
     path.forEach(p => bounds.extend(p));
     map.setBounds(bounds, 60);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapReady, items, selectedId]);
+  }, [mapReady, items, selectedId, dayFilter]);
 
   if (!appKey) {
     return (

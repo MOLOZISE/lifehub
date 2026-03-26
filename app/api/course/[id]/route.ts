@@ -13,7 +13,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
     where: { id },
     include: {
       items: {
-        orderBy: { order: "asc" },
+        orderBy: [{ day: "asc" }, { order: "asc" }],
         include: { restaurant: { select: { id: true, name: true, category: true, avgRating: true } } },
       },
     },
@@ -34,7 +34,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (!course) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (course.userId !== session.user.id) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const { title, description, theme, tags, isPublic } = await req.json();
+  const { title, description, theme, tags, isPublic, totalDays } = await req.json();
   const updated = await prisma.course.update({
     where: { id },
     data: {
@@ -43,6 +43,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
       ...(theme !== undefined && { theme }),
       ...(tags !== undefined && { tags }),
       ...(isPublic !== undefined && { isPublic }),
+      ...(totalDays !== undefined && { totalDays: Math.max(1, Number(totalDays)) }),
     },
   });
 

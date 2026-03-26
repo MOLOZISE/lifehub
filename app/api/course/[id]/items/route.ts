@@ -43,12 +43,14 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (check === "forbidden") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
-  const { restaurantId, placeName, placeAddress, lat, lng, plannedTime, duration, note } = body;
+  const { restaurantId, placeName, placeAddress, lat, lng, plannedTime, duration, note, day = 1, kakaoPlaceId } = body;
   if (!placeName?.trim()) return NextResponse.json({ error: "장소명을 입력해주세요" }, { status: 400 });
   if (!placeAddress?.trim()) return NextResponse.json({ error: "주소를 입력해주세요" }, { status: 400 });
 
+  const targetDay = Math.max(1, Number(day));
+  // order는 해당 day 내 마지막 order 기준
   const maxOrderItem = await prisma.courseItem.findFirst({
-    where: { courseId: id },
+    where: { courseId: id, day: targetDay },
     orderBy: { order: "desc" },
     select: { order: true },
   });
@@ -58,6 +60,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     data: {
       id: cuid(),
       courseId: id,
+      day: targetDay,
       order: nextOrder,
       restaurantId: restaurantId || null,
       placeName: placeName.trim(),
@@ -67,6 +70,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       plannedTime: plannedTime || null,
       duration: duration ? Number(duration) : null,
       note: note?.trim() || null,
+      kakaoPlaceId: kakaoPlaceId || null,
     },
     include: { restaurant: { select: { id: true, name: true, category: true, avgRating: true } } },
   });

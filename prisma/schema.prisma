@@ -801,6 +801,7 @@ model Course {
   theme       String   @default("date") // "date" | "family" | "friends" | "solo"
   tags        String[] @default([])
   isPublic    Boolean  @default(false)
+  totalDays   Int      @default(1)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -814,6 +815,7 @@ model Course {
 model CourseItem {
   id           String   @id @default(cuid())
   courseId     String
+  day          Int      @default(1)
   order        Int
   restaurantId String?
   placeName    String
@@ -823,12 +825,13 @@ model CourseItem {
   plannedTime  String?  // "HH:MM"
   duration     Int?     // 분
   note         String?  @db.Text
+  kakaoPlaceId String?
   createdAt    DateTime @default(now())
 
   course     Course      @relation(fields: [courseId], references: [id], onDelete: Cascade)
   restaurant Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: SetNull)
 
-  @@index([courseId, order])
+  @@index([courseId, day, order])
   @@map("course_items")
 }
 

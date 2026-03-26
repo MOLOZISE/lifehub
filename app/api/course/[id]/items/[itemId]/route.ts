@@ -22,6 +22,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     where: { id: itemId },
     data: {
       ...(body.order !== undefined && { order: Number(body.order) }),
+      ...(body.day !== undefined && { day: Math.max(1, Number(body.day)) }),
       ...(body.placeName !== undefined && { placeName: body.placeName }),
       ...(body.placeAddress !== undefined && { placeAddress: body.placeAddress }),
       ...(body.lat !== undefined && { lat: body.lat }),
@@ -29,6 +30,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       ...(body.plannedTime !== undefined && { plannedTime: body.plannedTime || null }),
       ...(body.duration !== undefined && { duration: body.duration ? Number(body.duration) : null }),
       ...(body.note !== undefined && { note: body.note?.trim() || null }),
+      ...(body.kakaoPlaceId !== undefined && { kakaoPlaceId: body.kakaoPlaceId || null }),
     },
   });
   return NextResponse.json({ item: updated });
