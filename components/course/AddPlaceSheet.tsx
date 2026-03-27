@@ -59,8 +59,8 @@ export default function AddPlaceSheet({ open, onClose, courseId, totalDays, defa
   const [kakaoSearching, setKakaoSearching] = useState(false);
   const [kakaoReady, setKakaoReady] = useState(false);
   const [selectedKakaoPlace, setSelectedKakaoPlace] = useState<KakaoPlaceResult | null>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
-  const pollRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const pollRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const pollCountRef = useRef(0);
 
   // 내 맛집
