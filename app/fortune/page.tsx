@@ -10,7 +10,6 @@ import Link from "next/link";
 import { toast } from "sonner";
 
 type FortuneKind = "daily" | "tarot" | "saju" | "history";
-type SajuPeriod = "today" | "month" | "year" | "custom";
 
 interface FortuneData {
   overall?: string; score?: number;
@@ -71,9 +70,7 @@ export default function FortunePage() {
   const today = localToday();
 
   const [fortuneKind, setFortuneKind] = useState<FortuneKind>("daily");
-  const [sajuPeriod, setSajuPeriod] = useState<SajuPeriod>("today");
-  const [sajuStart, setSajuStart] = useState(today);
-  const [sajuEnd, setSajuEnd] = useState("");
+  const [sajuDate, setSajuDate] = useState(today);
   const [birthDate, setBirthDate] = useState("");
   const [birthTime, setBirthTime] = useState("");
   const [gender, setGender] = useState<"male" | "female" | "">("");
@@ -147,9 +144,7 @@ export default function FortunePage() {
 
     setFortune(null); setFortuneLoading(true);
     try {
-      const cacheKey = fortuneKind === "saju"
-        ? `saju_${sajuStart}${sajuEnd ? "_" + sajuEnd : ""}`
-        : fortuneKind;
+      const cacheKey = fortuneKind === "saju" ? `saju_${sajuDate}` : fortuneKind;
       const cached = await fetch(`/api/planner/fortune?type=${cacheKey}`).then(r => r.json());
       if (cached.cached && (cached.overall || cached.cards)) { setFortune(cached); return; }
 
@@ -160,8 +155,7 @@ export default function FortunePage() {
           type: cacheKey, birthDate, birthTime, gender: gender || undefined,
           pickedCards: fortuneKind === "tarot" ? pickedCards : undefined,
           question: fortuneKind === "tarot" ? tarotQuestion : undefined,
-          sajuStart: fortuneKind === "saju" ? sajuStart : undefined,
-          sajuEnd: fortuneKind === "saju" ? sajuEnd : undefined,
+          sajuStart: fortuneKind === "saju" ? sajuDate : undefined,
         }),
       });
       const data = await res.json();
@@ -328,33 +322,18 @@ export default function FortunePage() {
         </Card>
       )}
 
-      {/* Saju period selector */}
+      {/* Saju date selector */}
       {fortuneKind === "saju" && (
-        <div className="space-y-2">
-          <div className="flex gap-1 bg-muted/30 rounded-xl p-1 text-xs">
-            {([{k:"today",l:"오늘"},{k:"month",l:"이번달"},{k:"year",l:`${today.slice(0,4)}년`},{k:"custom",l:"직접 선택"}] as {k:SajuPeriod,l:string}[]).map(({k,l}) => (
-              <button key={k} onClick={() => {
-                setSajuPeriod(k); setFortune(null);
-                if (k==="today") { setSajuStart(today); setSajuEnd(""); }
-                else if (k==="month") { setSajuStart(today.slice(0,7)+"-01"); setSajuEnd(""); }
-                else if (k==="year") { setSajuStart(today.slice(0,4)+"-01-01"); setSajuEnd(""); }
-              }}
-                className={`flex-1 py-1 rounded-lg font-medium transition-all ${sajuPeriod===k?"bg-background shadow-sm text-foreground":"text-muted-foreground"}`}>
-                {l}
-              </button>
-            ))}
-          </div>
-          {sajuPeriod === "custom" && (
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <p className="text-[10px] text-muted-foreground mb-1">시작일 *</p>
-                <Input type="date" value={sajuStart} onChange={e => { setSajuStart(e.target.value); setFortune(null); }} className="h-8 text-sm" />
-              </div>
-              <div>
-                <p className="text-[10px] text-muted-foreground mb-1">종료일 (선택)</p>
-                <Input type="date" value={sajuEnd} onChange={e => { setSajuEnd(e.target.value); setFortune(null); }} className="h-8 text-sm" />
-              </div>
-            </div>
+        <div className="flex items-center gap-2">
+          <p className="text-xs text-muted-foreground shrink-0">날짜</p>
+          <Input type="date" value={sajuDate}
+            onChange={e => { setSajuDate(e.target.value); setFortune(null); }}
+            className="h-8 text-sm w-auto" />
+          {sajuDate !== today && (
+            <button onClick={() => { setSajuDate(today); setFortune(null); }}
+              className="text-xs text-muted-foreground hover:text-foreground underline shrink-0">
+              오늘로
+            </button>
           )}
         </div>
       )}
@@ -530,7 +509,7 @@ export default function FortunePage() {
                 <Card className="bg-gradient-to-br from-teal-50 to-cyan-50 dark:from-teal-950/30 dark:to-cyan-950/30 border-teal-200 dark:border-teal-800">
                   <CardContent className="p-4">
                     <p className="font-semibold text-sm mb-1">
-                      ☯️ {sajuEnd ? `${sajuStart} ~ ${sajuEnd}` : sajuPeriod==="today"?"오늘":sajuPeriod==="month"?"이번 달":sajuPeriod==="year"?`${today.slice(0,4)}년`:sajuStart} 운세
+                      ☯️ {sajuDate === today ? "오늘" : sajuDate} 운세
                     </p>
                     <p className="text-sm leading-relaxed">{fortune.overall}</p>
                   </CardContent>
