@@ -58,7 +58,7 @@ function ResourcesView() {
   useEffect(() => {
     Promise.all([
       fetch("/api/study/shared-resources").then(r => r.json()),
-      fetch("/api/admin/exam-types").then(r => r.json()),
+      fetch("/api/exam-types").then(r => r.json()),
     ]).then(([res, et]) => {
       setResources(res);
       setExamTypes((et.examTypes ?? []).filter((t: ExamType & { isActive?: boolean }) => t.isActive !== false));
